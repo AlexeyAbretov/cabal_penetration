@@ -168,6 +168,11 @@ export class Soldier {
     this.alpha = alpha;
   }
 
+  /** Центр и размер хитбокса. Подбор смотрит на тело, не на кнопку. */
+  body(): { x: number; y: number; w: number; h: number } {
+    return { x: this.cx, y: this.cy, w: this.bodyW, h: this.bodyH };
+  }
+
   /** Верх прямоугольника. Стена точку вылета не подменяет. */
   muzzlePoint(): { x: number; y: number } {
     return { x: this.cx, y: this.cy - this.bodyH / 2 };

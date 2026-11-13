@@ -37,6 +37,23 @@ export const palette = {
   house: 0xd8c3a2,
   houseRoof: 0x8d4632,
   barTrack: 0x3a332c,
+  bush: 0x2f6a32,
+  bushLeaf: 0x4e9440,
+  bushHurt: 0x7d8a38,
+  bushStump: 0x6a4528,
+  crate: 0xc4a36a,
+  crateBand: 0x8a6234,
+  crateHurt: 0xa85a32,
+  crateCrit: 0x6e3a28,
+  rapid: 0x3c7edb,
+  rapidTracer: 0xc5ddff,
+  spread: 0xd24b3a,
+  spreadTracer: 0xffb089,
+  star: 0xf2c14e,
+  tank: 0x5c6770,
+  tankShade: 0x2a3138,
+  tankTurret: 0x3d4650,
+  tankBullet: 0xff6a1a,
 } as const;
 
 /**
@@ -85,6 +102,26 @@ export const aimMark = {
   thickness: 2,
 } as const;
 
+/**
+ * Два временных ствола против бесконечного автомата.
+ * rapid — часто и в точку. spread — реже, пятно fan в пикселях вокруг прицела.
+ * На границе сцены оба сгорают, снова автомат.
+ */
+export const weapons = {
+  rifle: { intervalMs: fireIntervalMs, pellets: 1, fan: 0, thick: 1.5, tracer: palette.tracer },
+  rapid: { intervalMs: 34, pellets: 1, fan: 0, thick: 1, tracer: palette.rapidTracer },
+  spread: { intervalMs: 210, pellets: 5, fan: 40, thick: 2.4, tracer: palette.spreadTracer },
+} as const;
+
+export type WeaponId = keyof typeof weapons;
+
+/** Крест сужается на частом стволе и раскрывается на широком. Точка выстрела — всё ещё курсор. */
+export const weaponMark = {
+  rifle: { arm: aimMark.arm, gap: aimMark.gap },
+  rapid: { arm: 7, gap: 2 },
+  spread: { arm: 15, gap: 4 },
+} as const;
+
 /** Доля роста стойки. Колено — поза, колонку попадания не меняет. */
 export const kneelScale = 0.62;
 
@@ -121,7 +158,37 @@ export const grenade = {
   explodeMs: 280,
   /** Разрыв по земле. Пачка у точки выхода входит, вся волна — нет. */
   blastRadius: 56,
+  /** Куст от гранаты почти кончается, ящик остаётся: гранату жалко не на магазин. */
+  propHits: 3,
 } as const;
+
+/** Падение на дорожку — твин. Подбор телом, когда предмет уже лёг. */
+export const pickup = {
+  fallMs: 480,
+  size: 18,
+  /** Пачка к текущему запасу. Потолка нет: между сценами гранаты копятся. */
+  grenades: 5,
+  /** Ниже середины дорожки, к ногам стойки. */
+  feet: 10,
+} as const;
+
+export type DropKind = 'grenades' | 'rapid' | 'spread' | 'star';
+
+/** Звезда — отдельный номинал, не очки за сам объект. */
+export const star = {
+  score: 2000,
+} as const;
+
+/**
+ * Куст и ящик. Несколько стадий, потом дроп.
+ * Очки за объект выше зелёного. Хитбокс — тот прямоугольник, куда встанет лист.
+ */
+export const scenery = {
+  bush: { hp: 4, stages: 3, width: 40, height: 34, score: 500 },
+  crate: { hp: 6, stages: 3, width: 48, height: 40, score: 1000 },
+} as const;
+
+export type PropKind = keyof typeof scenery;
 
 /**
  * Очередь зелёного. Замах запирается на колонку солдата.
@@ -158,6 +225,29 @@ export const green = {
   /** Маркер точки за столько мс до первого из пачки. */
   warnMs: 1100,
   score: 210,
+} as const;
+
+/**
+ * Танк-прямоугольник. Много пуль или одна граната.
+ * Очки выше зелёного: гранату есть на кого жалеть.
+ */
+export const tank = {
+  hp: 28,
+  width: 104,
+  height: 48,
+  run: 0.18,
+  runMs: 1200,
+  holdMs: 480,
+  score: 5000,
+  warnMs: 1400,
+} as const;
+
+/** Залп танка. Один залп доводит секцию стены до критической окраски, второй её добивает. */
+export const tankVolley = {
+  leadMs: 260,
+  burst: 6,
+  gapMs: 90,
+  recoverMs: 1200,
 } as const;
 
 /** Чем выше на поле, тем мельче фигура. Низ поля — полный хитбокс. */

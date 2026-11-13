@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { cssColor, enemyBar, hud, palette } from '../../constants';
+import { cssColor, enemyBar, hud, palette, type WeaponId } from '../../constants';
 import type { FrameLayout, Rect } from '../../layout';
 
 const fontFamily = 'Consolas, "Courier New", monospace';
@@ -18,6 +18,8 @@ export class Hud {
   private readonly scoreText: Phaser.GameObjects.Text;
   private readonly enemyLabel: Phaser.GameObjects.Text;
   private readonly barGfx: Phaser.GameObjects.Graphics;
+  private readonly weaponGfx: Phaser.GameObjects.Graphics;
+  private weapon: WeaponId = 'rifle';
   private readonly pauseVeil: Phaser.GameObjects.Graphics;
   private readonly pauseLabel: Phaser.GameObjects.Text;
   private readonly edge: Phaser.GameObjects.Graphics;
@@ -29,6 +31,7 @@ export class Hud {
     this.scoreText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5);
     this.enemyLabel = scene.add.text(0, 0, 'ENEMY', inkFont('18px')).setOrigin(0, 0.5);
     this.barGfx = scene.add.graphics();
+    this.weaponGfx = scene.add.graphics();
     this.pauseVeil = scene.add.graphics().setVisible(false);
     this.pauseLabel = scene.add
       .text(0, 0, 'ПАУЗА', {
@@ -44,6 +47,7 @@ export class Hud {
     layer.add(this.scoreText);
     layer.add(this.enemyLabel);
     layer.add(this.barGfx);
+    layer.add(this.weaponGfx);
     layer.add(this.pauseVeil);
     layer.add(this.pauseLabel);
     layer.add(this.edge);
@@ -67,6 +71,12 @@ export class Hud {
   addScore(points: number): void {
     this.score += points;
     this.scoreText.setText(String(this.score).padStart(hud.scoreDigits, '0'));
+  }
+
+  /** Автомат в рамке не рисуется: он и есть отсутствие ствола. Временный виден, пока сцена не кончилась. */
+  setWeapon(kind: WeaponId): void {
+    this.weapon = kind;
+    this.paintWeapon();
   }
 
   /** Сегмент снят. true — полоска пуста, кадр кончается. */
@@ -101,6 +111,7 @@ export class Hud {
     this.scoreText.setPosition(this.livesText.x + 36, mid);
     this.scoreText.setText(String(this.score).padStart(hud.scoreDigits, '0'));
     this.paintBar();
+    this.paintWeapon();
 
     this.pauseVeil.clear();
     this.pauseVeil.fillStyle(palette.black, 0.55);
@@ -140,6 +151,21 @@ export class Hud {
         enemyBar.height,
       );
     }
+  }
+
+  private paintWeapon(): void {
+    const band = this.band;
+    this.weaponGfx.clear();
+    if (!band || this.weapon === 'rifle' || this.frameWidth <= 0) return;
+    const mid = band.y + Math.round(band.height / 2);
+    const x = this.frameWidth - 36;
+    if (this.weapon === 'rapid') {
+      this.weaponGfx.fillStyle(palette.rapid, 1);
+      for (let i = 0; i < 3; i += 1) this.weaponGfx.fillRect(x + i * 5, mid - 8, 3, 16);
+      return;
+    }
+    this.weaponGfx.fillStyle(palette.spread, 1);
+    this.weaponGfx.fillRect(x - 2, mid - 4, 22, 8);
   }
 
   private drawHeart(x: number, y: number): void {
