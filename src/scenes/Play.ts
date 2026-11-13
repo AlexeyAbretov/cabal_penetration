@@ -1,25 +1,29 @@
 import Phaser from 'phaser';
 import { resolveColumnHit } from '../combat';
-import { green, palette } from '../constants';
+import { palette, pickup, star, type DropKind } from '../constants';
 import { drillWave, waveQuota } from '../data/wave';
 import { frameLayout, type FrameLayout } from '../layout';
 import { Aim } from './play/aim';
 import { Controls } from './play/input';
+import { Drops } from './play/drops';
 import { Enemies } from './play/enemies';
 import { Grenades } from './play/grenades';
 import { Gun } from './play/gun';
 import { Houses } from './play/houses';
 import { Hud } from './play/hud';
+import { Props } from './play/props';
 import { Soldier } from './play/soldier';
 import { Sparks } from './play/sparks';
 import { Stage } from './play/stage';
 import { FrontWall } from './play/wall';
 
 /**
- * Срез 3. Волна зелёных и полоска ENEMY.
- * Маркер точки горит до первого выстрела. Убийство съедает полоску.
- * Пустая полоска кончает кадр сразу: уцелевшие дома падают.
- * Глубина сзади вперёд: небо и дома, замах, дорожка, зелёные, стена, солдат, очередь, прицел, рамка.
+ * Срез 4. Дроп и два ствола.
+ * Куст и ящик проходят стадии и роняют на дорожку пачку, ствол или звезду. Подбор телом.
+ * Частый ствол бьёт в точку, широкий — пятном. На конце сцены оба сгорают, автомат остаётся.
+ * Танк-прямоугольник ест полоску. Очки за него и за крупные объекты выше, чем за зелёного.
+ * Глубина сзади вперёд: небо и дома, замах, дорожка, кусты и ящики, зелёные и танк,
+ * стена, дроп, солдат, очередь, прицел, рамка.
  */
 export class Play extends Phaser.Scene {
   private view!: FrameLayout;
@@ -32,6 +36,8 @@ export class Play extends Phaser.Scene {
   private wall!: FrontWall;
   private grenades!: Grenades;
   private enemies!: Enemies;
+  private props!: Props;
+  private drops!: Drops;
   private houses!: Houses;
   private sparks!: Sparks;
   private battleGfx!: Phaser.GameObjects.Graphics;
@@ -53,10 +59,17 @@ export class Play extends Phaser.Scene {
     this.soldier = new Soldier(this);
     this.hud = new Hud(this, this.stage.hud);
     this.grenades = new Grenades(this, this.sparks);
-    this.enemies = new Enemies(this, this.sparks, () => this.onKill());
+    this.drops = new Drops(this, this.sparks, (kind) => this.takeDrop(kind));
+    this.props = new Props(this, this.sparks, (drop, score, rx, ry) => {
+      this.hud.addScore(score);
+      this.drops.spawn(drop, rx, ry);
+    });
+    this.enemies = new Enemies(this, this.sparks, (points) => this.onKill(points));
     this.houses = new Houses(this, this.stage.field);
     this.grenades.onLand((x, y) => {
-      if (!this.cleared) this.enemies.blast(x, y);
+      if (this.cleared) return;
+      this.enemies.blast(x, y);
+      this.props.blast(x, y);
     });
     this.controls = new Controls(this, () => this.onRightClick());
     this.hud.setQuota(waveQuota(drillWave));
@@ -99,7 +112,7 @@ export class Play extends Phaser.Scene {
       aimX: this.aim.x,
       aimY: this.aim.y,
       muzzlePoint: () => this.soldier.muzzlePoint(),
-      onShot: (from) => this.resolvePlayerShot(from),
+      onShot: (from, at) => this.resolvePlayerShot(from, at),
     });
     if (this.cleared) {
       this.sparks.step(step);
@@ -111,6 +124,8 @@ export class Play extends Phaser.Scene {
     this.soldier.setAlpha(this.hud.stepHurt(step));
     this.sparks.step(step);
     this.grenades.sync(this.soldier.x);
+    this.props.step(step);
+    this.drops.step(this.view, this.soldier.body());
     this.drawBattle();
   }
 
@@ -132,6 +147,7 @@ export class Play extends Phaser.Scene {
     this.grenades.bind(this.view);
     this.houses.place(this.view);
     this.enemies.bind(this.view);
+    this.props.bind(this.view);
     this.placeSoldier();
     const pointer = this.controls.pointer;
     if (pointer) {
@@ -160,11 +176,13 @@ export class Play extends Phaser.Scene {
     this.grenades.sync(this.soldier.x);
   }
 
-  private resolvePlayerShot(from: { x: number; y: number }): void {
-    if (this.grenades.intercept(from.x, from.y, this.aim.x, this.aim.y)) return;
-    if (this.enemies.hit(this.aim.x, this.aim.y)) return;
-    const column = this.wall.aimColumn(this.view, this.aim.x, this.aim.y);
-    if (column !== null) this.wall.chip(column, this.aim.x, this.aim.y, this.sparks);
+  private resolvePlayerShot(from: { x: number; y: number }, at: { x: number; y: number }): void {
+    if (this.cleared) return;
+    if (this.grenades.intercept(from.x, from.y, at.x, at.y)) return;
+    if (this.enemies.hit(at.x, at.y)) return;
+    if (this.props.hit(at.x, at.y)) return;
+    const column = this.wall.aimColumn(this.view, at.x, at.y);
+    if (column !== null) this.wall.chip(column, at.x, at.y, this.sparks);
   }
 
   private resolveIncoming(column: number): void {
@@ -183,16 +201,35 @@ export class Play extends Phaser.Scene {
     if (verdict === 'hurt') this.hud.hurtSoldier();
   }
 
-  private onKill(): void {
-    this.hud.addScore(green.score);
+  private onKill(points: number): void {
+    this.hud.addScore(points);
     if (this.cleared) return;
     if (this.hud.eat()) this.finish();
+  }
+
+  private takeDrop(kind: DropKind): void {
+    if (kind === 'grenades') {
+      this.grenades.add(pickup.grenades);
+      this.grenades.sync(this.soldier.x);
+      return;
+    }
+    if (kind === 'star') {
+      this.hud.addScore(star.score);
+      return;
+    }
+    this.gun.equip(kind);
+    this.aim.setWeapon(kind);
+    this.hud.setWeapon(kind);
   }
 
   private finish(): void {
     if (this.cleared) return;
     this.cleared = true;
     this.enemies.freeze();
+    this.gun.burn();
+    this.aim.setWeapon('rifle');
+    this.hud.setWeapon('rifle');
+    this.drops.freeze();
     this.houses.fall();
   }
 
@@ -200,8 +237,10 @@ export class Play extends Phaser.Scene {
     if (!this.view) return;
     const gfx = this.battleGfx;
     gfx.clear();
+    this.props.draw();
     this.enemies.draw(this.view, this.wall);
     this.wall.draw(gfx, this.view);
+    this.drops.draw(this.view);
     this.soldier.draw();
     this.enemies.drawBullets(gfx, this.view, this.wall);
     this.grenades.draw(gfx);

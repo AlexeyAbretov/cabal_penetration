@@ -51,6 +51,12 @@ export class Grenades {
     this.view = view;
   }
 
+  /** Пачка с дороги прибавляется к запасу. Потолка нет. */
+  add(count: number): void {
+    if (count <= 0) return;
+    this.stock += count;
+  }
+
   /** Разрыв в точке падения. Сбитая в воздухе граната землю не бьёт. */
   onLand(boom: (x: number, y: number) => void): void {
     this.boom = boom;

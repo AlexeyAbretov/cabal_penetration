@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { fireIntervalMs, muzzleFlashMs, palette, tracerLength, tracerTravelMs } from '../../constants';
+import { muzzleFlashMs, palette, tracerLength, tracerTravelMs, weapons, type WeaponId } from '../../constants';
 
 type Shot = {
   x1: number;
@@ -7,6 +7,8 @@ type Shot = {
   x2: number;
   y2: number;
   life: number;
+  color: number;
+  thick: number;
 };
 
 type ShotFrame = {
@@ -15,20 +17,34 @@ type ShotFrame = {
   aimX: number;
   aimY: number;
   muzzlePoint: () => { x: number; y: number };
-  onShot: (from: { x: number; y: number }) => void;
+  onShot: (from: { x: number; y: number }, at: { x: number; y: number }) => void;
 };
 
-/** Очередь автомата. Кувырок её обрывает: сквозь перекат огонь не держится. */
+/** Очередь. Кувырок её обрывает. Временный ствол живёт до границы сцены, автомат — всегда. */
 export class Gun {
   /** Очередь не переживает кувырок: кнопку надо отпустить и нажать снова. */
   private blockFire = false;
   private fireCooldown = 0;
   private muzzleLife = 0;
+  private weapon: WeaponId = 'rifle';
+  private flashColor: number = palette.muzzle;
   private shots: Shot[] = [];
   private readonly gfx: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene) {
     this.gfx = scene.add.graphics().setDepth(4.6);
+  }
+
+  /** Частый или широкий. Автомат на это время уступает, патроны не кончаются. */
+  equip(kind: Exclude<WeaponId, 'rifle'>): void {
+    this.weapon = kind;
+    this.fireCooldown = 0;
+  }
+
+  /** Граница сцены. Оба временных ствола сгорают. */
+  burn(): void {
+    this.weapon = 'rifle';
+    this.fireCooldown = 0;
   }
 
   /** Сброс очереди в кадр, когда кувырок только начался. */
@@ -63,19 +79,25 @@ export class Gun {
     this.fireCooldown -= delta;
     if (this.fireCooldown > 0) return;
     this.shoot(frame);
-    this.fireCooldown = fireIntervalMs;
+    this.fireCooldown = weapons[this.weapon].intervalMs;
   }
 
   private shoot(frame: ShotFrame): void {
+    const spec = weapons[this.weapon];
+    this.flashColor = this.weapon === 'rifle' ? palette.muzzle : spec.tracer;
     const muzzle = frame.muzzlePoint();
-    frame.onShot(muzzle);
-    this.shots.push({
-      x1: muzzle.x,
-      y1: muzzle.y,
-      x2: frame.aimX,
-      y2: frame.aimY,
-      life: tracerTravelMs,
-    });
+    for (const at of pattern(this.weapon, frame.aimX, frame.aimY)) {
+      frame.onShot(muzzle, at);
+      this.shots.push({
+        x1: muzzle.x,
+        y1: muzzle.y,
+        x2: at.x,
+        y2: at.y,
+        life: tracerTravelMs,
+        color: spec.tracer,
+        thick: spec.thick,
+      });
+    }
     this.muzzleLife = muzzleFlashMs;
   }
 
@@ -93,7 +115,7 @@ export class Gun {
     this.gfx.clear();
     if (this.muzzleLife > 0 && !frame.rolling) {
       const muzzle = frame.muzzlePoint();
-      this.gfx.fillStyle(palette.muzzle, 1);
+      this.gfx.fillStyle(this.flashColor, 1);
       this.gfx.fillRect(muzzle.x - 5, muzzle.y - 4, 10, 4);
     }
     for (const shot of this.shots) this.drawShot(shot);
@@ -112,15 +134,31 @@ export class Gun {
 
     const ux = dx / len;
     const uy = dy / len;
-    const nx = -uy * 1.5;
-    const ny = ux * 1.5;
+    const nx = -uy * shot.thick;
+    const ny = ux * shot.thick;
     const x1 = shot.x1 + ux * tail;
     const y1 = shot.y1 + uy * tail;
     const x2 = shot.x1 + ux * head;
     const y2 = shot.y1 + uy * head;
 
-    this.gfx.fillStyle(palette.tracer, 1);
+    this.gfx.fillStyle(shot.color, 1);
     this.gfx.fillTriangle(x1 + nx, y1 + ny, x1 - nx, y1 - ny, x2 - nx, y2 - ny);
     this.gfx.fillTriangle(x1 + nx, y1 + ny, x2 - nx, y2 - ny, x2 + nx, y2 + ny);
   }
+}
+
+/** Узкий ствол — одна точка. Широкий — пятно вокруг прицела, крайние дробины чуть ниже. */
+function pattern(kind: WeaponId, aimX: number, aimY: number): { x: number; y: number }[] {
+  const spec = weapons[kind];
+  if (spec.pellets <= 1 || spec.fan <= 0) return [{ x: aimX, y: aimY }];
+  const mid = (spec.pellets - 1) / 2;
+  const points: { x: number; y: number }[] = [];
+  for (let i = 0; i < spec.pellets; i += 1) {
+    const t = (i - mid) / mid;
+    points.push({
+      x: aimX + t * spec.fan,
+      y: aimY + Math.abs(t) * spec.fan * 0.28,
+    });
+  }
+  return points;
 }
