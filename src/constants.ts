@@ -19,6 +19,19 @@ export const palette = {
   aim: 0xf2e27a,
   tracer: 0xfff1c2,
   muzzle: 0xfff6d0,
+  soldierRoll: 0x3d5c82,
+  wall: 0xa89880,
+  wallBand: 0x6f6556,
+  wallHurt: 0xd06a32,
+  wallCrit: 0x8e3428,
+  wallGone: 0x2c261f,
+  enemyBullet: 0xff3b2e,
+  enemyLane: 0xff9a2e,
+  grenade: 0x2f6b3a,
+  grenadeArc: 0xd5e29a,
+  explosion: 0xf0c14a,
+  heart: 0xd24b4b,
+  notch: 0xe7dcc4,
 } as const;
 
 /**
@@ -66,3 +79,65 @@ export const aimMark = {
   gap: 3,
   thickness: 2,
 } as const;
+
+/** Доля роста стойки. Колено — поза, колонку попадания не меняет. */
+export const kneelScale = 0.62;
+
+/**
+ * Два кувырка. Длина — в колонках текущей дорожки.
+ * Окно неуязвимости равно длительности: короткий успевает сменить секцию,
+ * длинный перекрывает очередь таймера, если упереться в край и стоять в той же колонке.
+ */
+export const rollMove = {
+  short: { columns: 1.05, durationMs: 280 },
+  long: { columns: 2.7, durationMs: 820 },
+} as const;
+
+/** Высота лица стены в поле. Ниже этой полосы своя очередь стену не берёт. */
+export const wall = {
+  hits: 8,
+  stripes: 4,
+  intoField: 56,
+  seam: 4,
+} as const;
+
+/** Старт как у FRAG-57: десять гранат, число у ног. */
+export const grenade = {
+  stock: 10,
+  flightMs: 800,
+  arcLift: 96,
+  body: 8,
+  /** Попадание по телу гранаты, если прицел на ней. */
+  aimRadius: 22,
+  /** Попадание пулей по дуге, когда граната уже оторвалась от прямой на точку. */
+  hitRadius: 14,
+  armT: 0.2,
+  lateT: 0.8,
+  explodeMs: 280,
+} as const;
+
+/**
+ * Таймер без спрайта врага. Очередь запирается на колонку солдата в момент замаха.
+ * Первый удар: open + lead + travel. Хвост очереди: ещё (burst - 1) * gap.
+ */
+export const volley = {
+  openMs: 800,
+  leadMs: 200,
+  travelMs: 180,
+  burst: 4,
+  gapMs: 120,
+  recoverMs: 1100,
+  thickness: 6,
+  length: 14,
+} as const;
+
+export const hud = {
+  lives: 5,
+  scoreDigits: 6,
+  hurtMs: 1000,
+  blinkMs: 80,
+} as const;
+
+export function cssColor(color: number): string {
+  return `#${color.toString(16).padStart(6, '0')}`;
+}
