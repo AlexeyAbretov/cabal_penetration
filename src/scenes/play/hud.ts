@@ -1,17 +1,23 @@
 import Phaser from 'phaser';
-import { cssColor, hud, palette } from '../../constants';
-import type { FrameLayout } from '../../layout';
+import { cssColor, enemyBar, hud, palette } from '../../constants';
+import type { FrameLayout, Rect } from '../../layout';
 
 const fontFamily = 'Consolas, "Courier New", monospace';
 
-/** Рамка: сердце, жизни, счёт и пауза. */
+/** Рамка: сердце, жизни, счёт, полоска ENEMY и пауза. */
 export class Hud {
   private lives: number = hud.lives;
   private score = 0;
+  private quota = 0;
+  private slain = 0;
   private hurtTimer = 0;
+  private frameWidth = 0;
+  private band: Rect | null = null;
   private readonly heartGfx: Phaser.GameObjects.Graphics;
   private readonly livesText: Phaser.GameObjects.Text;
   private readonly scoreText: Phaser.GameObjects.Text;
+  private readonly enemyLabel: Phaser.GameObjects.Text;
+  private readonly barGfx: Phaser.GameObjects.Graphics;
   private readonly pauseVeil: Phaser.GameObjects.Graphics;
   private readonly pauseLabel: Phaser.GameObjects.Text;
   private readonly edge: Phaser.GameObjects.Graphics;
@@ -21,6 +27,8 @@ export class Hud {
     this.heartGfx = scene.add.graphics();
     this.livesText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5);
     this.scoreText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5);
+    this.enemyLabel = scene.add.text(0, 0, 'ENEMY', inkFont('18px')).setOrigin(0, 0.5);
+    this.barGfx = scene.add.graphics();
     this.pauseVeil = scene.add.graphics().setVisible(false);
     this.pauseLabel = scene.add
       .text(0, 0, 'ПАУЗА', {
@@ -34,6 +42,8 @@ export class Hud {
     layer.add(this.heartGfx);
     layer.add(this.livesText);
     layer.add(this.scoreText);
+    layer.add(this.enemyLabel);
+    layer.add(this.barGfx);
     layer.add(this.pauseVeil);
     layer.add(this.pauseLabel);
     layer.add(this.edge);
@@ -47,6 +57,24 @@ export class Hud {
     this.lives = Math.max(0, this.lives - 1);
     this.hurtTimer = hud.hurtMs;
     this.livesText.setText(String(this.lives));
+  }
+
+  setQuota(quota: number): void {
+    this.quota = quota;
+    this.paintBar();
+  }
+
+  addScore(points: number): void {
+    this.score += points;
+    this.scoreText.setText(String(this.score).padStart(hud.scoreDigits, '0'));
+  }
+
+  /** Сегмент снят. true — полоска пуста, кадр кончается. */
+  eat(): boolean {
+    if (this.quota <= 0 || this.slain >= this.quota) return this.slain >= this.quota && this.quota > 0;
+    this.slain += 1;
+    this.paintBar();
+    return this.slain >= this.quota;
   }
 
   /** Доля непрозрачности тела: мигание, пока держится окно после ранения. */
@@ -63,6 +91,8 @@ export class Hud {
 
   draw(view: FrameLayout, width: number, height: number): void {
     const band = view.hud;
+    this.band = band;
+    this.frameWidth = width;
     const mid = band.y + Math.round(band.height / 2);
     this.heartGfx.clear();
     this.drawHeart(16, mid - 9);
@@ -70,6 +100,7 @@ export class Hud {
     this.livesText.setText(String(this.lives));
     this.scoreText.setPosition(this.livesText.x + 36, mid);
     this.scoreText.setText(String(this.score).padStart(hud.scoreDigits, '0'));
+    this.paintBar();
 
     this.pauseVeil.clear();
     this.pauseVeil.fillStyle(palette.black, 0.55);
@@ -82,6 +113,33 @@ export class Hud {
     this.edge.fillRect(0, height - 1, width, 1);
     this.edge.fillRect(0, 0, 1, height);
     this.edge.fillRect(width - 1, 0, 1, height);
+  }
+
+  private paintBar(): void {
+    const band = this.band;
+    if (!band || this.frameWidth <= 0 || this.quota <= 0) return;
+    const labelW = this.enemyLabel.width;
+    const groupW = labelW + 8 + enemyBar.width;
+    let x = Math.round((this.frameWidth - groupW) / 2);
+    const scoreRight = this.scoreText.x + this.scoreText.width + 16;
+    if (x < scoreRight) x = Math.round(scoreRight);
+    const mid = band.y + Math.round(band.height / 2);
+    this.enemyLabel.setPosition(x, mid);
+    const barX = x + labelW + 8;
+    const barY = mid - enemyBar.height / 2;
+    const segGap = enemyBar.gap;
+    const segW = (enemyBar.width - segGap * (this.quota - 1)) / this.quota;
+    const remaining = this.quota - this.slain;
+    this.barGfx.clear();
+    for (let i = 0; i < this.quota; i += 1) {
+      this.barGfx.fillStyle(i < remaining ? palette.enemy : palette.barTrack, 1);
+      this.barGfx.fillRect(
+        Math.round(barX + i * (segW + segGap)),
+        Math.round(barY),
+        Math.max(1, Math.floor(segW)),
+        enemyBar.height,
+      );
+    }
   }
 
   private drawHeart(x: number, y: number): void {

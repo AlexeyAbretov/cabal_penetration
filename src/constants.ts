@@ -32,6 +32,11 @@ export const palette = {
   explosion: 0xf0c14a,
   heart: 0xd24b4b,
   notch: 0xe7dcc4,
+  enemy: 0x2e8f3c,
+  enemyShade: 0x143d1e,
+  house: 0xd8c3a2,
+  houseRoof: 0x8d4632,
+  barTrack: 0x3a332c,
 } as const;
 
 /**
@@ -114,14 +119,16 @@ export const grenade = {
   armT: 0.2,
   lateT: 0.8,
   explodeMs: 280,
+  /** Разрыв по земле. Пачка у точки выхода входит, вся волна — нет. */
+  blastRadius: 56,
 } as const;
 
 /**
- * Таймер без спрайта врага. Очередь запирается на колонку солдата в момент замаха.
- * Первый удар: open + lead + travel. Хвост очереди: ещё (burst - 1) * gap.
+ * Очередь зелёного. Замах запирается на колонку солдата.
+ * Первый удар: lead + travel. Хвост: ещё (burst - 1) * gap.
+ * Длинный перекат перекрывает этот хвост, если остаться в той же колонке.
  */
 export const volley = {
-  openMs: 800,
   leadMs: 200,
   travelMs: 180,
   burst: 4,
@@ -129,6 +136,41 @@ export const volley = {
   recoverMs: 1100,
   thickness: 6,
   length: 14,
+} as const;
+
+/**
+ * Зелёный. Хитбокс заглушки — тот же прямоугольник, куда встанет лист.
+ * Масштаб берётся из глубины точки на поле.
+ */
+export const green = {
+  hp: 2,
+  width: 30,
+  height: 40,
+  /** Выбег к игроку, доля высоты поля. */
+  run: 0.12,
+  /** Веер пачки, доля ширины поля на шаг от середины. */
+  spread: 0.07,
+  runMs: 560,
+  /** Стоит и ещё не целится. Вся пачка успевает выйти, пока первый не открыл огонь. */
+  holdMs: 880,
+  /** Пауза между зелёными одной точки. */
+  gapMs: 300,
+  /** Маркер точки за столько мс до первого из пачки. */
+  warnMs: 1100,
+  score: 210,
+} as const;
+
+/** Чем выше на поле, тем мельче фигура. Низ поля — полный хитбокс. */
+export const depth = {
+  far: 0.62,
+  near: 1,
+} as const;
+
+/** Полоска ENEMY в рамке. Один сегмент — одно убийство волны. */
+export const enemyBar = {
+  width: 156,
+  height: 12,
+  gap: 3,
 } as const;
 
 export const hud = {

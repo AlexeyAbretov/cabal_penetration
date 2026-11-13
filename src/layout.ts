@@ -1,4 +1,4 @@
-import { bands } from './constants';
+import { bands, depth } from './constants';
 
 export type Rect = { x: number; y: number; width: number; height: number };
 
@@ -56,6 +56,12 @@ export function frameLayout(width: number, height: number): FrameLayout {
   const track: Rect = { x: 0, y: field.y + field.height, width, height: trackH };
   const hud: Rect = { x: 0, y: track.y + track.height, width, height: hudH };
   return { width, height, sky, field, track, hud };
+}
+
+/** 0 у верхнего края поля, 1 у дорожки. Дальние фигуры мельче. */
+export function fieldScale(y: number, field: Rect): number {
+  const t = Math.min(1, Math.max(0, (y - field.y) / Math.max(1, field.height)));
+  return depth.far + (depth.near - depth.far) * t;
 }
 
 /** Точка прицела остаётся внутри поля, включая кромку. */

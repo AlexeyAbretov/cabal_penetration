@@ -32,6 +32,7 @@ export class Grenades {
   private readonly label: Phaser.GameObjects.Text;
   private readonly scene: Phaser.Scene;
   private readonly sparks: Sparks;
+  private boom: ((x: number, y: number) => void) | null = null;
 
   constructor(scene: Phaser.Scene, sparks: Sparks) {
     this.scene = scene;
@@ -48,6 +49,11 @@ export class Grenades {
 
   bind(view: FrameLayout): void {
     this.view = view;
+  }
+
+  /** Разрыв в точке падения. Сбитая в воздухе граната землю не бьёт. */
+  onLand(boom: (x: number, y: number) => void): void {
+    this.boom = boom;
   }
 
   throw(args: Throw): void {
@@ -102,10 +108,12 @@ export class Grenades {
   sync(soldierX: number): void {
     const view = this.view;
     if (!view) return;
-    const feet = Math.round(view.track.y + view.track.height / 2 + soldierBox.height / 2 + 2);
-    this.label.setPosition(Math.round(soldierX), feet);
     this.label.setText(String(this.stock));
     this.label.setColor(cssColor(this.stock > 0 ? palette.ink : palette.wallCrit));
+    const feet = Math.round(view.track.y + view.track.height / 2 + soldierBox.height / 2 + 2);
+    // Низкая дорожка иначе прячет нижнюю половину цифр под полоску ENEMY.
+    const aboveHud = view.hud.y - Math.max(this.label.height, 1);
+    this.label.setPosition(Math.round(soldierX), Math.round(Math.min(feet, aboveHud)));
   }
 
   draw(gfx: Phaser.GameObjects.Graphics): void {
@@ -130,6 +138,7 @@ export class Grenades {
     item.alive = false;
     this.drop(item);
     this.sparks.add(item.toX, item.toY, grenade.explodeMs, 'land');
+    this.boom?.(item.toX, item.toY);
   }
 
   private pop(item: Grenade): void {

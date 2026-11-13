@@ -1,23 +1,25 @@
 import Phaser from 'phaser';
 import { resolveColumnHit } from '../combat';
-import { palette } from '../constants';
+import { green, palette } from '../constants';
+import { drillWave, waveQuota } from '../data/wave';
 import { frameLayout, type FrameLayout } from '../layout';
 import { Aim } from './play/aim';
 import { Controls } from './play/input';
+import { Enemies } from './play/enemies';
 import { Grenades } from './play/grenades';
 import { Gun } from './play/gun';
+import { Houses } from './play/houses';
 import { Hud } from './play/hud';
-import { Pressure } from './play/pressure';
 import { Soldier } from './play/soldier';
 import { Sparks } from './play/sparks';
 import { Stage } from './play/stage';
 import { FrontWall } from './play/wall';
 
 /**
- * Срез 2. Колено, два переката, граната, передняя стена.
- * Пуля таймера бьёт колонку: секция цела или идёт перекат — жизнь на месте.
- * Глубина сзади вперёд: небо, поле, дорожка, стена, бой, прицел, рамка HUD.
- * Здесь только порядок кадра. Ноги, огонь, стена и очередь таймера лежат рядом, в play/.
+ * Срез 3. Волна зелёных и полоска ENEMY.
+ * Маркер точки горит до первого выстрела. Убийство съедает полоску.
+ * Пустая полоска кончает кадр сразу: уцелевшие дома падают.
+ * Глубина сзади вперёд: небо и дома, замах, дорожка, зелёные, стена, солдат, очередь, прицел, рамка.
  */
 export class Play extends Phaser.Scene {
   private view!: FrameLayout;
@@ -29,10 +31,12 @@ export class Play extends Phaser.Scene {
   private gun!: Gun;
   private wall!: FrontWall;
   private grenades!: Grenades;
-  private pressure!: Pressure;
+  private enemies!: Enemies;
+  private houses!: Houses;
   private sparks!: Sparks;
   private battleGfx!: Phaser.GameObjects.Graphics;
   private paused = false;
+  private cleared = false;
 
   constructor() {
     super('Play');
@@ -46,11 +50,16 @@ export class Play extends Phaser.Scene {
     this.battleGfx = this.add.graphics().setDepth(4);
     this.gun = new Gun(this);
     this.aim = new Aim(this);
-    this.soldier = new Soldier(this, this.stage.track);
+    this.soldier = new Soldier(this);
     this.hud = new Hud(this, this.stage.hud);
     this.grenades = new Grenades(this, this.sparks);
-    this.pressure = new Pressure();
+    this.enemies = new Enemies(this, this.sparks, () => this.onKill());
+    this.houses = new Houses(this, this.stage.field);
+    this.grenades.onLand((x, y) => {
+      if (!this.cleared) this.enemies.blast(x, y);
+    });
     this.controls = new Controls(this, () => this.onRightClick());
+    this.hud.setQuota(waveQuota(drillWave));
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.layout();
@@ -65,6 +74,13 @@ export class Play extends Phaser.Scene {
       this.controls.sample();
       return;
     }
+    if (this.cleared) {
+      const pointer = this.controls.pointer;
+      if (pointer) this.aim.aimAt(pointer.x, pointer.y, this.view.field);
+      this.sparks.step(Math.min(delta, 50));
+      this.drawBattle();
+      return;
+    }
 
     const input = this.controls.sample();
     const pointer = this.controls.pointer;
@@ -76,17 +92,22 @@ export class Play extends Phaser.Scene {
     if (this.soldier.rolling) this.soldier.advanceRoll(step);
     else this.soldier.step(step, input);
 
+    this.enemies.step(step, this.soldier.column(), this.view);
     this.gun.step(step, {
       rolling: this.soldier.rolling,
       triggerDown: input.firing,
       aimX: this.aim.x,
       aimY: this.aim.y,
-      muzzle: this.soldier.muzzle,
       muzzlePoint: () => this.soldier.muzzlePoint(),
       onShot: (from) => this.resolvePlayerShot(from),
     });
-    this.pressure.step(step, this.soldier.column());
-    for (const column of this.pressure.arrive(step)) this.resolveIncoming(column);
+    if (this.cleared) {
+      this.sparks.step(step);
+      this.grenades.sync(this.soldier.x);
+      this.drawBattle();
+      return;
+    }
+    for (const column of this.enemies.arrive(step)) this.resolveIncoming(column);
     this.soldier.setAlpha(this.hud.stepHurt(step));
     this.sparks.step(step);
     this.grenades.sync(this.soldier.x);
@@ -94,7 +115,7 @@ export class Play extends Phaser.Scene {
   }
 
   private onRightClick(): void {
-    if (!this.view || this.paused) return;
+    if (!this.view || this.paused || this.cleared) return;
     const pointer = this.controls.pointer;
     if (!pointer) return;
     this.aim.aimAt(pointer.x, pointer.y, this.view.field);
@@ -109,6 +130,8 @@ export class Play extends Phaser.Scene {
     this.stage.paint(this.view);
     this.soldier.bind(this.view, this.wall);
     this.grenades.bind(this.view);
+    this.houses.place(this.view);
+    this.enemies.bind(this.view);
     this.placeSoldier();
     const pointer = this.controls.pointer;
     if (pointer) {
@@ -139,6 +162,7 @@ export class Play extends Phaser.Scene {
 
   private resolvePlayerShot(from: { x: number; y: number }): void {
     if (this.grenades.intercept(from.x, from.y, this.aim.x, this.aim.y)) return;
+    if (this.enemies.hit(this.aim.x, this.aim.y)) return;
     const column = this.wall.aimColumn(this.view, this.aim.x, this.aim.y);
     if (column !== null) this.wall.chip(column, this.aim.x, this.aim.y, this.sparks);
   }
@@ -159,12 +183,27 @@ export class Play extends Phaser.Scene {
     if (verdict === 'hurt') this.hud.hurtSoldier();
   }
 
+  private onKill(): void {
+    this.hud.addScore(green.score);
+    if (this.cleared) return;
+    if (this.hud.eat()) this.finish();
+  }
+
+  private finish(): void {
+    if (this.cleared) return;
+    this.cleared = true;
+    this.enemies.freeze();
+    this.houses.fall();
+  }
+
   private drawBattle(): void {
     if (!this.view) return;
     const gfx = this.battleGfx;
     gfx.clear();
+    this.enemies.draw(this.view, this.wall);
     this.wall.draw(gfx, this.view);
-    this.pressure.draw(gfx, this.view, this.wall);
+    this.soldier.draw();
+    this.enemies.drawBullets(gfx, this.view, this.wall);
     this.grenades.draw(gfx);
     this.sparks.draw(gfx);
     this.wall.drawNotch(gfx, this.view, this.soldier.column());

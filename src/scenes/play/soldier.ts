@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { frame, kneelScale, motion, palette, rollMove, soldierBox, wall } from '../../constants';
+import { frame, kneelScale, motion, palette, rollMove, soldierBox } from '../../constants';
 import type { FrameLayout } from '../../layout';
 import type { MoveInput } from './input';
 import type { FrontWall } from './wall';
@@ -17,14 +17,20 @@ type Pose = 'stand' | 'kneel' | 'roll';
 /**
  * Ноги на дорожке: шаг, бег, колено, короткий и длинный перекат.
  * Очередь сюда не входит. Пока зажат огонь, шаг из этого класса не вызывают.
+ * Тело — свой Graphics выше стены. Rectangle и фигуры внутри буфера стены остаются под кладкой.
  */
 export class Soldier {
-  readonly body: Phaser.GameObjects.Rectangle;
-  readonly muzzle: Phaser.GameObjects.Rectangle;
-
+  private readonly gfx: Phaser.GameObjects.Graphics;
   /** 0 — левый край хитбокса, 1 — правый. На ресайзе солдат остаётся на той же доле. */
   private soldierRatio = 0.5;
   private soldierX = 0;
+  private cx = 0;
+  private cy = 0;
+  private bodyW: number = soldierBox.width;
+  private bodyH: number = soldierBox.height;
+  private angle = 0;
+  private fill: number = palette.soldier;
+  private alpha = 1;
   /** Бег держится, пока Shift в связке с направлением. Огонь и перекат связку рвут. */
   private runLatched = false;
   private kneeling = false;
@@ -33,13 +39,8 @@ export class Soldier {
   private view: FrameLayout | null = null;
   private columns: FrontWall | null = null;
 
-  constructor(scene: Phaser.Scene, track: Phaser.GameObjects.Container) {
-    this.body = scene.add
-      .rectangle(0, 0, soldierBox.width, soldierBox.height, palette.soldier)
-      .setOrigin(0.5, 0.5);
-    track.add(this.body);
-    this.muzzle = scene.add.rectangle(0, 0, 10, 4, palette.muzzle).setOrigin(0.5, 1).setVisible(false);
-    track.add(this.muzzle);
+  constructor(scene: Phaser.Scene) {
+    this.gfx = scene.add.graphics().setDepth(4.5);
   }
 
   get x(): number {
@@ -57,7 +58,7 @@ export class Soldier {
 
   column(): number {
     if (!this.view || !this.columns) return 0;
-    return this.columns.columnAt(this.view, this.body.x);
+    return this.columns.columnAt(this.view, this.cx);
   }
 
   /** Доля дорожки, на которой центр солдата совпадает с центром колонки. */
@@ -141,25 +142,35 @@ export class Soldier {
     const { min, max } = this.walkSpan(view);
     this.soldierX = min + (max - min) * this.soldierRatio;
     const bottom = Math.round(view.track.y + view.track.height / 2 + soldierBox.height / 2);
-    this.body.setPosition(Math.round(this.soldierX), Math.round(bottom - this.body.height / 2));
-    this.placeMuzzle();
+    this.cx = Math.round(this.soldierX);
+    this.cy = Math.round(bottom - this.bodyH / 2);
+  }
+
+  /** Свой буфер, глубже стены по списку. Так тело закрывает кладку. */
+  draw(): void {
+    const gfx = this.gfx;
+    gfx.clear();
+    gfx.setPosition(0, 0);
+    gfx.setAngle(0);
+    gfx.fillStyle(this.fill, this.alpha);
+    if (this.angle === 0) {
+      gfx.fillRect(this.cx - this.bodyW / 2, this.cy - this.bodyH / 2, this.bodyW, this.bodyH);
+      return;
+    }
+    gfx.save();
+    gfx.translateCanvas(this.cx, this.cy);
+    gfx.rotateCanvas(Phaser.Math.DegToRad(this.angle));
+    gfx.fillRect(-this.bodyW / 2, -this.bodyH / 2, this.bodyW, this.bodyH);
+    gfx.restore();
   }
 
   setAlpha(alpha: number): void {
-    this.body.setAlpha(alpha);
+    this.alpha = alpha;
   }
 
-  /** Из-за целой стены ствол торчит над лицом секции, иначе очередь рисуется сквозь кладку. */
+  /** Верх прямоугольника. Стена точку вылета не подменяет. */
   muzzlePoint(): { x: number; y: number } {
-    let y = this.body.y - this.body.height / 2;
-    if (this.view && this.columns) {
-      const column = this.columns.columnAt(this.view, this.body.x);
-      if (this.columns.up(column)) {
-        const face = this.view.track.y - wall.intoField;
-        if (y > face) y = face - 2;
-      }
-    }
-    return { x: this.body.x, y };
+    return { x: this.cx, y: this.cy - this.bodyH / 2 };
   }
 
   private startRoll(kind: 'short' | 'long', dir: -1 | 1): boolean {
@@ -184,25 +195,13 @@ export class Soldier {
     const next: Pose = this.roll ? 'roll' : this.kneeling ? 'kneel' : 'stand';
     if (next !== this.pose) {
       this.pose = next;
-      const height =
+      this.bodyH =
         next === 'stand' ? soldierBox.height : next === 'kneel' ? soldierBox.height * kneelScale : soldierBox.height * 0.42;
-      const width = next === 'roll' ? soldierBox.width * 1.35 : soldierBox.width;
-      this.body
-        .setSize(width, height)
-        .setOrigin(0.5, 0.5)
-        .setFillStyle(next === 'roll' ? palette.soldierRoll : palette.soldier);
+      this.bodyW = next === 'roll' ? soldierBox.width * 1.35 : soldierBox.width;
+      this.fill = next === 'roll' ? palette.soldierRoll : palette.soldier;
     }
-    if (!this.roll) {
-      this.body.setAngle(0);
-      return;
-    }
-    const t = Math.min(1, this.roll.elapsed / this.roll.duration);
-    this.body.setAngle(this.roll.dir * t * 360);
-  }
-
-  private placeMuzzle(): void {
-    const point = this.muzzlePoint();
-    this.muzzle.setPosition(point.x, point.y);
+    const t = this.roll ? Math.min(1, this.roll.elapsed / this.roll.duration) : 0;
+    this.angle = this.roll ? this.roll.dir * t * 360 : 0;
   }
 
   private walkSpan(view: FrameLayout): { min: number; max: number } {

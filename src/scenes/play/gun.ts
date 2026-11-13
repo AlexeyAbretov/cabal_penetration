@@ -14,7 +14,6 @@ type ShotFrame = {
   triggerDown: boolean;
   aimX: number;
   aimY: number;
-  muzzle: Phaser.GameObjects.Rectangle;
   muzzlePoint: () => { x: number; y: number };
   onShot: (from: { x: number; y: number }) => void;
 };
@@ -29,7 +28,7 @@ export class Gun {
   private readonly gfx: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene) {
-    this.gfx = scene.add.graphics().setDepth(4);
+    this.gfx = scene.add.graphics().setDepth(4.6);
   }
 
   /** Сброс очереди в кадр, когда кувырок только начался. */
@@ -78,27 +77,25 @@ export class Gun {
       life: tracerTravelMs,
     });
     this.muzzleLife = muzzleFlashMs;
-    frame.muzzle.setPosition(muzzle.x, muzzle.y);
-    frame.muzzle.setVisible(true);
   }
 
   private stepShots(delta: number, frame: ShotFrame): void {
     this.muzzleLife = Math.max(0, this.muzzleLife - delta);
-    frame.muzzle.setVisible(this.muzzleLife > 0 && !frame.rolling);
 
     let any = false;
     for (const shot of this.shots) {
       shot.life -= delta;
       if (shot.life > 0) any = true;
     }
-    if (!any) {
-      this.shots.length = 0;
-      this.gfx.clear();
-      return;
-    }
+    if (!any) this.shots.length = 0;
+    else this.shots = this.shots.filter((shot) => shot.life > 0);
 
-    this.shots = this.shots.filter((shot) => shot.life > 0);
     this.gfx.clear();
+    if (this.muzzleLife > 0 && !frame.rolling) {
+      const muzzle = frame.muzzlePoint();
+      this.gfx.fillStyle(palette.muzzle, 1);
+      this.gfx.fillRect(muzzle.x - 5, muzzle.y - 4, 10, 4);
+    }
     for (const shot of this.shots) this.drawShot(shot);
   }
 
