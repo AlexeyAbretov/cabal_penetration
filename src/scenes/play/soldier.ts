@@ -48,6 +48,8 @@ export class Soldier {
   private clip = '';
   private pose: Pose = 'stand';
   private roll: Roll | null = null;
+  /** Пустая полоска: бег вперёд за правый край, без клампа дорожки. */
+  private leaving = false;
   private view: FrameLayout | null = null;
   private columns: FrontWall | null = null;
 
@@ -121,6 +123,31 @@ export class Soldier {
     this.place();
   }
 
+  /**
+   * Смена картинки. Бег за правый край дорожки, ноги больше не упираются в её конец.
+   * true — тело уже ушло с дорожки, сцену можно сменить.
+   */
+  leave(delta: number): boolean {
+    const view = this.view;
+    if (!view) return false;
+    if (!this.leaving) {
+      this.leaving = true;
+      this.roll = null;
+      this.kneeling = false;
+      this.firing = false;
+      this.gait = 'run';
+      this.face = 1;
+      this.clip = '';
+    }
+    const span = view.width / frame.width;
+    this.soldierX += motion.run * span * (delta / 1000);
+    this.feetY = Math.round(view.track.y + view.track.height / 2 + soldierBox.height / 2);
+    this.cx = Math.round(this.soldierX);
+    this.applyPose();
+    this.cy = Math.round(this.feetY - this.bodyH / 2);
+    return this.cx - this.bodyW / 2 > view.track.x + view.track.width;
+  }
+
   step(delta: number, input: MoveInput, showFire: boolean, aimX: number, aimY: number): void {
     const view = this.view;
     if (!view) return;
@@ -171,6 +198,13 @@ export class Soldier {
   place(): void {
     const view = this.view;
     if (!view) return;
+    if (this.leaving) {
+      this.applyPose();
+      this.feetY = Math.round(view.track.y + view.track.height / 2 + soldierBox.height / 2);
+      this.cx = Math.round(this.soldierX);
+      this.cy = Math.round(this.feetY - this.bodyH / 2);
+      return;
+    }
     this.applyPose();
     const { min, max } = this.walkSpan(view);
     this.soldierX = min + (max - min) * this.soldierRatio;

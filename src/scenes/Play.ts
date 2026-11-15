@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
+import { afterPicture, marchFrom, marchPicture, type March } from '../campaign/march';
+import type { Picture } from '../campaign/picture';
 import { resolveColumnHit } from '../combat';
-import { palette, pickup, star, type DropKind } from '../constants';
-import { drillWave, waveQuota } from '../data/wave';
+import { hud as hudNumbers, palette, pickup, star, type DropKind } from '../constants';
+import { waveQuota } from '../data/wave';
 import { frameLayout, type FrameLayout } from '../layout';
 import { Aim } from './play/aim';
 import { Controls } from './play/input';
@@ -19,7 +21,7 @@ import { Stage } from './play/stage';
 import { FrontWall } from './play/wall';
 
 /**
- * Срез 4. Дроп и два ствола.
+ * Картинка из маршрута. Гранаты, счёт и жизни приходят с захода, ствол — нет.
  * Куст и ящик проходят стадии и роняют на дорожку пачку, ствол или звезду. Подбор телом.
  * Частый ствол бьёт в точку, широкий — пятном. На конце сцены оба сгорают, автомат остаётся.
  * Танк-прямоугольник ест полоску. Очки за него и за крупные объекты выше, чем за зелёного.
@@ -44,14 +46,29 @@ export class Play extends Phaser.Scene {
   private battleGfx!: Phaser.GameObjects.Graphics;
   private paused = false;
   private cleared = false;
+  private down: 'continue' | 'over' | null = null;
+  private handoff: March | null = null;
+  private settled = false;
+  private march: March = marchFrom(undefined);
+  private picture!: Picture;
 
   constructor() {
     super('Play');
   }
 
+  init(data?: object): void {
+    this.march = marchFrom(data);
+    this.picture = marchPicture(this.march);
+    this.paused = false;
+    this.cleared = false;
+    this.down = null;
+    this.handoff = null;
+    this.settled = false;
+  }
+
   create(): void {
     this.cameras.main.setBackgroundColor(palette.black);
-    this.wall = new FrontWall();
+    this.wall = new FrontWall(this.picture.wall);
     this.sparks = new Sparks();
     this.stage = new Stage(this);
     this.battleGfx = this.add.graphics().setDepth(4);
@@ -60,25 +77,29 @@ export class Play extends Phaser.Scene {
     this.soldier = new Soldier(this);
     this.hud = new Hud(this, this.stage.hud);
     this.grenades = new Grenades(this, this.sparks);
+    this.grenades.setStock(this.march.grenades);
     this.drops = new Drops(this, this.sparks, (kind) => this.takeDrop(kind));
-    this.props = new Props(this, this.sparks, (drop, score, rx, ry) => {
+    this.props = new Props(this, this.picture.props, this.sparks, (drop, score, rx, ry) => {
       this.hud.addScore(score);
       this.drops.spawn(drop, rx, ry);
     });
-    this.enemies = new Enemies(this, this.sparks, (points) => this.onKill(points));
-    this.houses = new Houses(this, this.stage.field);
+    this.enemies = new Enemies(this, this.picture.wave, this.sparks, (points) => this.onKill(points), (count) =>
+      this.onGone(count),
+    );
+    this.houses = new Houses(this, this.picture.houses, this.stage.field);
     this.grenades.onLand((x, y) => {
       if (this.cleared) return;
       this.enemies.blast(x, y);
       this.props.blast(x, y);
     });
     this.controls = new Controls(this, () => this.onRightClick());
-    this.hud.setQuota(waveQuota(drillWave));
+    this.hud.setQuota(waveQuota(this.picture.wave));
+    this.hud.carry(this.march.score, this.march.lives);
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.layout();
     // Центр секции, не стык. Стык у дыры читается как «стою в проломе».
-    this.soldier.standInColumn(4);
+    this.soldier.standInColumn(Math.min(4, Math.max(0, this.picture.wall.length - 1)));
     this.placeSoldier();
     void this.attachSoldierSheet();
   }
@@ -123,15 +144,22 @@ export class Play extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    if (this.controls.escPressed()) this.setPaused(!this.paused);
-    if (this.paused) {
+    if (this.handoff) {
+      const next = this.handoff;
+      this.handoff = null;
+      this.scene.restart(next);
+      return;
+    }
+    if (this.controls.escPressed() && !this.down) this.setPaused(!this.paused);
+    if (this.paused || this.down) {
       this.controls.sample();
+      if (this.down === 'continue' && this.controls.enterPressed()) this.acceptContinue();
       return;
     }
     if (this.cleared) {
       const pointer = this.controls.pointer;
       if (pointer) this.aim.aimAt(pointer.x, pointer.y, this.view.field);
-      this.sparks.step(Math.min(delta, 50));
+      this.stepClear(Math.min(delta, 50));
       this.drawBattle();
       return;
     }
@@ -146,7 +174,12 @@ export class Play extends Phaser.Scene {
     if (this.soldier.rolling) this.soldier.advanceRoll(step);
     else this.soldier.step(step, input, input.firing && this.gun.acceptsTrigger(), this.aim.x, this.aim.y);
 
-    this.enemies.step(step, this.soldier.column(), this.view);
+    this.enemies.step(step, this.soldier.column(), this.view, this.wall);
+    if (this.cleared) {
+      this.stepClear(step);
+      this.drawBattle();
+      return;
+    }
     this.gun.step(step, {
       rolling: this.soldier.rolling,
       triggerDown: input.firing,
@@ -156,12 +189,14 @@ export class Play extends Phaser.Scene {
       onShot: (from, at) => this.resolvePlayerShot(from, at),
     });
     if (this.cleared) {
-      this.sparks.step(step);
-      this.grenades.sync(this.soldier.x);
+      this.stepClear(step);
       this.drawBattle();
       return;
     }
-    for (const column of this.enemies.arrive(step)) this.resolveIncoming(column);
+    for (const column of this.enemies.arrive(step)) {
+      if (this.down || this.handoff) break;
+      this.resolveIncoming(column);
+    }
     this.soldier.setAlpha(this.hud.stepHurt(step));
     this.sparks.step(step);
     this.grenades.sync(this.soldier.x);
@@ -171,7 +206,7 @@ export class Play extends Phaser.Scene {
   }
 
   private onRightClick(): void {
-    if (!this.view || this.paused || this.cleared) return;
+    if (!this.view || this.paused || this.cleared || this.down) return;
     const pointer = this.controls.pointer;
     if (!pointer) return;
     this.aim.aimAt(pointer.x, pointer.y, this.view.field);
@@ -239,13 +274,79 @@ export class Play extends Phaser.Scene {
       return;
     }
     this.sparks.add(point.x, point.y, 120, 'puff');
-    if (verdict === 'hurt') this.hud.hurtSoldier();
+    if (verdict === 'hurt') this.onLifeLost();
+  }
+
+  /**
+   * Обычная картинка остаётся как есть: жизнь снята, волна на месте.
+   * Босс обнуляется. Нулевая жизнь ждёт Enter, пока континуэ не кончились.
+   * Континуэ обнуляет счёт, как в порте, и возвращает стартовые жизни.
+   */
+  private onLifeLost(): void {
+    if (this.down || this.handoff) return;
+    const spent = this.hud.hurtSoldier();
+    this.march.lives = this.hud.livesLeft;
+    this.march.score = this.hud.points;
+    this.march.grenades = this.grenades.count();
+    if (this.picture.boss && this.march.lives > 0) {
+      this.handoff = { ...this.march };
+      return;
+    }
+    if (!spent) return;
+    if (this.march.continues > 0) {
+      this.down = 'continue';
+      this.hud.setHold('continue', this.march.continues);
+    } else {
+      this.down = 'over';
+      this.hud.setHold('over');
+    }
+    this.tweens.pauseAll();
+  }
+
+  private acceptContinue(): void {
+    this.march.continues -= 1;
+    this.march.score = 0;
+    this.march.lives = hudNumbers.lives;
+    this.march.grenades = this.grenades.count();
+    this.down = null;
+    this.hud.setHold(null);
+    if (this.picture.boss) {
+      this.handoff = { ...this.march };
+      return;
+    }
+    this.hud.carry(0, hudNumbers.lives);
+    this.tweens.resumeAll();
+  }
+
+  /** Дома уже падают. Солдат убегает, затем следующая картинка или лишняя жизнь. */
+  private stepClear(delta: number): void {
+    this.sparks.step(delta);
+    this.grenades.sync(this.soldier.x);
+    if (this.settled) return;
+    if (!this.soldier.leave(delta)) return;
+    this.march.lives = this.hud.livesLeft;
+    this.march.score = this.hud.points;
+    this.march.grenades = this.grenades.count();
+    const next = afterPicture(this.march);
+    this.march = next.march;
+    if (next.done) {
+      this.settled = true;
+      this.hud.carry(this.march.score, this.march.lives);
+      return;
+    }
+    this.handoff = this.march;
   }
 
   private onKill(points: number): void {
     this.hud.addScore(points);
     if (this.cleared) return;
     if (this.hud.eat()) this.finish();
+  }
+
+  /** Грузовик уехал или кузов не высадился. Очков нет. */
+  private onGone(count: number): void {
+    if (this.cleared) return;
+    if (this.hud.release(count)) this.finish();
   }
 
   private takeDrop(kind: DropKind): void {
@@ -291,7 +392,7 @@ export class Play extends Phaser.Scene {
 
   private setPaused(paused: boolean): void {
     this.paused = paused;
-    this.hud.setPaused(paused);
+    this.hud.setHold(paused ? 'pause' : null);
     if (paused) this.tweens.pauseAll();
     else this.tweens.resumeAll();
   }

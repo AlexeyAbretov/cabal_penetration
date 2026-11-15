@@ -30,6 +30,7 @@ export class Controls {
     ctrl: Phaser.Input.Keyboard.Key;
     grenade: Phaser.Input.Keyboard.Key;
     esc: Phaser.Input.Keyboard.Key;
+    enter: Phaser.Input.Keyboard.Key;
   };
 
   private livePointer: { x: number; y: number } | null = null;
@@ -54,8 +55,9 @@ export class Controls {
       ctrl: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL),
       grenade: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.G),
       esc: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC),
+      enter: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER),
     };
-    keyboard.addCapture('LEFT,RIGHT,UP,DOWN,SHIFT,SPACE,A,D,S,G');
+    keyboard.addCapture('LEFT,RIGHT,UP,DOWN,SHIFT,SPACE,A,D,S,G,ENTER');
     scene.input.mouse?.disableContextMenu();
     scene.input.setDefaultCursor('none');
 
@@ -75,6 +77,11 @@ export class Controls {
 
   escPressed(): boolean {
     return Phaser.Input.Keyboard.JustDown(this.keys.esc);
+  }
+
+  /** Континуэ. Пробел занят длинным перекатом. */
+  enterPressed(): boolean {
+    return Phaser.Input.Keyboard.JustDown(this.keys.enter);
   }
 
   sample(): MoveInput {

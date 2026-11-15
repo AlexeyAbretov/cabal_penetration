@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { palette } from '../../constants';
-import { drillHouses } from '../../data/wave';
+import type { HouseMark } from '../../data/wave';
 import type { FrameLayout } from '../../layout';
 
 type House = {
@@ -15,9 +15,9 @@ export class Houses {
   private readonly houses: House[];
   private readonly scene: Phaser.Scene;
 
-  constructor(scene: Phaser.Scene, field: Phaser.GameObjects.Container) {
+  constructor(scene: Phaser.Scene, marks: readonly HouseMark[], field: Phaser.GameObjects.Container) {
     this.scene = scene;
-    this.houses = drillHouses.map((mark) => {
+    this.houses = marks.map((mark) => {
       const roofH = 14;
       const root = scene.add.container(0, 0);
       const body = scene.add.rectangle(0, roofH / 2, mark.w, mark.h - roofH, palette.house);

@@ -57,10 +57,28 @@ export class Hud {
     return this.hurtTimer > 0;
   }
 
-  hurtSoldier(): void {
+  get livesLeft(): number {
+    return this.lives;
+  }
+
+  get points(): number {
+    return this.score;
+  }
+
+  /** Заход или континуэ. Полоска сцены при этом не трогается. */
+  carry(score: number, lives: number): void {
+    this.score = Math.max(0, score);
+    this.lives = Math.max(0, lives);
+    this.livesText.setText(String(this.lives));
+    this.scoreText.setText(String(this.score).padStart(hud.scoreDigits, '0'));
+  }
+
+  /** true — жизней не осталось. */
+  hurtSoldier(): boolean {
     this.lives = Math.max(0, this.lives - 1);
     this.hurtTimer = hud.hurtMs;
     this.livesText.setText(String(this.lives));
+    return this.lives === 0;
   }
 
   setQuota(quota: number): void {
@@ -87,6 +105,14 @@ export class Hud {
     return this.slain >= this.quota;
   }
 
+  /** Уехали, не убиты. Сегменты сходят без очков. true — полоска от этого пуста. */
+  release(count: number): boolean {
+    if (count <= 0 || this.quota <= 0) return false;
+    this.quota = Math.max(this.slain, this.quota - count);
+    this.paintBar();
+    return this.slain >= this.quota && this.quota > 0;
+  }
+
   /** Доля непрозрачности тела: мигание, пока держится окно после ранения. */
   stepHurt(delta: number): number {
     this.hurtTimer = Math.max(0, this.hurtTimer - delta);
@@ -94,9 +120,13 @@ export class Hud {
     return blink ? 0.3 : 1;
   }
 
-  setPaused(paused: boolean): void {
-    this.pauseVeil.setVisible(paused);
-    this.pauseLabel.setVisible(paused);
+  setHold(hold: 'pause' | 'continue' | 'over' | null, continuesLeft = 0): void {
+    const visible = hold !== null;
+    this.pauseVeil.setVisible(visible);
+    this.pauseLabel.setVisible(visible);
+    if (hold === 'pause') this.pauseLabel.setText('ПАУЗА');
+    if (hold === 'continue') this.pauseLabel.setText(`ENTER  ${continuesLeft}`);
+    if (hold === 'over') this.pauseLabel.setText('КОНЕЦ');
   }
 
   draw(view: FrameLayout, width: number, height: number): void {

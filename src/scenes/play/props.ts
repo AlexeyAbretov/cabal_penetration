@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { grenade, palette, scenery, wall, type DropKind, type PropKind } from '../../constants';
-import { drillProps } from '../../data/wave';
+import type { PropMark } from '../../data/wave';
 import { fieldScale, type FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
 
@@ -33,12 +33,13 @@ export class Props {
 
   constructor(
     scene: Phaser.Scene,
+    marks: readonly PropMark[],
     sparks: Sparks,
     onBreak: (drop: DropKind, score: number, rx: number, ry: number) => void,
   ) {
     this.sparks = sparks;
     this.onBreak = onBreak;
-    this.props = drillProps.map((mark) => {
+    this.props = marks.map((mark) => {
       const spec = scenery[mark.kind];
       return {
         kind: mark.kind,

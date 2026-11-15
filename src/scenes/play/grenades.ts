@@ -26,7 +26,7 @@ type Throw = {
 
 /** Одна граната за нажатие. Дуга видна, пока она в воздухе, число лежит у ног. */
 export class Grenades {
-  private stock = grenade.stock;
+  private stock: number = grenade.stock;
   private grenades: Grenade[] = [];
   private view: FrameLayout | null = null;
   private readonly label: Phaser.GameObjects.Text;
@@ -49,6 +49,15 @@ export class Grenades {
 
   bind(view: FrameLayout): void {
     this.view = view;
+  }
+
+  count(): number {
+    return this.stock;
+  }
+
+  /** Заход приносит запас с прошлой картинки. Между сценами гранаты не сбрасываются. */
+  setStock(stock: number): void {
+    this.stock = Math.max(0, Math.floor(stock));
   }
 
   /** Пачка с дороги прибавляется к запасу. Потолка нет. */

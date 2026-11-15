@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { columnIndex } from '../../combat';
 import { palette, wall } from '../../constants';
-import { rangeWall } from '../../data/range';
 import type { FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
 
@@ -18,8 +17,8 @@ export type WallGeom = {
 export class FrontWall {
   private readonly hp: number[];
 
-  constructor() {
-    this.hp = rangeWall.map((up) => (up ? wall.hits : 0));
+  constructor(mask: readonly boolean[]) {
+    this.hp = mask.map((up) => (up ? wall.hits : 0));
   }
 
   up(column: number): boolean {
