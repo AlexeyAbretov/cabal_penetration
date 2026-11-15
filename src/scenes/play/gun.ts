@@ -53,6 +53,11 @@ export class Gun {
     if (triggerHeld) this.blockFire = true;
   }
 
+  /** Зажатая после кувырка кнопка очередь не продолжает. Вспышка листа ждёт нового нажатия. */
+  acceptsTrigger(): boolean {
+    return !this.blockFire;
+  }
+
   step(delta: number, frame: ShotFrame): void {
     this.stepFire(delta, frame);
     this.stepShots(delta, frame);
@@ -116,7 +121,7 @@ export class Gun {
     if (this.muzzleLife > 0 && !frame.rolling) {
       const muzzle = frame.muzzlePoint();
       this.gfx.fillStyle(this.flashColor, 1);
-      this.gfx.fillRect(muzzle.x - 5, muzzle.y - 4, 10, 4);
+      this.gfx.fillRect(muzzle.x - 2, muzzle.y - 2, 4, 4);
     }
     for (const shot of this.shots) this.drawShot(shot);
   }

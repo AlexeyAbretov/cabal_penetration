@@ -12,6 +12,7 @@ import { Gun } from './play/gun';
 import { Houses } from './play/houses';
 import { Hud } from './play/hud';
 import { Props } from './play/props';
+import { registerSoldierAnims, soldierSheet, soldierSheetReady } from '../soldierSheet';
 import { Soldier } from './play/soldier';
 import { Sparks } from './play/sparks';
 import { Stage } from './play/stage';
@@ -79,6 +80,46 @@ export class Play extends Phaser.Scene {
     // Центр секции, не стык. Стык у дыры читается как «стою в проломе».
     this.soldier.standInColumn(4);
     this.placeSoldier();
+    void this.attachSoldierSheet();
+  }
+
+  /**
+   * Лист необязателен. Нет файла или размер не контракт — остаётся прямоугольник,
+   * загрузчик Phaser при этом не ругается на пустой путь.
+   */
+  private async attachSoldierSheet(): Promise<void> {
+    let response: Response;
+    try {
+      response = await fetch(soldierSheet.url, { method: 'HEAD' });
+    } catch {
+      return;
+    }
+    if (!response.ok) return;
+    const type = response.headers.get('content-type') ?? '';
+    if (type.includes('text/html')) return;
+    if (this.textures.exists(soldierSheet.key)) {
+      this.mountSoldierSheet();
+      return;
+    }
+    this.load.spritesheet(soldierSheet.key, soldierSheet.url, {
+      frameWidth: soldierSheet.frameWidth,
+      frameHeight: soldierSheet.frameHeight,
+    });
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => this.mountSoldierSheet());
+    this.load.start();
+  }
+
+  private mountSoldierSheet(): void {
+    if (!soldierSheetReady(this)) {
+      if (!this.textures.exists(soldierSheet.key)) return;
+      const source = this.textures.get(soldierSheet.key).getSourceImage();
+      const width = soldierSheet.frameWidth * soldierSheet.columns;
+      const height = soldierSheet.frameHeight * soldierSheet.rows;
+      console.warn(`Лист солдата ${source.width}×${source.height}, контракт ${width}×${height}.`);
+      return;
+    }
+    registerSoldierAnims(this);
+    this.soldier.useSheet();
   }
 
   update(_time: number, delta: number): void {
@@ -103,7 +144,7 @@ export class Play extends Phaser.Scene {
     const step = Math.min(delta, 50);
     if (this.soldier.tryRoll(input)) this.gun.interrupt(input.firing);
     if (this.soldier.rolling) this.soldier.advanceRoll(step);
-    else this.soldier.step(step, input);
+    else this.soldier.step(step, input, input.firing && this.gun.acceptsTrigger(), this.aim.x, this.aim.y);
 
     this.enemies.step(step, this.soldier.column(), this.view);
     this.gun.step(step, {
@@ -111,7 +152,7 @@ export class Play extends Phaser.Scene {
       triggerDown: input.firing,
       aimX: this.aim.x,
       aimY: this.aim.y,
-      muzzlePoint: () => this.soldier.muzzlePoint(),
+      muzzlePoint: () => this.soldier.barrelPoint(),
       onShot: (from, at) => this.resolvePlayerShot(from, at),
     });
     if (this.cleared) {
