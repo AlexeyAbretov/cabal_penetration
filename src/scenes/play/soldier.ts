@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { aimFan, frame, kneelScale, motion, palette, rollMove, soldierBox } from '../../constants';
-import type { FrameLayout } from '../../layout';
+import { soldierFeetY, type FrameLayout } from '../../layout';
 import { aimFrame, aimMuzzle, soldierAnimKey, soldierSheet, type SoldierClipName } from '../../soldierSheet';
 import type { MoveInput } from './input';
 import type { FrontWall } from './wall';
@@ -18,7 +18,7 @@ type Pose = 'stand' | 'kneel' | 'roll';
 /**
  * Ноги на дорожке: шаг, бег, колено, короткий и длинный перекат.
  * Очередь сюда не входит. Пока зажат огонь, шаг из этого класса не вызывают.
- * Тело — свой Graphics выше стены, пока лист не лёг в тот же прямоугольник.
+ * Ступни на дорожке под забором, сразу над рамкой. Макушка забора чуть выше шлема.
  */
 export class Soldier {
   private readonly scene: Phaser.Scene;
@@ -141,7 +141,7 @@ export class Soldier {
     }
     const span = view.width / frame.width;
     this.soldierX += motion.run * span * (delta / 1000);
-    this.feetY = Math.round(view.track.y + view.track.height / 2 + soldierBox.height / 2);
+    this.feetY = soldierFeetY(view.track);
     this.cx = Math.round(this.soldierX);
     this.applyPose();
     this.cy = Math.round(this.feetY - this.bodyH / 2);
@@ -200,7 +200,7 @@ export class Soldier {
     if (!view) return;
     if (this.leaving) {
       this.applyPose();
-      this.feetY = Math.round(view.track.y + view.track.height / 2 + soldierBox.height / 2);
+      this.feetY = soldierFeetY(view.track);
       this.cx = Math.round(this.soldierX);
       this.cy = Math.round(this.feetY - this.bodyH / 2);
       return;
@@ -208,7 +208,7 @@ export class Soldier {
     this.applyPose();
     const { min, max } = this.walkSpan(view);
     this.soldierX = min + (max - min) * this.soldierRatio;
-    this.feetY = Math.round(view.track.y + view.track.height / 2 + soldierBox.height / 2);
+    this.feetY = soldierFeetY(view.track);
     this.cx = Math.round(this.soldierX);
     this.cy = Math.round(this.feetY - this.bodyH / 2);
   }

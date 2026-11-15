@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { arcPoint, distanceToSegment } from '../../combat';
-import { cssColor, grenade, palette, soldierBox } from '../../constants';
+import { grenade, palette } from '../../constants';
 import type { FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
 
@@ -24,12 +24,11 @@ type Throw = {
   aimY: number;
 };
 
-/** Одна граната за нажатие. Дуга видна, пока она в воздухе, число лежит у ног. */
+/** Одна граната за нажатие. Дуга видна, пока она в воздухе. Число запаса рисует рамка. */
 export class Grenades {
   private stock: number = grenade.stock;
   private grenades: Grenade[] = [];
   private view: FrameLayout | null = null;
-  private readonly label: Phaser.GameObjects.Text;
   private readonly scene: Phaser.Scene;
   private readonly sparks: Sparks;
   private boom: ((x: number, y: number) => void) | null = null;
@@ -37,14 +36,6 @@ export class Grenades {
   constructor(scene: Phaser.Scene, sparks: Sparks) {
     this.scene = scene;
     this.sparks = sparks;
-    this.label = scene.add
-      .text(0, 0, '', {
-        fontFamily: 'Consolas, "Courier New", monospace',
-        fontSize: '20px',
-        color: cssColor(palette.ink),
-      })
-      .setOrigin(0.5, 0)
-      .setDepth(5);
   }
 
   bind(view: FrameLayout): void {
@@ -118,17 +109,6 @@ export class Grenades {
     if (!hit) return false;
     this.pop(hit);
     return true;
-  }
-
-  sync(soldierX: number): void {
-    const view = this.view;
-    if (!view) return;
-    this.label.setText(String(this.stock));
-    this.label.setColor(cssColor(this.stock > 0 ? palette.ink : palette.wallCrit));
-    const feet = Math.round(view.track.y + view.track.height / 2 + soldierBox.height / 2 + 2);
-    // Низкая дорожка иначе прячет нижнюю половину цифр под полоску ENEMY.
-    const aboveHud = view.hud.y - Math.max(this.label.height, 1);
-    this.label.setPosition(Math.round(soldierX), Math.round(Math.min(feet, aboveHud)));
   }
 
   draw(gfx: Phaser.GameObjects.Graphics): void {

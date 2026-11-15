@@ -1,31 +1,33 @@
 import Phaser from 'phaser';
-import { palette } from '../../constants';
 import type { HouseMark } from '../../data/wave';
 import type { FrameLayout } from '../../layout';
+import { blit, ensureCanvas } from './blit';
+import { buildingBox, drawBuilding } from './buildings';
 
 type House = {
   root: Phaser.GameObjects.Container;
-  x: number;
-  y: number;
+  image: Phaser.GameObjects.Image;
+  key: string;
+  mark: HouseMark;
+  w: number;
+  h: number;
   falling: boolean;
 };
 
-/** Прямоугольники деревни. Пока целы, стоят. Пустая полоска роняет все уцелевшие. */
+/** Дома 1-1. Пустая полоска роняет уцелевшие. Пока по ним не стреляют. */
 export class Houses {
   private readonly houses: House[];
   private readonly scene: Phaser.Scene;
 
   constructor(scene: Phaser.Scene, marks: readonly HouseMark[], field: Phaser.GameObjects.Container) {
     this.scene = scene;
-    this.houses = marks.map((mark) => {
-      const roofH = 14;
+    this.houses = marks.map((mark, index) => {
+      const key = ensureCanvas(scene, `house-${index}`);
+      const image = scene.add.image(0, 0, key).setOrigin(0.5, 1).setVisible(false);
       const root = scene.add.container(0, 0);
-      const body = scene.add.rectangle(0, roofH / 2, mark.w, mark.h - roofH, palette.house);
-      const roof = scene.add.rectangle(0, -mark.h / 2 + roofH / 2, mark.w + 8, roofH, palette.houseRoof);
-      root.add(body);
-      root.add(roof);
+      root.add(image);
       field.add(root);
-      return { root, x: mark.x, y: mark.y, falling: false };
+      return { root, image, key, mark, w: 0, h: 0, falling: false };
     });
   }
 
@@ -33,7 +35,16 @@ export class Houses {
     const field = view.field;
     for (const house of this.houses) {
       if (house.falling) continue;
-      house.root.setPosition(field.x + house.x * field.width, field.y + house.y * field.height);
+      const box = buildingBox(house.mark.w, house.mark.h, house.mark.y, field);
+      if (box.w !== house.w || box.h !== house.h) {
+        blit(this.scene, house.key, drawBuilding(house.mark.kind, box.w, box.h));
+        house.image.setTexture(house.key);
+        house.image.setDisplaySize(box.w, box.h);
+        house.image.setVisible(true);
+        house.w = box.w;
+        house.h = box.h;
+      }
+      house.root.setPosition(field.x + house.mark.x * field.width, field.y + house.mark.y * field.height);
     }
   }
 

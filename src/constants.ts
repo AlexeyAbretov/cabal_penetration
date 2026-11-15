@@ -11,8 +11,64 @@ export const frame = {
 export const palette = {
   black: 0x000000,
   sky: 0x7ea0c4,
+  skyDeep: 0x3f6e98,
+  skyLite: 0xc5dced,
+  cloud: 0xe7f1f6,
+  cloudShade: 0xb7c9d4,
+  hill: 0x1e3828,
+  hillFar: 0x6a9068,
   field: 0x6e7d45,
+  grass: 0x3d8a34,
+  grassDark: 0x246428,
+  grassLite: 0x67ae4a,
+  grassDeep: 0x173f1c,
   track: 0x8a7352,
+  dirt: 0xc6a24e,
+  dirtDark: 0x8d6a32,
+  dirtLite: 0xe4c67c,
+  dirtRut: 0x6a4c22,
+  pebble: 0x9a9078,
+  cream: 0xe7d7b4,
+  creamDark: 0xc2ae84,
+  creamLite: 0xf7edd6,
+  manor: 0xe8aa9c,
+  manorDark: 0xc48476,
+  manorLite: 0xf6d2c6,
+  roof: 0xc65c2c,
+  roofDark: 0x863616,
+  roofLite: 0xe48c4a,
+  roofWood: 0x6a4424,
+  brick: 0xb4683c,
+  brickDark: 0x7a4024,
+  brickLite: 0xd48c5a,
+  mortar: 0xdccfb4,
+  wood: 0x8a5c32,
+  woodDark: 0x5a3a1e,
+  woodLite: 0xc49860,
+  bark: 0x6b4428,
+  barkDark: 0x3c2816,
+  barkLite: 0x8d6240,
+  leaf: 0x2f7630,
+  leafLite: 0x62b04c,
+  leafDark: 0x18481c,
+  hay: 0xd6ae46,
+  hayLite: 0xf0d27c,
+  hayBand: 0x7a5424,
+  iron: 0x6e6c66,
+  ironLite: 0xc8c4b4,
+  brass: 0xc6b24a,
+  flower: 0xe6d25a,
+  petal: 0xf4f0e6,
+  bloom: 0xd45a58,
+  glass: 0x243038,
+  glassLite: 0xd5e6ec,
+  door: 0x5a341c,
+  doorLite: 0x8a5834,
+  shutter: 0x5a6e64,
+  shutterDark: 0x2c4038,
+  line: 0x1a140e,
+  wallLite: 0xd4c8b2,
+  joint: 0x2a241c,
   hud: 0x1c1814,
   ink: 0xe7dcc4,
   soldier: 0x243044,
@@ -67,7 +123,11 @@ export const palette = {
  */
 export const bands = {
   sky: { ratio: 0.18, min: 48, max: 140 },
-  track: { ratio: 0.16, min: 64, max: 120 },
+  /**
+   * Пол, если окно не вмещает дорожку.
+   * Обычная высота — wall.path, её считает кадр, не доля экрана.
+   */
+  track: { ratio: 0.06, min: 12, max: 20 },
   hud: { ratio: 0.1, min: 40, max: 72 },
   fieldMin: 80,
 } as const;
@@ -149,15 +209,21 @@ export const rollMove = {
   long: { columns: 2.7, durationMs: 820 },
 } as const;
 
-/** Высота лица стены в поле. Ниже этой полосы своя очередь стену не берёт. */
+/**
+ * Передняя стена. Макушка чуть выше шлема.
+ * Под низом — короткая дорожка до рамки, по ней ходит солдат.
+ */
 export const wall = {
   hits: 8,
   stripes: 4,
-  intoField: 56,
+  /** Насколько забор выше кадра солдата. */
+  aboveHead: 8,
+  /** Земля между низом забора и рамкой. Не растёт с окном. */
+  path: 20,
   seam: 4,
 } as const;
 
-/** Старт как у FRAG-57: десять гранат, число у ног. */
+/** Старт как у FRAG-57: десять гранат. Число стоит в рамке, сразу после счёта. */
 export const grenade = {
   stock: 10,
   flightMs: 800,
@@ -172,7 +238,7 @@ export const grenade = {
   explodeMs: 280,
   /** Разрыв по земле. Пачка у точки выхода входит, вся волна — нет. */
   blastRadius: 56,
-  /** Куст от гранаты почти кончается, ящик остаётся: гранату жалко не на магазин. */
+  /** Сколько жизней ящика снимает разрыв. Куст в радиусе кончается сразу. */
   propHits: 3,
 } as const;
 
@@ -182,7 +248,7 @@ export const pickup = {
   size: 18,
   /** Пачка к текущему запасу. Потолка нет: между сценами гранаты копятся. */
   grenades: 5,
-  /** Ниже середины дорожки, к ногам стойки. */
+  /** Ниже середины хитбокса, к ступням. */
   feet: 10,
 } as const;
 
@@ -198,7 +264,7 @@ export const star = {
  * Очки за объект выше зелёного. Хитбокс — тот прямоугольник, куда встанет лист.
  */
 export const scenery = {
-  bush: { hp: 4, stages: 3, width: 40, height: 34, score: 500 },
+  bush: { hp: 4, stages: 3, width: 64, height: 52, score: 500 },
   crate: { hp: 6, stages: 3, width: 48, height: 40, score: 1000 },
 } as const;
 

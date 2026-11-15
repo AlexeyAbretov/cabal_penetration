@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { frame, green, grenade, palette, tank, tankVolley, truck, volley, wall, wheel } from '../../constants';
 import { type EnemyKind, type WaveGroup } from '../../data/wave';
-import { fieldScale, type FrameLayout } from '../../layout';
+import { fieldScale, wallTopY, type FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
 import type { FrontWall } from './wall';
 
@@ -487,7 +487,7 @@ export class Enemies {
 
   private place(view: FrameLayout): void {
     const field = view.field;
-    const ceiling = view.track.y - wall.intoField;
+    const ceiling = wallTopY(view.track);
     for (const enemy of this.units) {
       const u = enemy.moveT >= 1 ? 1 : 1 - (1 - enemy.moveT) * (1 - enemy.moveT);
       const rx = enemy.sx + (enemy.tx - enemy.sx) * u;

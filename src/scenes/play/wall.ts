@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { columnIndex } from '../../combat';
 import { palette, wall } from '../../constants';
-import type { FrameLayout } from '../../layout';
+import { soldierBodyY, wallBottomY, wallTopY, type FrameLayout } from '../../layout';
+import { hash } from './pix';
 import type { Sparks } from './sparks';
 
 export type WallGeom = {
@@ -42,16 +43,17 @@ export class FrontWall {
   /** Колонка прицела, если точка лежит на лице живой секции. Иначе выстрел стену не берёт. */
   aimColumn(view: FrameLayout, aimX: number, aimY: number): number | null {
     const track = view.track;
-    const top = track.y - wall.intoField;
-    if (aimY < top || aimY >= track.y) return null;
+    const top = wallTopY(track);
+    const bottom = wallBottomY(track);
+    if (aimY < top || aimY >= bottom) return null;
     const index = this.columnAt(view, aimX);
     return this.hp[index] > 0 ? index : null;
   }
 
-  /** Точка, куда прилетает пуля таймера: лицо секции или середина дорожки, если секции нет. */
+  /** Точка, куда прилетает пуля: макушка секции или середина тела, если секции нет. */
   impact(view: FrameLayout, column: number): { x: number; y: number } {
     const geom = this.geom(view);
-    const y = this.up(column) ? geom.top : Math.round(view.track.y + view.track.height / 2);
+    const y = this.up(column) ? geom.top : soldierBodyY(view.track);
     return { x: this.columnCenter(view, column), y };
   }
 
@@ -64,8 +66,8 @@ export class FrontWall {
 
   geom(view: FrameLayout): WallGeom {
     const track = view.track;
-    const bottom = Math.round(track.y + track.height / 2);
-    const top = Math.round(track.y - wall.intoField);
+    const bottom = wallBottomY(track);
+    const top = wallTopY(track);
     return {
       top,
       height: Math.max(1, bottom - top),
@@ -78,31 +80,32 @@ export class FrontWall {
 
   draw(gfx: Phaser.GameObjects.Graphics, view: FrameLayout): void {
     const geom = this.geom(view);
-    const gap = 3;
-    const stripeH = (geom.height - gap * (wall.stripes - 1)) / wall.stripes;
+    const courses = wall.stripes;
+    const per = wall.hits / courses;
+    const gap = 2;
+    const courseH = (geom.height - gap * (courses - 1)) / courses;
     for (let i = 0; i < this.hp.length; i += 1) {
       const hp = this.hp[i] ?? 0;
       const x = Math.round(geom.trackX + i * geom.colW + wall.seam / 2);
       const width = Math.round(geom.colW - wall.seam);
-      if (hp <= 0 || width <= 0) {
-        gfx.fillStyle(palette.wallGone, 1);
-        gfx.fillRect(x, geom.trackY, Math.max(0, width), 5);
+      if (width <= 0) continue;
+      if (hp <= 0) {
+        rubble(gfx, x, geom.trackY, width, i);
         continue;
       }
-      const lost = wall.hits - hp;
-      const wounded = Math.ceil(lost / (wall.hits / wall.stripes));
-      for (let stripe = 0; stripe < wall.stripes; stripe += 1) {
-        const color =
-          hp <= wall.hits / wall.stripes
-            ? palette.wallCrit
-            : stripe < wounded
-              ? palette.wallHurt
-              : stripe % 2 === 0
-                ? palette.wall
-                : palette.wallBand;
-        const y = Math.round(geom.top + stripe * (stripeH + gap));
-        gfx.fillStyle(color, 1);
-        gfx.fillRect(x, y, width, Math.max(1, Math.round(stripeH)));
+      const gone = Math.min(courses - 1, Math.floor((wall.hits - hp) / per));
+      const chipped = (wall.hits - hp) % per !== 0;
+      const y0 = Math.round(geom.top + gone * (courseH + gap));
+      const bottom = geom.top + geom.height;
+      gfx.fillStyle(palette.mortar, 1);
+      gfx.fillRect(x, y0, width, Math.max(1, bottom - y0));
+      gfx.fillStyle(palette.joint, 1);
+      gfx.fillRect(Math.round(geom.trackX + i * geom.colW), y0, Math.max(1, wall.seam - 1), Math.max(1, bottom - y0));
+      for (let course = gone; course < courses; course += 1) {
+        const y = Math.round(geom.top + course * (courseH + gap));
+        const ch = Math.max(3, Math.round(courseH));
+        const hurt = course === gone && (chipped || hp <= per);
+        stones(gfx, x, y, width, ch, i, course, hurt, hp <= per);
       }
     }
   }
@@ -114,5 +117,50 @@ export class FrontWall {
     const y = Math.round(geom.trackY + geom.trackH - 5);
     gfx.fillStyle(palette.notch, 1);
     gfx.fillRect(x, y, Math.max(1, width), 3);
+  }
+}
+
+function rubble(gfx: Phaser.GameObjects.Graphics, x: number, y: number, width: number, column: number): void {
+  for (let k = 0; k < 4; k += 1) {
+    const n = hash(column * 9 + k, 4);
+    const rw = 4 + (n % 6);
+    const rh = 3 + (n % 3);
+    const span = Math.max(1, width - rw);
+    gfx.fillStyle(k % 2 === 0 ? palette.wall : palette.brickDark, 1);
+    gfx.fillRect(x + (n % span), y + (n % 7), rw, rh);
+  }
+}
+
+/** Песчаник вперевязку. Сбитый верхний ряд теряет камни, колонка при этом ещё стоит. */
+function stones(
+  gfx: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  column: number,
+  course: number,
+  hurt: boolean,
+  crit: boolean,
+): void {
+  const count = Math.max(1, Math.floor(width / 14));
+  const sw = width / count;
+  const bond = course % 2 === 1 ? sw / 2 : 0;
+  gfx.fillStyle(palette.wallLite, 1);
+  gfx.fillRect(x, y, width, 2);
+  const missing = hurt ? hash(column, course) % count : -1;
+  for (let s = 0; s < count; s += 1) {
+    if (s === missing) continue;
+    const raw = x + s * sw + bond;
+    const bx = Math.max(x + 1, Math.round(raw));
+    const ex = Math.min(x + width - 1, Math.round(raw + sw - 1));
+    if (ex - bx < 2) continue;
+    const tone = crit ? palette.wallCrit : hurt ? palette.wallHurt : (s + course) % 2 === 0 ? palette.wall : palette.wallBand;
+    gfx.fillStyle(tone, 1);
+    gfx.fillRect(bx, y + 2, ex - bx, Math.max(1, height - 4));
+    gfx.fillStyle(palette.wallLite, 1);
+    gfx.fillRect(bx, y + 2, ex - bx, 1);
+    gfx.fillStyle(palette.joint, 1);
+    gfx.fillRect(bx, y + height - 2, ex - bx, 1);
   }
 }

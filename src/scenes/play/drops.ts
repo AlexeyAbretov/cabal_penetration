@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { palette, pickup, type DropKind } from '../../constants';
-import type { FrameLayout } from '../../layout';
+import { palette, pickup, soldierBox, type DropKind } from '../../constants';
+import { soldierFeetY, type FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
 
 type Item = {
@@ -88,7 +88,7 @@ export class Drops {
     const field = view.field;
     const x = field.x + item.rx * field.width;
     const fromY = field.y + item.ry * field.height;
-    const landY = view.track.y + view.track.height / 2 + pickup.feet;
+    const landY = soldierFeetY(view.track) - Math.round(soldierBox.height / 2 - pickup.feet);
     const t = item.landed ? 1 : item.fall;
     return { x, y: fromY + (landY - fromY) * t, landY };
   }

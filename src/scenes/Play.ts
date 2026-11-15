@@ -78,6 +78,7 @@ export class Play extends Phaser.Scene {
     this.hud = new Hud(this, this.stage.hud);
     this.grenades = new Grenades(this, this.sparks);
     this.grenades.setStock(this.march.grenades);
+    this.hud.setGrenades(this.grenades.count());
     this.drops = new Drops(this, this.sparks, (kind) => this.takeDrop(kind));
     this.props = new Props(this, this.picture.props, this.sparks, (drop, score, rx, ry) => {
       this.hud.addScore(score);
@@ -199,7 +200,6 @@ export class Play extends Phaser.Scene {
     }
     this.soldier.setAlpha(this.hud.stepHurt(step));
     this.sparks.step(step);
-    this.grenades.sync(this.soldier.x);
     this.props.step(step);
     this.drops.step(this.view, this.soldier.body());
     this.drawBattle();
@@ -218,7 +218,7 @@ export class Play extends Phaser.Scene {
     const height = Math.floor(this.scale.gameSize.height);
     this.cameras.resize(width, height);
     this.view = frameLayout(width, height);
-    this.stage.paint(this.view);
+    this.stage.paint(this.view, this.picture.id);
     this.soldier.bind(this.view, this.wall);
     this.grenades.bind(this.view);
     this.houses.place(this.view);
@@ -238,7 +238,6 @@ export class Play extends Phaser.Scene {
 
   private placeSoldier(): void {
     this.soldier.place();
-    this.grenades.sync(this.soldier.x);
   }
 
   private throwGrenade(): void {
@@ -249,7 +248,7 @@ export class Play extends Phaser.Scene {
       aimX: this.aim.x,
       aimY: this.aim.y,
     });
-    this.grenades.sync(this.soldier.x);
+    this.hud.setGrenades(this.grenades.count());
   }
 
   private resolvePlayerShot(from: { x: number; y: number }, at: { x: number; y: number }): void {
@@ -321,7 +320,6 @@ export class Play extends Phaser.Scene {
   /** Дома уже падают. Солдат убегает, затем следующая картинка или лишняя жизнь. */
   private stepClear(delta: number): void {
     this.sparks.step(delta);
-    this.grenades.sync(this.soldier.x);
     if (this.settled) return;
     if (!this.soldier.leave(delta)) return;
     this.march.lives = this.hud.livesLeft;
@@ -352,7 +350,7 @@ export class Play extends Phaser.Scene {
   private takeDrop(kind: DropKind): void {
     if (kind === 'grenades') {
       this.grenades.add(pickup.grenades);
-      this.grenades.sync(this.soldier.x);
+      this.hud.setGrenades(this.grenades.count());
       return;
     }
     if (kind === 'star') {

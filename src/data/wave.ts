@@ -16,9 +16,15 @@ export type WaveGroup = {
   composition: readonly EnemyKind[];
 };
 
+export type BuildingKind = 'cottage' | 'shed' | 'manor';
+
 export type HouseMark = {
+  kind: BuildingKind;
+  /** Доля поля: 0 слева, 1 справа. Середина фасада. */
   x: number;
+  /** Доля поля: низ стены, где дом стоит на земле. */
   y: number;
+  /** Пиксели у ближнего края, до масштаба глубины. */
   w: number;
   h: number;
 };

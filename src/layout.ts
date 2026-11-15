@@ -1,4 +1,5 @@
-import { bands, depth } from './constants';
+import { bands, depth, frame, soldierBox, wall } from './constants';
+import { soldierSheet } from './soldierSheet';
 
 export type Rect = { x: number; y: number; width: number; height: number };
 
@@ -22,7 +23,7 @@ function bandHeight(
 /** Небо, поле, дорожка, рамка. Сумма высот равна кадру: поле забирает остаток. */
 export function frameLayout(width: number, height: number): FrameLayout {
   let skyH = bandHeight(height, bands.sky);
-  let trackH = bandHeight(height, bands.track);
+  let trackH: number = wall.path;
   let hudH = bandHeight(height, bands.hud);
   let fieldH = height - skyH - trackH - hudH;
 
@@ -42,7 +43,7 @@ export function frameLayout(width: number, height: number): FrameLayout {
   // Окно ниже минимумов: делим кадр пропорциями, чтобы полосы всё равно закрыли его без щели.
   if (fieldH < 0) {
     skyH = Math.round(height * bands.sky.ratio);
-    trackH = Math.round(height * bands.track.ratio);
+    trackH = Math.min(wall.path, Math.max(bands.track.min, Math.round(height * bands.track.ratio)));
     hudH = Math.round(height * bands.hud.ratio);
     fieldH = height - skyH - trackH - hudH;
     if (fieldH < 0) {
@@ -58,10 +59,40 @@ export function frameLayout(width: number, height: number): FrameLayout {
   return { width, height, sky, field, track, hud };
 }
 
+const homeField = frameLayout(frame.width, frame.height).field;
+
+/**
+ * Окно меньше опорного кадра — сцена сжимается целиком.
+ * Шире или выше опорного — пиксель тот же, лишнее место занимает земля.
+ */
+export function fitScale(field: Rect): number {
+  return Math.min(1, field.width / homeField.width, field.height / homeField.height);
+}
+
 /** 0 у верхнего края поля, 1 у дорожки. Дальние фигуры мельче. */
 export function fieldScale(y: number, field: Rect): number {
   const t = Math.min(1, Math.max(0, (y - field.y) / Math.max(1, field.height)));
   return depth.far + (depth.near - depth.far) * t;
+}
+
+/** Ступни на нижнем крае дорожки, сразу над рамкой. */
+export function soldierFeetY(track: Rect): number {
+  return Math.round(track.y + track.height);
+}
+
+/** Низ забора: дальний край дорожки. Под ним остаётся земля, по которой ходят. */
+export function wallBottomY(track: Rect): number {
+  return track.y;
+}
+
+/** Верх забора: кадр солдата и небольшой запас над шлемом. */
+export function wallTopY(track: Rect): number {
+  return soldierFeetY(track) - soldierSheet.frameHeight - wall.aboveHead;
+}
+
+/** Середина хитбокса стойки. Искра, когда секции уже нет. */
+export function soldierBodyY(track: Rect): number {
+  return soldierFeetY(track) - Math.round(soldierBox.height / 2);
 }
 
 /** Точка прицела остаётся внутри поля, включая кромку. */

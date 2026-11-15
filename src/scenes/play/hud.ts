@@ -3,11 +3,34 @@ import { cssColor, enemyBar, hud, palette, type WeaponId } from '../../constants
 import type { FrameLayout, Rect } from '../../layout';
 
 const fontFamily = 'Consolas, "Courier New", monospace';
+const grenadeStep = 2;
 
-/** Рамка: сердце, жизни, счёт, полоска ENEMY и пауза. */
+/**
+ * Сбоку, как боевая осколочная: кольцо чеки, запал, скоба вдоль бока и ребристое тело.
+ * Точка — пустая клетка. m кольцо, l скоба, b запал, h блик, g тело, d ребро.
+ */
+const grenadeMark = [
+  '...mmmm.....',
+  '...m..m.....',
+  '...m..m.....',
+  '...mmmmll...',
+  '....bbbll...',
+  '..hggggll...',
+  '.ggggggll...',
+  '.gdggdgll...',
+  '.ggggggll...',
+  '.gdggdgll...',
+  '.gggggggg...',
+  '..ggggggg...',
+  '..gggggg....',
+  '...gggg.....',
+];
+
+/** Рамка снизу: сердце, жизни, счёт, запас гранат, полоска ENEMY и пауза. */
 export class Hud {
   private lives: number = hud.lives;
   private score = 0;
+  private grenades = 0;
   private quota = 0;
   private slain = 0;
   private hurtTimer = 0;
@@ -16,6 +39,8 @@ export class Hud {
   private readonly heartGfx: Phaser.GameObjects.Graphics;
   private readonly livesText: Phaser.GameObjects.Text;
   private readonly scoreText: Phaser.GameObjects.Text;
+  private readonly grenadeGfx: Phaser.GameObjects.Graphics;
+  private readonly grenadeText: Phaser.GameObjects.Text;
   private readonly enemyLabel: Phaser.GameObjects.Text;
   private readonly barGfx: Phaser.GameObjects.Graphics;
   private readonly weaponGfx: Phaser.GameObjects.Graphics;
@@ -29,7 +54,9 @@ export class Hud {
     this.heartGfx = scene.add.graphics();
     this.livesText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5);
     this.scoreText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5);
-    this.enemyLabel = scene.add.text(0, 0, 'ENEMY', inkFont('18px')).setOrigin(0, 0.5);
+    this.grenadeGfx = scene.add.graphics();
+    this.grenadeText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5);
+    this.enemyLabel = scene.add.text(0, 0, 'ENEMY', inkFont('18px')).setOrigin(0, 0.5).setVisible(false);
     this.barGfx = scene.add.graphics();
     this.weaponGfx = scene.add.graphics();
     this.pauseVeil = scene.add.graphics().setVisible(false);
@@ -45,6 +72,8 @@ export class Hud {
     layer.add(this.heartGfx);
     layer.add(this.livesText);
     layer.add(this.scoreText);
+    layer.add(this.grenadeGfx);
+    layer.add(this.grenadeText);
     layer.add(this.enemyLabel);
     layer.add(this.barGfx);
     layer.add(this.weaponGfx);
@@ -89,6 +118,14 @@ export class Hud {
   addScore(points: number): void {
     this.score += points;
     this.scoreText.setText(String(this.score).padStart(hud.scoreDigits, '0'));
+  }
+
+  /** Запас в нижней рамке, сразу после счёта. */
+  setGrenades(count: number): void {
+    this.grenades = Math.max(0, Math.floor(count));
+    if (!this.band) return;
+    this.paintGrenades();
+    this.paintBar();
   }
 
   /** Автомат в рамке не рисуется: он и есть отсутствие ствола. Временный виден, пока сцена не кончилась. */
@@ -140,6 +177,7 @@ export class Hud {
     this.livesText.setText(String(this.lives));
     this.scoreText.setPosition(this.livesText.x + 36, mid);
     this.scoreText.setText(String(this.score).padStart(hud.scoreDigits, '0'));
+    this.paintGrenades();
     this.paintBar();
     this.paintWeapon();
 
@@ -158,12 +196,13 @@ export class Hud {
 
   private paintBar(): void {
     const band = this.band;
+    this.enemyLabel.setVisible(this.quota > 0);
     if (!band || this.frameWidth <= 0 || this.quota <= 0) return;
     const labelW = this.enemyLabel.width;
     const groupW = labelW + 8 + enemyBar.width;
     let x = Math.round((this.frameWidth - groupW) / 2);
-    const scoreRight = this.scoreText.x + this.scoreText.width + 16;
-    if (x < scoreRight) x = Math.round(scoreRight);
+    const grenadeRight = this.grenadeText.x + this.grenadeText.width + 16;
+    if (x < grenadeRight) x = Math.round(grenadeRight);
     const mid = band.y + Math.round(band.height / 2);
     this.enemyLabel.setPosition(x, mid);
     const barX = x + labelW + 8;
@@ -196,6 +235,40 @@ export class Hud {
     }
     this.weaponGfx.fillStyle(palette.spread, 1);
     this.weaponGfx.fillRect(x - 2, mid - 4, 22, 8);
+  }
+
+  private paintGrenades(): void {
+    const band = this.band;
+    if (!band) return;
+    const mid = band.y + Math.round(band.height / 2);
+    const iconW = grenadeMark[0].length * grenadeStep;
+    const iconH = grenadeMark.length * grenadeStep;
+    const x = Math.round(this.scoreText.x + this.scoreText.width + 14);
+    this.grenadeGfx.clear();
+    this.drawGrenade(x, Math.round(mid - iconH / 2));
+    this.grenadeText.setText(String(this.grenades));
+    this.grenadeText.setColor(cssColor(this.grenades > 0 ? palette.ink : palette.wallCrit));
+    this.grenadeText.setPosition(x + iconW + 6, mid);
+  }
+
+  /** Кольцо, рычаг, запал и овальное тело с рёбрами — силуэт осколочной гранаты. */
+  private drawGrenade(x: number, y: number): void {
+    const ink: Record<string, number> = {
+      m: palette.ironLite,
+      l: palette.iron,
+      b: palette.brass,
+      h: palette.grassLite,
+      g: palette.grenade,
+      d: palette.grassDeep,
+    };
+    grenadeMark.forEach((row, iy) => {
+      [...row].forEach((cell, ix) => {
+        const color = ink[cell];
+        if (color === undefined) return;
+        this.grenadeGfx.fillStyle(color, 1);
+        this.grenadeGfx.fillRect(x + ix * grenadeStep, y + iy * grenadeStep, grenadeStep, grenadeStep);
+      });
+    });
   }
 
   private drawHeart(x: number, y: number): void {
