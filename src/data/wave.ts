@@ -40,6 +40,17 @@ export type PropMark = {
   drop: DropKind;
 };
 
+/** Какой лист секции. Новая картинка выбирает свои. */
+export type FenceKind = 'stone' | 'rust';
+
+export type FenceMark = {
+  kind: FenceKind;
+  /** Первая колонка дорожки перед солдатом. */
+  from: number;
+  /** Последняя колонка, включительно. Дыра маски стены секцию не получает. */
+  to: number;
+};
+
 /** Грузовик держит на полоске ещё и тех, кого высадит. */
 export function waveQuota(wave: readonly WaveGroup[]): number {
   return wave.reduce((sum, group) => {

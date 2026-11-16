@@ -3,12 +3,14 @@ import { afterPicture, marchFrom, marchPicture, type March } from '../campaign/m
 import type { Picture } from '../campaign/picture';
 import { resolveColumnHit } from '../combat';
 import { hud as hudNumbers, palette, pickup, star, type DropKind } from '../constants';
-import { waveQuota } from '../data/wave';
+import { waveQuota, type FenceKind, type FenceMark } from '../data/wave';
 import { frameLayout, type FrameLayout } from '../layout';
+import { loadFenceSheets, registerFenceAnims } from '../fenceSheet';
 import { Aim } from './play/aim';
 import { Controls } from './play/input';
 import { Drops } from './play/drops';
 import { Enemies } from './play/enemies';
+import { Fences } from './play/fences';
 import { Grenades } from './play/grenades';
 import { Gun } from './play/gun';
 import { Houses } from './play/houses';
@@ -42,6 +44,7 @@ export class Play extends Phaser.Scene {
   private props!: Props;
   private drops!: Drops;
   private houses!: Houses;
+  private fences!: Fences;
   private sparks!: Sparks;
   private battleGfx!: Phaser.GameObjects.Graphics;
   private paused = false;
@@ -59,6 +62,7 @@ export class Play extends Phaser.Scene {
   preload(): void {
     if (!this.textures.exists(hudIcons.heart)) this.load.image(hudIcons.heart, hudIcons.heartUrl);
     if (!this.textures.exists(hudIcons.grenade)) this.load.image(hudIcons.grenade, hudIcons.grenadeUrl);
+    loadFenceSheets(this, fenceKinds(this.picture.fences));
   }
 
   init(data?: object): void {
@@ -93,6 +97,8 @@ export class Play extends Phaser.Scene {
       this.onGone(count),
     );
     this.houses = new Houses(this, this.picture.houses, this.stage.field);
+    registerFenceAnims(this, fenceKinds(this.picture.fences));
+    this.fences = new Fences(this, this.picture.fences, this.picture.wall);
     this.grenades.onLand((x, y) => {
       if (this.cleared) return;
       this.enemies.blast(x, y);
@@ -229,6 +235,7 @@ export class Play extends Phaser.Scene {
     this.houses.place(this.view);
     this.enemies.bind(this.view);
     this.props.bind(this.view);
+    this.fences.sync(this.view, this.wall);
     this.placeSoldier();
     const pointer = this.controls.pointer;
     if (pointer) {
@@ -384,7 +391,8 @@ export class Play extends Phaser.Scene {
     gfx.clear();
     this.props.draw();
     this.enemies.draw(this.view, this.wall);
-    this.wall.draw(gfx, this.view);
+    this.fences.sync(this.view, this.wall);
+    this.wall.draw(gfx, this.view, this.fences.columns());
     this.drops.draw(this.view);
     this.soldier.draw();
     this.enemies.drawBullets(gfx, this.view, this.wall);
@@ -398,4 +406,8 @@ export class Play extends Phaser.Scene {
     if (paused) this.tweens.pauseAll();
     else this.tweens.resumeAll();
   }
+}
+
+function fenceKinds(marks: readonly FenceMark[]): FenceKind[] {
+  return [...new Set(marks.map((mark) => mark.kind))];
 }

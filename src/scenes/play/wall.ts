@@ -78,13 +78,14 @@ export class FrontWall {
     };
   }
 
-  draw(gfx: Phaser.GameObjects.Graphics, view: FrameLayout): void {
+  draw(gfx: Phaser.GameObjects.Graphics, view: FrameLayout, sheet: ReadonlySet<number>): void {
     const geom = this.geom(view);
     const courses = wall.stripes;
     const per = wall.hits / courses;
     const gap = 2;
     const courseH = (geom.height - gap * (courses - 1)) / courses;
     for (let i = 0; i < this.hp.length; i += 1) {
+      if (sheet.has(i)) continue;
       const hp = this.hp[i] ?? 0;
       const x = Math.round(geom.trackX + i * geom.colW + wall.seam / 2);
       const width = Math.round(geom.colW - wall.seam);

@@ -1,4 +1,4 @@
-import type { HouseMark, PropMark, WaveGroup } from '../../../data/wave';
+import type { FenceMark, HouseMark, PropMark, WaveGroup } from '../../../data/wave';
 import type { Picture } from '../../picture';
 
 /**
@@ -56,11 +56,21 @@ const houses: readonly HouseMark[] = [
 /** false — дыра: пуля этой колонки доходит до тела. */
 const wall = [true, true, true, false, true, true, true, true] as const;
 
+/**
+ * Забор перед солдатом, по колонкам дорожки. Дыра в маске стены остаётся дырой.
+ * Слева камень, справа ржавые плиты. Другая картинка пишет свой список.
+ */
+const fences: readonly FenceMark[] = [
+  { kind: 'stone', from: 0, to: 2 },
+  { kind: 'rust', from: 4, to: 7 },
+];
+
 export const picture: Picture = {
   id: '1-1',
   boss: false,
   wall,
   houses,
   props,
+  fences,
   wave: [],
 };

@@ -271,6 +271,14 @@ export const scenery = {
   crate: { hp: 6, stages: 3, width: 48, height: 40, score: 1000 },
 } as const;
 
+/** Лист передней стены. Жизни колонки прежние: когда они кончаются, играет ролик. */
+export const fence = {
+  width: 96,
+  height: 48,
+  frames: 9,
+  frameRate: 12,
+} as const;
+
 export type PropKind = keyof typeof scenery;
 
 /**
