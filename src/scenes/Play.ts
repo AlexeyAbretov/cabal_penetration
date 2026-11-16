@@ -390,7 +390,6 @@ export class Play extends Phaser.Scene {
     this.enemies.drawBullets(gfx, this.view, this.wall);
     this.grenades.draw(gfx);
     this.sparks.draw(gfx);
-    this.wall.drawNotch(gfx, this.view, this.soldier.column());
   }
 
   private setPaused(paused: boolean): void {

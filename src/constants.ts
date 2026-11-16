@@ -88,7 +88,6 @@ export const palette = {
   grenadeArc: 0xd5e29a,
   explosion: 0xf0c14a,
   heart: 0xd24b4b,
-  notch: 0xe7dcc4,
   enemy: 0x2e8f3c,
   enemyShade: 0x143d1e,
   house: 0xd8c3a2,

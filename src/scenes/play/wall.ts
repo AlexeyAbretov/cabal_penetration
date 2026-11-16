@@ -109,15 +109,6 @@ export class FrontWall {
       }
     }
   }
-
-  drawNotch(gfx: Phaser.GameObjects.Graphics, view: FrameLayout, soldierColumn: number): void {
-    const geom = this.geom(view);
-    const x = Math.round(geom.trackX + soldierColumn * geom.colW + wall.seam / 2);
-    const width = Math.round(geom.colW - wall.seam);
-    const y = Math.round(geom.trackY + geom.trackH - 5);
-    gfx.fillStyle(palette.notch, 1);
-    gfx.fillRect(x, y, Math.max(1, width), 3);
-  }
 }
 
 function rubble(gfx: Phaser.GameObjects.Graphics, x: number, y: number, width: number, column: number): void {
