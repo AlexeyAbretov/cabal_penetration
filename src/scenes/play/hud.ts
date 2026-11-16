@@ -3,28 +3,21 @@ import { cssColor, enemyBar, hud, palette, type WeaponId } from '../../constants
 import type { FrameLayout, Rect } from '../../layout';
 
 const fontFamily = 'Consolas, "Courier New", monospace';
-const grenadeStep = 2;
 
 /**
- * Сбоку, как боевая осколочная: кольцо чеки, запал, скоба вдоль бока и ребристое тело.
- * Точка — пустая клетка. m кольцо, l скоба, b запал, h блик, g тело, d ребро.
+ * Значки PixelLab 48×48, в рамке пиксель в пиксель.
+ * right и bottom — край непрозрачных пикселей, не включая его.
  */
-const grenadeMark = [
-  '...mmmm.....',
-  '...m..m.....',
-  '...m..m.....',
-  '...mmmmll...',
-  '....bbbll...',
-  '..hggggll...',
-  '.ggggggll...',
-  '.gdggdgll...',
-  '.ggggggll...',
-  '.gdggdgll...',
-  '.gggggggg...',
-  '..ggggggg...',
-  '..gggggg....',
-  '...gggg.....',
-];
+export const hudIcons = {
+  heart: 'hud-heart',
+  grenade: 'hud-grenade',
+  heartUrl: 'assets/hud-heart.png',
+  grenadeUrl: 'assets/hud-grenade.png',
+  heartTrim: { left: 9, top: 12, right: 39, bottom: 38 },
+  grenadeTrim: { left: 14, top: 7, right: 37, bottom: 41 },
+} as const;
+
+type IconTrim = { left: number; top: number; right: number; bottom: number };
 
 /** Рамка снизу: сердце, жизни, счёт, запас гранат, полоска ENEMY и пауза. */
 export class Hud {
@@ -36,10 +29,10 @@ export class Hud {
   private hurtTimer = 0;
   private frameWidth = 0;
   private band: Rect | null = null;
-  private readonly heartGfx: Phaser.GameObjects.Graphics;
+  private readonly heart: Phaser.GameObjects.Image;
   private readonly livesText: Phaser.GameObjects.Text;
   private readonly scoreText: Phaser.GameObjects.Text;
-  private readonly grenadeGfx: Phaser.GameObjects.Graphics;
+  private readonly grenade: Phaser.GameObjects.Image;
   private readonly grenadeText: Phaser.GameObjects.Text;
   private readonly enemyLabel: Phaser.GameObjects.Text;
   private readonly barGfx: Phaser.GameObjects.Graphics;
@@ -51,10 +44,10 @@ export class Hud {
 
   constructor(scene: Phaser.Scene, layer: Phaser.GameObjects.Container) {
     const font = inkFont('22px');
-    this.heartGfx = scene.add.graphics();
+    this.heart = hudIcon(scene, hudIcons.heart);
     this.livesText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5);
     this.scoreText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5);
-    this.grenadeGfx = scene.add.graphics();
+    this.grenade = hudIcon(scene, hudIcons.grenade);
     this.grenadeText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5);
     this.enemyLabel = scene.add.text(0, 0, 'ENEMY', inkFont('18px')).setOrigin(0, 0.5).setVisible(false);
     this.barGfx = scene.add.graphics();
@@ -69,10 +62,10 @@ export class Hud {
       .setOrigin(0.5)
       .setVisible(false);
     this.edge = scene.add.graphics();
-    layer.add(this.heartGfx);
+    layer.add(this.heart);
     layer.add(this.livesText);
     layer.add(this.scoreText);
-    layer.add(this.grenadeGfx);
+    layer.add(this.grenade);
     layer.add(this.grenadeText);
     layer.add(this.enemyLabel);
     layer.add(this.barGfx);
@@ -171,9 +164,8 @@ export class Hud {
     this.band = band;
     this.frameWidth = width;
     const mid = band.y + Math.round(band.height / 2);
-    this.heartGfx.clear();
-    this.drawHeart(16, mid - 9);
-    this.livesText.setPosition(16 + 7 * 3 + 10, mid);
+    const heartRight = this.placeIcon(this.heart, 10, mid, hudIcons.heartTrim);
+    this.livesText.setPosition(heartRight + 8, mid);
     this.livesText.setText(String(this.lives));
     this.scoreText.setPosition(this.livesText.x + 36, mid);
     this.scoreText.setText(String(this.score).padStart(hud.scoreDigits, '0'));
@@ -241,46 +233,28 @@ export class Hud {
     const band = this.band;
     if (!band) return;
     const mid = band.y + Math.round(band.height / 2);
-    const iconW = grenadeMark[0].length * grenadeStep;
-    const iconH = grenadeMark.length * grenadeStep;
-    const x = Math.round(this.scoreText.x + this.scoreText.width + 14);
-    this.grenadeGfx.clear();
-    this.drawGrenade(x, Math.round(mid - iconH / 2));
+    const left = Math.round(this.scoreText.x + this.scoreText.width + 12);
+    const grenadeRight = this.placeIcon(this.grenade, left, mid, hudIcons.grenadeTrim);
     this.grenadeText.setText(String(this.grenades));
     this.grenadeText.setColor(cssColor(this.grenades > 0 ? palette.ink : palette.wallCrit));
-    this.grenadeText.setPosition(x + iconW + 6, mid);
+    this.grenadeText.setPosition(grenadeRight + 6, mid);
   }
 
-  /** Кольцо, рычаг, запал и овальное тело с рёбрами — силуэт осколочной гранаты. */
-  private drawGrenade(x: number, y: number): void {
-    const ink: Record<string, number> = {
-      m: palette.ironLite,
-      l: palette.iron,
-      b: palette.brass,
-      h: palette.grassLite,
-      g: palette.grenade,
-      d: palette.grassDeep,
-    };
-    grenadeMark.forEach((row, iy) => {
-      [...row].forEach((cell, ix) => {
-        const color = ink[cell];
-        if (color === undefined) return;
-        this.grenadeGfx.fillStyle(color, 1);
-        this.grenadeGfx.fillRect(x + ix * grenadeStep, y + iy * grenadeStep, grenadeStep, grenadeStep);
-      });
-    });
+  /**
+   * Левый край непрозрачных пикселей встаёт в visualLeft, середина рисунка — на mid.
+   * Возвращает правый край рисунка.
+   */
+  private placeIcon(image: Phaser.GameObjects.Image, visualLeft: number, mid: number, trim: IconTrim): number {
+    const contentMid = (trim.top + trim.bottom) / 2;
+    image.setScale(1);
+    image.setPosition(Math.round(visualLeft - trim.left), Math.round(mid - contentMid));
+    return Math.round(image.x + trim.right);
   }
+}
 
-  private drawHeart(x: number, y: number): void {
-    const rows = ['0110110', '1111111', '1111111', '0111110', '0011100', '0001000'];
-    const step = 3;
-    this.heartGfx.fillStyle(palette.heart, 1);
-    rows.forEach((row, iy) => {
-      [...row].forEach((cell, ix) => {
-        if (cell === '1') this.heartGfx.fillRect(x + ix * step, y + iy * step, step, step);
-      });
-    });
-  }
+function hudIcon(scene: Phaser.Scene, key: string): Phaser.GameObjects.Image {
+  scene.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+  return scene.add.image(0, 0, key).setOrigin(0, 0);
 }
 
 function inkFont(size: string): Phaser.Types.GameObjects.Text.TextStyle {

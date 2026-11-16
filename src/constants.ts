@@ -70,7 +70,7 @@ export const palette = {
   line: 0x1a140e,
   wallLite: 0xd4c8b2,
   joint: 0x2a241c,
-  hud: 0x1c1814,
+  hud: 0x675546,
   ink: 0xe7dcc4,
   soldier: 0x243044,
   aim: 0xf2e27a,
@@ -129,7 +129,11 @@ export const bands = {
    * Обычная высота — wall.path, её считает кадр, не доля экрана.
    */
   track: { ratio: 0.06, min: 12, max: 20 },
-  hud: { ratio: 0.1, min: 40, max: 72 },
+  /**
+   * Высота под гранату в родном размере: рисунок 34 пикселя и кромка.
+   * Значки не сжимаются.
+   */
+  hud: { ratio: 0.1, min: 42, max: 42 },
   fieldMin: 80,
 } as const;
 

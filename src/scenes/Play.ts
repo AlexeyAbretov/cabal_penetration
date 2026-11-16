@@ -12,7 +12,7 @@ import { Enemies } from './play/enemies';
 import { Grenades } from './play/grenades';
 import { Gun } from './play/gun';
 import { Houses } from './play/houses';
-import { Hud } from './play/hud';
+import { Hud, hudIcons } from './play/hud';
 import { Props } from './play/props';
 import { registerSoldierAnims, soldierSheet, soldierSheetReady } from '../soldierSheet';
 import { Soldier } from './play/soldier';
@@ -54,6 +54,11 @@ export class Play extends Phaser.Scene {
 
   constructor() {
     super('Play');
+  }
+
+  preload(): void {
+    if (!this.textures.exists(hudIcons.heart)) this.load.image(hudIcons.heart, hudIcons.heartUrl);
+    if (!this.textures.exists(hudIcons.grenade)) this.load.image(hudIcons.grenade, hudIcons.grenadeUrl);
   }
 
   init(data?: object): void {
