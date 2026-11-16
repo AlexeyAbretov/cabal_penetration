@@ -16,9 +16,32 @@
         overflow: hidden;
       }
 
+      #game {
+        position: relative;
+      }
+
       canvas {
         image-rendering: pixelated;
         image-rendering: crisp-edges;
+      }
+
+      /* Цифры HUD живут вне холста: его увеличение режет край в пиксель. */
+      .hud-figures {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+      }
+
+      .hud-figure {
+        position: absolute;
+        left: 0;
+        top: 0;
+        font-family: Consolas, "Courier New", monospace;
+        font-weight: 400;
+        line-height: 1;
+        white-space: pre;
+        transform: translateY(-50%);
       }
     </style>
   </head>

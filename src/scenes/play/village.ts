@@ -38,21 +38,18 @@ function paintSky(w: number, h: number): Pix {
   return pix;
 }
 
-export function paintTrack(w: number, h: number): Pix {
+/** Земля под ногами — нижние ряды той же дороги и того же газона, без своей кромки. */
+export function paintTrack(w: number, h: number, fieldH: number): Pix {
   const pix = new Pix(w, h);
+  const groundH = Math.max(1, fieldH);
   for (let y = 0; y < h; y += 1) {
+    const gy = fieldH + y;
+    const edges = roadEdges(gy, w, groundH, true);
     for (let x = 0; x < w; x += 1) {
-      const n = hash(x, y);
-      let color: number = palette.dirtDark;
-      if (n % 8 === 0) color = palette.dirt;
-      if (n % 15 === 0) color = palette.dirtRut;
-      if (y % 6 === 2 && n % 4 !== 0) color = palette.dirtRut;
-      if (n % 47 === 0) color = palette.pebble;
-      if (n % 53 === 0) color = palette.dirtLite;
-      pix.px(x, y, color);
+      if (x >= edges.left && x <= edges.right) pix.px(x, y, dirtTone(x, gy, edges));
+      else pix.px(x, y, grassTone(x, gy));
     }
   }
-  pix.fill(0, 0, w, 3, palette.dirtRut);
   return pix;
 }
 
@@ -114,11 +111,15 @@ function dirtTone(x: number, y: number, edges: { left: number; right: number }):
   return palette.dirt;
 }
 
-/** Дорога с точки на горизонте (y = 0) до переднего плана. Дальше опорной глубины почти не ширится. */
-function roadEdges(y: number, w: number, h: number): { left: number; right: number } {
+/**
+ * Дорога с точки на горизонте (y = 0) до переднего плана.
+ * Дальше опорной глубины поле почти не ширится.
+ * Под ногами наклон тот же, что над забором: иначе кромка встаёт вертикально.
+ */
+function roadEdges(y: number, w: number, h: number, foreground = false): { left: number; right: number } {
   const depth = Math.max(1, sceneDepth({ x: 0, y: 0, width: w, height: h }));
   const t = y / depth;
-  const near = t < 1 ? t : 1 + (t - 1) * 0.12;
+  const near = t < 1 || foreground ? t : 1 + (t - 1) * 0.12;
   const fade = Math.min(1, t * 4);
   const mid = w * 0.5 + ((hash(4, y >> 3) % 7) - 3) * fade;
   const wobble = ((hash(2, y) % 5) - 2) * fade;

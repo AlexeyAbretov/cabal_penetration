@@ -5,7 +5,10 @@ import { blit, ensureCanvas } from './blit';
 import type { Pix } from './pix';
 import { paintTrack, paintVillageBackdrop } from './village';
 
-/** Полосы кадра снизу вверх по глубине: небо, поле, дорожка, рамка. */
+/**
+ * Полосы кадра снизу вверх по глубине: небо, поле, дорожка, рамка.
+ * Дорожка — низ земли этой картинки. Своей заливки у неё нет.
+ */
 export class Stage {
   readonly sky: Phaser.GameObjects.Container;
   readonly field: Phaser.GameObjects.Container;
@@ -51,10 +54,16 @@ export class Stage {
       height: view.sky.height + view.field.height,
     });
     this.fieldImage.setVisible(false);
-    put(this.scene, this.trackImage, 'band-track', paintTrack(view.track.width, view.track.height), view.track);
+    put(
+      this.scene,
+      this.trackImage,
+      'band-track',
+      paintTrack(view.track.width, view.track.height, view.field.height),
+      view.track,
+    );
   }
 
-  /** Чужая картинка, пока у неё нет своей земли. */
+  /** Чужая картинка, пока у неё нет своей земли. Поле и дорожка — одна заливка. */
   private paintFlat(view: FrameLayout): void {
     this.skyImage.setVisible(false);
     this.fieldImage.setVisible(false);
@@ -62,7 +71,7 @@ export class Stage {
     this.flat.clear();
     fill(this.flat, view.sky, palette.sky);
     fill(this.flat, view.field, palette.field);
-    fill(this.flat, view.track, palette.track);
+    fill(this.flat, view.track, palette.field);
   }
 }
 

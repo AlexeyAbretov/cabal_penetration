@@ -22,7 +22,6 @@ export const palette = {
   grassDark: 0x246428,
   grassLite: 0x67ae4a,
   grassDeep: 0x173f1c,
-  track: 0x8a7352,
   dirt: 0xc6a24e,
   dirtDark: 0x8d6a32,
   dirtLite: 0xe4c67c,

@@ -3,6 +3,15 @@ import { cssColor, enemyBar, hud, palette, type WeaponId } from '../../constants
 import type { FrameLayout, Rect } from '../../layout';
 
 const fontFamily = 'Consolas, "Courier New", monospace';
+/** Размер цифр в пикселях кадра. На экран их рисует DOM, не холст. */
+const figurePx = 22;
+
+type HudFigures = {
+  root: HTMLDivElement;
+  lives: HTMLSpanElement;
+  score: HTMLSpanElement;
+  grenades: HTMLSpanElement;
+};
 
 /**
  * Значки PixelLab 48×48, в рамке пиксель в пиксель.
@@ -29,6 +38,8 @@ export class Hud {
   private hurtTimer = 0;
   private frameWidth = 0;
   private band: Rect | null = null;
+  private readonly scene: Phaser.Scene;
+  private readonly figures: HudFigures;
   private readonly heart: Phaser.GameObjects.Image;
   private readonly livesText: Phaser.GameObjects.Text;
   private readonly scoreText: Phaser.GameObjects.Text;
@@ -43,12 +54,14 @@ export class Hud {
   private readonly edge: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene, layer: Phaser.GameObjects.Container) {
-    const font = inkFont('22px');
+    this.scene = scene;
+    const font = inkFont(`${figurePx}px`);
+    this.figures = mountFigures(scene);
     this.heart = hudIcon(scene, hudIcons.heart);
-    this.livesText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5);
-    this.scoreText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5);
+    this.livesText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5).setVisible(false);
+    this.scoreText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5).setVisible(false);
     this.grenade = hudIcon(scene, hudIcons.grenade);
-    this.grenadeText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5);
+    this.grenadeText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5).setVisible(false);
     this.enemyLabel = scene.add.text(0, 0, 'ENEMY', inkFont('18px')).setOrigin(0, 0.5).setVisible(false);
     this.barGfx = scene.add.graphics();
     this.weaponGfx = scene.add.graphics();
@@ -93,6 +106,7 @@ export class Hud {
     this.lives = Math.max(0, lives);
     this.livesText.setText(String(this.lives));
     this.scoreText.setText(String(this.score).padStart(hud.scoreDigits, '0'));
+    this.syncFigures();
   }
 
   /** true — жизней не осталось. */
@@ -100,6 +114,7 @@ export class Hud {
     this.lives = Math.max(0, this.lives - 1);
     this.hurtTimer = hud.hurtMs;
     this.livesText.setText(String(this.lives));
+    this.syncFigures();
     return this.lives === 0;
   }
 
@@ -111,6 +126,7 @@ export class Hud {
   addScore(points: number): void {
     this.score += points;
     this.scoreText.setText(String(this.score).padStart(hud.scoreDigits, '0'));
+    this.syncFigures();
   }
 
   /** Запас в нижней рамке, сразу после счёта. */
@@ -119,6 +135,7 @@ export class Hud {
     if (!this.band) return;
     this.paintGrenades();
     this.paintBar();
+    this.syncFigures();
   }
 
   /** Автомат в рамке не рисуется: он и есть отсутствие ствола. Временный виден, пока сцена не кончилась. */
@@ -184,6 +201,39 @@ export class Hud {
     this.edge.fillRect(0, height - 1, width, 1);
     this.edge.fillRect(0, 0, 1, height);
     this.edge.fillRect(width - 1, 0, 1, height);
+    this.syncFigures();
+  }
+
+  /**
+   * Цифры стоят на тех же местах, что скрытый текст холста,
+   * но в пикселях окна: увеличение кадра их не режет.
+   */
+  private syncFigures(): void {
+    if (!this.band) return;
+    const canvas = this.scene.game.canvas;
+    if (canvas.width === 0 || canvas.height === 0) return;
+    const scaleX = canvas.clientWidth / canvas.width;
+    const scaleY = canvas.clientHeight / canvas.height;
+    const fontPx = figurePx * scaleY;
+    this.placeFigure(this.figures.lives, this.livesText, scaleX, scaleY, fontPx);
+    this.placeFigure(this.figures.score, this.scoreText, scaleX, scaleY, fontPx);
+    this.placeFigure(this.figures.grenades, this.grenadeText, scaleX, scaleY, fontPx);
+  }
+
+  private placeFigure(
+    el: HTMLSpanElement,
+    text: Phaser.GameObjects.Text,
+    scaleX: number,
+    scaleY: number,
+    fontPx: number,
+  ): void {
+    const canvas = this.scene.game.canvas;
+    const color = text.style.color;
+    el.textContent = text.text;
+    el.style.color = typeof color === 'string' ? color : cssColor(palette.ink);
+    el.style.fontSize = `${fontPx}px`;
+    el.style.left = `${canvas.offsetLeft + text.x * scaleX}px`;
+    el.style.top = `${canvas.offsetTop + text.y * scaleY}px`;
   }
 
   private paintBar(): void {
@@ -255,6 +305,22 @@ export class Hud {
 function hudIcon(scene: Phaser.Scene, key: string): Phaser.GameObjects.Image {
   scene.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
   return scene.add.image(0, 0, key).setOrigin(0, 0);
+}
+
+function mountFigures(scene: Phaser.Scene): HudFigures {
+  const root = document.createElement('div');
+  root.className = 'hud-figures';
+  const lives = document.createElement('span');
+  const score = document.createElement('span');
+  const grenades = document.createElement('span');
+  lives.className = 'hud-figure';
+  score.className = 'hud-figure';
+  grenades.className = 'hud-figure';
+  root.append(lives, score, grenades);
+  scene.game.canvas.parentElement?.querySelector('.hud-figures')?.remove();
+  scene.game.canvas.insertAdjacentElement('afterend', root);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => root.remove());
+  return { root, lives, score, grenades };
 }
 
 function inkFont(size: string): Phaser.Types.GameObjects.Text.TextStyle {
