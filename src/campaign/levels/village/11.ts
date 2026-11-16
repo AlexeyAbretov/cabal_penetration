@@ -35,10 +35,11 @@ export const combatWave: readonly WaveGroup[] = [
 
 /**
  * Два куста на траве, ниже домов и не на дороге.
+ * Левый выше штакетника: голые ветки на досках не читаются.
  * Левый роняет пачку, правый — частый ствол.
  */
 const props: readonly PropMark[] = [
-  { kind: 'bush', x: 0.1, y: 0.64, drop: 'grenades' },
+  { kind: 'bush', x: 0.2, y: 0.42, drop: 'grenades' },
   { kind: 'bush', x: 0.74, y: 0.62, drop: 'rapid' },
 ];
 
