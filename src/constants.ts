@@ -48,9 +48,10 @@ export const palette = {
   bark: 0x6b4428,
   barkDark: 0x3c2816,
   barkLite: 0x8d6240,
-  leaf: 0x2f7630,
-  leafLite: 0x62b04c,
-  leafDark: 0x18481c,
+  /** Кроны и кусты. Свет листа ниже основной травы, иначе масса сливается с полем. */
+  leaf: 0x145228,
+  leafLite: 0x1e6c34,
+  leafDark: 0x0c3018,
   hay: 0xd6ae46,
   hayLite: 0xf0d27c,
   hayBand: 0x7a5424,
