@@ -69,6 +69,19 @@ export function fitScale(field: Rect): number {
   return Math.min(1, field.width / homeField.width, field.height / homeField.height);
 }
 
+/**
+ * Пиксели опорного поля с учётом сжатия маленького окна.
+ * Дальняя деревня меряется ими от горизонта: лишняя высота кадра остаётся впереди.
+ */
+export function sceneDepth(field: Rect): number {
+  return homeField.height * fitScale(field);
+}
+
+/** Доля опорного поля вниз от горизонта, в пикселях текущего поля. */
+export function belowHorizon(fraction: number, field: Rect): number {
+  return fraction * sceneDepth(field);
+}
+
 /** 0 у верхнего края поля, 1 у дорожки. Дальние фигуры мельче. */
 export function fieldScale(y: number, field: Rect): number {
   const t = Math.min(1, Math.max(0, (y - field.y) / Math.max(1, field.height)));

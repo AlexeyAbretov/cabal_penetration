@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { HouseMark } from '../../data/wave';
-import type { FrameLayout } from '../../layout';
+import { belowHorizon, type FrameLayout } from '../../layout';
 import { blit, ensureCanvas } from './blit';
 import { buildingBox, drawBuilding } from './buildings';
 
@@ -44,7 +44,7 @@ export class Houses {
         house.w = box.w;
         house.h = box.h;
       }
-      house.root.setPosition(field.x + house.mark.x * field.width, field.y + house.mark.y * field.height);
+      house.root.setPosition(field.x + house.mark.x * field.width, field.y + belowHorizon(house.mark.y, field));
     }
   }
 

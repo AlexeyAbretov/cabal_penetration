@@ -1,18 +1,29 @@
 import { palette } from '../../constants';
 import { picture } from '../../campaign/levels/village/11';
-import { fitScale } from '../../layout';
+import { belowHorizon, fitScale, sceneDepth, type Rect } from '../../layout';
 import { paintBush } from './plants';
 import { disc, hash, lerpColor, Pix, stamp } from './pix';
 
 /**
  * Своя картинка 1-1, не рип.
- * Дорога уходит вдаль, дома стоят на траве по бокам,
+ * Дорога сходится в точку на горизонте. Крыши и кроны заходят на небо,
  * заборы и растения заполняют двор. Врагов на этом слое нет.
  */
 
-const roadTop = 0.36;
+/** Небо и поле одним листом: крона выше горизонта остаётся на небе, а не обрезается. */
+export function paintVillageBackdrop(w: number, skyH: number, fieldH: number): Pix {
+  const pix = new Pix(w, Math.max(1, skyH + fieldH));
+  if (skyH > 0) stamp(pix, paintSky(w, skyH), 0, 0);
+  if (fieldH > 0) stamp(pix, paintField(w, fieldH), 0, skyH);
+  const field: Rect = { x: 0, y: 0, width: w, height: fieldH };
+  const fit = fitScale(field);
+  const ground = (fraction: number) => skyH + Math.round(belowHorizon(fraction, field));
+  tree(pix, Math.round(w * 0.32), ground(0.29), Math.round(118 * fit));
+  deadTree(pix, Math.round(w * 0.44), ground(0.13), Math.round(96 * fit));
+  return pix;
+}
 
-export function paintSky(w: number, h: number): Pix {
+function paintSky(w: number, h: number): Pix {
   const pix = new Pix(w, h);
   const band = 4;
   for (let y = 0; y < h; y += 1) {
@@ -21,11 +32,9 @@ export function paintSky(w: number, h: number): Pix {
     pix.fill(0, y, w, 1, color);
   }
   const scale = h >= 70 ? 2 : 1;
-  cloud(pix, Math.round(w * 0.16), Math.round(h * 0.16), scale);
-  if (w > 180) cloud(pix, Math.round(w * 0.62), Math.round(h * 0.28), scale);
-  ridge(pix, palette.hillFar, 0.42);
-  ridge(pix, palette.hill, 0.7);
-  treeline(pix);
+  cloud(pix, Math.round(w * 0.16), Math.round(h * 0.14), scale);
+  if (w > 180) cloud(pix, Math.round(w * 0.68), Math.round(h * 0.3), scale);
+  horizon(pix, h);
   return pix;
 }
 
@@ -47,7 +56,7 @@ export function paintTrack(w: number, h: number): Pix {
   return pix;
 }
 
-export function paintField(w: number, h: number): Pix {
+function paintField(w: number, h: number): Pix {
   const pix = new Pix(w, h);
   const dirt = new Uint8Array(w * h);
   for (let y = 0; y < h; y += 1) {
@@ -62,18 +71,17 @@ export function paintField(w: number, h: number): Pix {
     }
   }
 
-  const fit = fitScale({ x: 0, y: 0, width: w, height: h });
+  const field: Rect = { x: 0, y: 0, width: w, height: h };
+  const fit = fitScale(field);
   sow(pix, dirt, w, h, fit);
   for (const house of picture.houses) {
     const pad = house.kind === 'shed' ? 10 : 16;
-    yard(pix, house.x * w, house.y * h + 2, pad * fit, 7 * fit);
+    yard(pix, house.x * w, belowHorizon(house.y, field) + 2, pad * fit, 7 * fit);
   }
   roadside(pix, w, h, fit);
   const aboveWall = h - 60;
   lowBrick(pix, Math.round(w * 0.78), aboveWall - Math.round(18 * fit), Math.round(78 * fit), Math.round(16 * fit));
   pickets(pix, Math.round(w * 0.02), Math.round(w * 0.3), aboveWall, Math.round(28 * fit));
-  tree(pix, Math.round(w * 0.34), Math.round(h * 0.46), Math.round(118 * fit));
-  deadTree(pix, Math.round(w * 0.28), Math.round(h * 0.4), Math.round(86 * fit));
   hayPile(pix, Math.round(w * 0.5), Math.round(h * 0.52), fit);
   barrel(pix, Math.round(w * 0.3), Math.round(h * 0.56), fit);
   kiln(pix, Math.round(w * 0.95), Math.round(h * 0.5), Math.round(30 * fit));
@@ -106,19 +114,15 @@ function dirtTone(x: number, y: number, edges: { left: number; right: number }):
   return palette.dirt;
 }
 
-function roadEdges(y: number, w: number, h: number): { left: number; right: number } | null {
-  const top = Math.round(h * roadTop);
-  const mid = w * 0.5 + ((hash(4, y >> 3) % 7) - 3);
-  if (y < top) {
-    const dy = top - y;
-    const cap = w * 0.035;
-    if (dy > cap) return null;
-    const room = Math.sqrt(Math.max(0, 1 - (dy / cap) ** 2)) * (w * 0.045);
-    return { left: mid - room, right: mid + room };
-  }
-  const t = (y - top) / Math.max(1, h - top);
-  const wobble = (hash(2, y) % 5) - 2;
-  const half = (0.045 + t * 0.3) * w + wobble;
+/** Дорога с точки на горизонте (y = 0) до переднего плана. Дальше опорной глубины почти не ширится. */
+function roadEdges(y: number, w: number, h: number): { left: number; right: number } {
+  const depth = Math.max(1, sceneDepth({ x: 0, y: 0, width: w, height: h }));
+  const t = y / depth;
+  const near = t < 1 ? t : 1 + (t - 1) * 0.12;
+  const fade = Math.min(1, t * 4);
+  const mid = w * 0.5 + ((hash(4, y >> 3) % 7) - 3) * fade;
+  const wobble = ((hash(2, y) % 5) - 2) * fade;
+  const half = Math.min(w * 0.42, Math.max(1, near * 0.36 * w) + wobble);
   return { left: mid - half, right: mid + half };
 }
 
@@ -197,7 +201,7 @@ function yard(pix: Pix, cx: number, cy: number, rx: number, ry: number): void {
 }
 
 function roadside(pix: Pix, w: number, h: number, fit: number): void {
-  const top = Math.round(h * roadTop) + Math.round(18 * fit);
+  const top = Math.round(belowHorizon(0.52, { x: 0, y: 0, width: w, height: h }));
   const step = Math.max(16, Math.round(28 * fit));
   const left: { x: number; y: number; ph: number }[] = [];
   const right: { x: number; y: number; ph: number }[] = [];
@@ -474,25 +478,18 @@ function cloud(pix: Pix, x: number, y: number, s: number): void {
   pix.fill(x, y + 5 * s, 11 * s, s, palette.cloudShade);
 }
 
-function ridge(pix: Pix, color: number, reach: number): void {
-  const { w, h } = pix;
-  const base = Math.round(h * reach);
-  for (let x = 0; x < w; x += 2) {
-    const wave = (hash(x >> 2, color & 31) % 10) + (hash(x >> 4, 3) % 8);
-    const top = Math.min(h - 1, base - wave);
-    pix.fill(x, top, 2, h - top, color);
+/** Узкая даль у самого горизонта. Основная высота неба остаётся синей. */
+function horizon(pix: Pix, skyH: number): void {
+  const hill = Math.max(12, Math.min(36, Math.round(skyH * 0.12)));
+  for (let x = 0; x < pix.w; x += 2) {
+    const wave = (hash(x >> 2, 1) % hill) + (hash(x >> 4, 3) % Math.max(2, Math.round(hill * 0.35)));
+    const top = skyH - wave;
+    pix.fill(x, top, 2, skyH - top, palette.hillFar);
     pix.fill(x, top, 2, 1, palette.grassDeep);
   }
-}
-
-/** Дальний лес: шапки торчат из гребня, сам холм остаётся сплошным. */
-function treeline(pix: Pix): void {
-  const { w, h } = pix;
-  const base = Math.round(h * 0.7);
-  for (let x = 6; x < w - 6; x += 12 + (hash(x, 11) % 14)) {
-    const wave = (hash(x >> 2, palette.hill & 31) % 10) + (hash(x >> 4, 3) % 8);
-    const ground = Math.min(h - 2, base - wave);
-    const height = 7 + (hash(x, 5) % 9);
+  for (let x = 6; x < pix.w - 6; x += 14 + (hash(x, 11) % 16)) {
+    const height = 8 + (hash(x, 5) % 14);
+    const ground = skyH - (hash(x, 9) % 4);
     if (hash(x, 8) % 2 === 0) cone(pix, x, ground, height);
     else mound(pix, x, ground, height);
   }

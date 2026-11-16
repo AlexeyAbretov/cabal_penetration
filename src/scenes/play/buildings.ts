@@ -1,11 +1,11 @@
 import { palette } from '../../constants';
 import type { BuildingKind } from '../../data/wave';
-import { fieldScale, fitScale, type Rect } from '../../layout';
+import { belowHorizon, fieldScale, fitScale, type Rect } from '../../layout';
 import { hash, inkOutline, Pix } from './pix';
 
 /** Размер фасада на этом поле: глубина мельчит дальний дом, узкое окно сжимает все. */
 export function buildingBox(baseW: number, baseH: number, feet: number, field: Rect): { w: number; h: number } {
-  const y = field.y + feet * field.height;
+  const y = field.y + belowHorizon(feet, field);
   const scale = fieldScale(y, field) * fitScale(field);
   return {
     w: Math.max(20, Math.round(baseW * scale)),

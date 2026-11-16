@@ -3,7 +3,7 @@ import { palette } from '../../constants';
 import type { FrameLayout, Rect } from '../../layout';
 import { blit, ensureCanvas } from './blit';
 import type { Pix } from './pix';
-import { paintField, paintSky, paintTrack } from './village';
+import { paintTrack, paintVillageBackdrop } from './village';
 
 /** Полосы кадра снизу вверх по глубине: небо, поле, дорожка, рамка. */
 export class Stage {
@@ -43,8 +43,14 @@ export class Stage {
 
   private paintVillage(view: FrameLayout): void {
     this.flat.clear();
-    put(this.scene, this.skyImage, 'band-sky', paintSky(view.sky.width, view.sky.height), view.sky);
-    put(this.scene, this.fieldImage, 'band-field', paintField(view.field.width, view.field.height), view.field);
+    const backdrop = paintVillageBackdrop(view.sky.width, view.sky.height, view.field.height);
+    put(this.scene, this.skyImage, 'band-sky', backdrop, {
+      x: 0,
+      y: 0,
+      width: view.sky.width,
+      height: view.sky.height + view.field.height,
+    });
+    this.fieldImage.setVisible(false);
     put(this.scene, this.trackImage, 'band-track', paintTrack(view.track.width, view.track.height), view.track);
   }
 
