@@ -6,7 +6,7 @@ import { disc, hash, lerpColor, Pix, stamp } from './pix';
 
 /**
  * Своя картинка 1-1, не рип.
- * Дорога уходит к сараю, дома стоят на траве по бокам,
+ * Дорога уходит вдаль, дома стоят на траве по бокам,
  * заборы и растения заполняют двор. Врагов на этом слое нет.
  */
 
@@ -73,7 +73,7 @@ export function paintField(w: number, h: number): Pix {
   lowBrick(pix, Math.round(w * 0.78), aboveWall - Math.round(18 * fit), Math.round(78 * fit), Math.round(16 * fit));
   pickets(pix, Math.round(w * 0.02), Math.round(w * 0.3), aboveWall, Math.round(28 * fit));
   tree(pix, Math.round(w * 0.34), Math.round(h * 0.46), Math.round(118 * fit));
-  deadTree(pix, Math.round(w * 0.62), Math.round(h * 0.4), Math.round(86 * fit));
+  deadTree(pix, Math.round(w * 0.28), Math.round(h * 0.4), Math.round(86 * fit));
   hayPile(pix, Math.round(w * 0.5), Math.round(h * 0.52), fit);
   barrel(pix, Math.round(w * 0.3), Math.round(h * 0.56), fit);
   kiln(pix, Math.round(w * 0.95), Math.round(h * 0.5), Math.round(30 * fit));
