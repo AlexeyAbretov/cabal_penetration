@@ -1,6 +1,10 @@
-# Публикация игры на GitHub Pages. Событие — push в ветку release/release-…
-# Собирается обычный dist
+# Публикация игры на GitHub Pages.
+# Пуш в любую ветку release/release-<версия> пересобирает все такие ветки:
+# выкладка заменяет сайт целиком, поэтому старые версии надо положить в тот же артефакт.
+# release/release-0.1 → https://alexeyabretov.github.io/cabal_penetration/0.1/
+# Корень сайта — та же сборка, что у самой старшей версии.
 # В настройках репозитория источник Pages — GitHub Actions, иначе workflow не выкладывает сайт.
+# У vite base должен остаться './': один dist открывается и с корня, и из папки версии.
 
 name: GitHub Pages
 
@@ -8,6 +12,7 @@ on:
   push:
     branches:
       - 'release/release-**'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -29,13 +34,51 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      - name: Собрать каждую ветку в свою папку версии
+        run: |
+          set -euo pipefail
+          root="${GITHUB_WORKSPACE}"
+          mkdir -p "${root}/site"
 
-      - run: npm run build
+          git fetch --depth=1 origin '+refs/heads/release/release-*:refs/remotes/origin/release/release-*'
+
+          mapfile -t branches < <(git for-each-ref --format='%(refname:strip=3)' 'refs/remotes/origin/release/release-*' | sort -V)
+
+          latest=""
+          for branch in "${branches[@]}"; do
+            version="${branch#release/release-}"
+            if [[ ! "${version}" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+              echo "Пропуск ${branch}: после release/release- нужна версия вроде 0.1"
+              continue
+            fi
+
+            work="${RUNNER_TEMP}/pages-${version}"
+            echo "Сборка ${branch} → /${version}/"
+            git worktree add --detach "${work}" "origin/${branch}"
+            (
+              cd "${work}"
+              npm ci
+              npm run build
+            )
+            mkdir -p "${root}/site/${version}"
+            cp -a "${work}/dist/." "${root}/site/${version}/"
+            git worktree remove --force "${work}"
+            latest="${version}"
+          done
+
+          if [[ -z "${latest}" ]]; then
+            echo "Нет веток release/release-<версия>"
+            exit 1
+          fi
+
+          echo "Корень сайта — версия ${latest}"
+          cp -a "${root}/site/${latest}/." "${root}/site/"
+          echo "В корне:"
+          ls -1 "${root}/site"
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: site
 
   deploy:
     needs: build
