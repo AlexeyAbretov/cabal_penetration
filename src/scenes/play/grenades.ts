@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { arcPoint, centerBox, distanceToSegment, rectsOverlap, type HitBox } from '../../combat';
 import { grenade, palette } from '../../constants';
-import { explosionSheet } from '../../explosionSheet';
+import { blastSheet } from '../../explosionSheet';
 import type { FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
 
@@ -71,8 +71,9 @@ export class Grenades {
 
   /** Кадры разрыва. На паузе и на экране смерти сцена этот шаг не зовёт. */
   step(delta: number): void {
-    const frameMs = explosionSheet.frameMs;
-    const frames = explosionSheet.frames;
+    const sheet = blastSheet();
+    const frameMs = sheet.frameMs;
+    const frames = sheet.frames;
     this.blasts = this.blasts.filter((blast) => {
       blast.life += delta;
       const frame = Math.floor(blast.life / frameMs);
@@ -173,9 +174,14 @@ export class Grenades {
     this.boom?.(item.toX, item.toY);
   }
 
-  /** Край круглого кадра — это радиус урона. Осколки после пика чуть выходят за круг. */
+  /** Край рисунка — один и тот же радиус у обоих роликов. Осколки после пика чуть выходят за него. */
   private blast(x: number, y: number): void {
-    const sprite = this.scene.add.sprite(x, y, explosionSheet.key, 0).setOrigin(0.5, 0.5).setDepth(4.4);
+    const sheet = blastSheet();
+    const sprite = this.scene.add
+      .sprite(x, y, sheet.key, 0)
+      .setOrigin(sheet.originX, sheet.originY)
+      .setScale(sheet.scale)
+      .setDepth(4.4);
     this.blasts.push({ sprite, life: 0 });
   }
 

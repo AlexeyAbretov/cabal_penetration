@@ -236,6 +236,12 @@ export const grenade = {
   propHits: 3,
 } as const;
 
+/**
+ * Ролик разрыва гранаты. Один переключатель.
+ * `ring` — старый круг. `ground` — вспышка с земли.
+ */
+export const grenadeBlast: 'ring' | 'ground' = 'ground';
+
 /** Падение на дорожку — твин. Подбор телом, когда предмет уже лёг. */
 export const pickup = {
   fallMs: 480,
