@@ -449,13 +449,126 @@ function cloud(pix: Pix, x: number, y: number, s: number): void {
   pix.fill(x, y + 5 * s, 11 * s, s, palette.cloudShade);
 }
 
-/** Узкая даль у самого горизонта. Основная высота неба остаётся синей. */
+/**
+ * Горы у горизонта. Общий контур — гряда, кромка идёт уступами, не прямой гранью.
+ * В нижней половине ближних склонов — пятна травы.
+ */
 function horizon(pix: Pix, skyH: number): void {
-  const hill = Math.max(12, Math.min(36, Math.round(skyH * 0.12)));
-  for (let x = 0; x < pix.w; x += 2) {
-    const wave = (hash(x >> 2, 1) % hill) + (hash(x >> 4, 3) % Math.max(2, Math.round(hill * 0.35)));
-    const top = skyH - wave;
-    pix.fill(x, top, 2, skyH - top, palette.hillFar);
-    pix.fill(x, top, 2, 1, palette.grassDeep);
+  const tall = Math.max(28, Math.min(72, Math.round(skyH * 0.32)));
+  const step = Math.max(84, Math.min(136, Math.round(pix.w / 7)));
+  const near = layPeaks(pix.w, tall, step, 2);
+  const far = layPeaks(pix.w, Math.round(tall * 0.58), Math.round(step * 1.4), 6);
+  const front = silhouette(pix.w, near, 4);
+  const back = silhouette(pix.w, far, 11);
+  for (let x = 0; x < pix.w; x += 1) {
+    const h = front[x] ?? 0;
+    const bh = back[x] ?? 0;
+    if (bh > h) paintFar(pix, x, skyH, h, bh);
+    if (h > 0) paintNear(pix, x, skyH, h);
   }
+}
+
+type Peak = { x: number; left: number; right: number; h: number };
+
+function layPeaks(w: number, tall: number, step: number, salt: number): Peak[] {
+  const peaks: Peak[] = [];
+  let x = -Math.round(step * 0.35);
+  let i = 0;
+  while (x < w + step) {
+    const h = Math.round(tall * (0.55 + (hash(i, salt) % 46) / 100));
+    const left = Math.round(step * (0.42 + (hash(i, salt + 1) % 55) / 100));
+    const right = Math.round(step * (0.36 + (hash(salt, i) % 70) / 100));
+    peaks.push({ x, left, right, h });
+    if (hash(i, salt + 5) % 3 !== 0) {
+      const side = hash(i, salt + 6) % 2 === 0 ? 1 : -1;
+      const shift = Math.round(side * step * (0.16 + (hash(i, salt + 7) % 22) / 100));
+      peaks.push({
+        x: x + shift,
+        left: Math.round(left * 0.4),
+        right: Math.round(right * 0.46),
+        h: Math.round(h * (0.52 + (hash(i, salt + 8) % 28) / 100)),
+      });
+    }
+    x += Math.round(step * (0.7 + (hash(i + 3, salt) % 45) / 100));
+    i += 1;
+  }
+  return peaks;
+}
+
+/** Кромка держится площадкой в несколько пикселей, потом срывается на 1–3. */
+function silhouette(w: number, peaks: readonly Peak[], salt: number): number[] {
+  const out: number[] = [];
+  let y = Math.round(peakHeight(0, peaks));
+  let run = 0;
+  for (let x = 0; x < w; x += 1) {
+    if (run <= 0) {
+      const delta = peakHeight(x, peaks) - y;
+      const n = hash(x, salt);
+      let step = 0;
+      if (delta !== 0) {
+        const lag = Math.abs(delta);
+        const mag = lag > 12 ? 3 + (n % 3) : lag > 5 ? 1 + (n % 3) : 1;
+        step = Math.sign(delta) * Math.min(lag, mag);
+        if (n % 8 === 0) step = 0;
+        else if (n % 15 === 0) step = -Math.sign(delta);
+      } else if (n % 10 === 0) {
+        step = n % 2 === 0 ? 1 : -1;
+      }
+      y = Math.max(4, y + step);
+      run = 2 + (hash(x, salt + 4) % 4);
+    }
+    run -= 1;
+    out.push(y);
+  }
+  return out;
+}
+
+function peakHeight(x: number, peaks: readonly Peak[]): number {
+  let h = 0;
+  for (const peak of peaks) {
+    const dx = x - peak.x;
+    const span = dx < 0 ? peak.left : peak.right;
+    if (span <= 0) continue;
+    const dist = Math.abs(dx);
+    if (dist >= span) continue;
+    const rise = peak.h * (1 - dist / span);
+    if (rise > h) h = rise;
+  }
+  return h;
+}
+
+function paintFar(pix: Pix, x: number, skyH: number, nearH: number, h: number): void {
+  const top = skyH - h;
+  const stop = skyH - nearH;
+  for (let y = top; y < stop; y += 1) {
+    pix.px(x, y, hash(x, y) % 8 === 0 ? palette.mountLite : palette.mountFar);
+  }
+}
+
+/** Ближний склон: сиреневое тело, к низу всё гуще пятна травы. */
+function paintNear(pix: Pix, x: number, skyH: number, h: number): void {
+  const top = skyH - h;
+  for (let i = 0; i < h; i += 1) {
+    const y = top + i;
+    const depth = (i + 1) / h;
+    const n = hash(x, y);
+    const patch = hash(x >> 2, y >> 1);
+    const low = depth > 0.4 && (patch % 6 === 0 || n % 100 < depth * 46);
+    const speck = depth > 0.58 && patch % 14 === 0;
+    const base = depth > 0.84 && n % 4 !== 0;
+    if (low || speck || base) {
+      pix.px(x, y, greenSpeck(n));
+      continue;
+    }
+    const lite = i < h * 0.2 ? n % 3 !== 0 : n % 7 === 0;
+    pix.px(x, y, lite ? palette.mountLite : palette.mount);
+  }
+}
+
+function greenSpeck(n: number): number {
+  const k = n % 5;
+  if (k === 0) return palette.grassDark;
+  if (k === 1) return palette.field;
+  if (k === 2) return palette.grassLite;
+  return palette.grass;
 }

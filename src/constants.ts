@@ -15,8 +15,10 @@ export const palette = {
   skyLite: 0xc5dced,
   cloud: 0xe7f1f6,
   cloudShade: 0xb7c9d4,
-  hill: 0x1e3828,
-  hillFar: 0x6a9068,
+  /** Дальные горы у горизонта: тень, свет на гребне, дальняя гряда. */
+  mount: 0x6c6e76,
+  mountLite: 0x9c9ea6,
+  mountFar: 0x848a94,
   field: 0x6e7d45,
   grass: 0x3d8a34,
   grassDark: 0x246428,
