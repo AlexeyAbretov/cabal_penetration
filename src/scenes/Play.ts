@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { afterPicture, marchFrom, marchPicture, type March } from '../campaign/march';
 import type { Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat';
-import { bonus, grenade, grenadeFly, hud as hudNumbers, palette, pickup, star, weapons, type DropKind } from '../constants';
+import { bonus, grenade, grenadeFly, hitFlash, hud as hudNumbers, palette, pickup, star, weapons, type DropKind } from '../constants';
 import { waveQuota, type FenceKind, type FenceMark } from '../data/wave';
 import { loadExplosion } from '../explosionSheet';
 import { frameLayout, type FrameLayout } from '../layout';
@@ -75,6 +75,12 @@ export class Play extends Phaser.Scene {
     if (!this.textures.exists(hudIcons.heart)) this.load.image(hudIcons.heart, hudIcons.heartUrl);
     if (!this.textures.exists(hudIcons.grenade)) this.load.image(hudIcons.grenade, hudIcons.grenadeUrl);
     if (!this.textures.exists(grenadeFly.key)) this.load.image(grenadeFly.key, grenadeFly.url);
+    if (!this.textures.exists(hitFlash.key)) {
+      this.load.spritesheet(hitFlash.key, hitFlash.url, {
+        frameWidth: hitFlash.frameWidth,
+        frameHeight: hitFlash.frameHeight,
+      });
+    }
     loadExplosion(this);
     loadFenceSheets(this, fenceKinds(this.picture.fences));
     if (this.picture.shorts.length > 0) loadShortFence(this);

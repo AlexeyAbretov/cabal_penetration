@@ -1,53 +1,19 @@
 import Phaser from 'phaser';
-import { aimMark, hitFlashMs, palette, weapons, type WeaponId } from '../../constants';
+import { aimMark, hitFlash, palette, weapons, type WeaponId } from '../../constants';
 import { clampToRect, type Rect } from '../../layout';
-
-/**
- * Огненный ком с кадра попадания. Точка пустая.
- * W — яркое жёлтое, Y — жёлтое, O — оранжевое, R — тёмный край.
- * Второй кадр короче: ком сгорает и гаснет, без полупрозрачности.
- */
-const fireBurst = [
-  '....YY...',
-  '..OOYYY..',
-  '.YYOOYOO.',
-  '.OYYYYYY.',
-  'OOYWWYYO.',
-  '.OYYYYOO.',
-  '..OYYYR..',
-  '...ORR...',
-  '....R....',
-] as const;
-
-const fireEmber = [
-  '.........',
-  '....Y....',
-  '...YYY...',
-  '..OYWYO..',
-  '...OOO...',
-  '....R....',
-  '.........',
-  '.........',
-  '.........',
-] as const;
-
-const fireColor: Record<string, number> = {
-  W: palette.explosion,
-  Y: palette.star,
-  O: palette.enemyLane,
-  R: palette.wallHurt,
-};
 
 /** Прерывистый крест. Ширина и высота зависят от ствола, и этот прямоугольник бьёт. */
 export class Aim {
   x = 0;
   y = 0;
   private kind: WeaponId = 'rifle';
-  private flashLeft = 0;
-  private flashHalf = 0;
+  private burst: Phaser.GameObjects.Sprite | null = null;
+  private burstLife = 0;
+  private readonly scene: Phaser.Scene;
   private readonly gfx: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene) {
+    this.scene = scene;
     this.gfx = scene.add.graphics().setDepth(5);
   }
 
@@ -55,27 +21,48 @@ export class Aim {
     const point = clampToRect(x, y, field);
     this.x = point.x;
     this.y = point.y;
+    this.placeBurst();
     this.draw();
   }
 
   setWeapon(kind: WeaponId): void {
     this.kind = kind;
+    this.placeBurst();
     this.draw();
   }
 
-  /** Попадание в дырке креста. Размер снят со ствола, который выстрелил. */
+  /** Попадание в дырке креста. Ролик облака, пока предыдущий не догорел. */
   flash(): void {
-    const spec = weapons[this.kind];
-    const span = Math.min(spec.reach, spec.reachY);
-    this.flashHalf = Math.max(2, Math.round(span * spec.flash));
-    this.flashLeft = hitFlashMs;
-    this.draw();
+    if (this.burst || !this.scene.textures.exists(hitFlash.key)) return;
+    this.burst = this.scene.add.sprite(this.x, this.y, hitFlash.key, 0).setOrigin(0.5, 0.5).setDepth(4.95);
+    this.burstLife = 0;
+    this.placeBurst();
   }
 
   step(delta: number): void {
-    if (this.flashLeft <= 0) return;
-    this.flashLeft = Math.max(0, this.flashLeft - delta);
-    this.draw();
+    const burst = this.burst;
+    if (!burst) return;
+    this.burstLife += delta;
+    const frame = Math.floor(this.burstLife / hitFlash.frameMs);
+    if (frame >= hitFlash.frames) {
+      burst.destroy();
+      this.burst = null;
+      return;
+    }
+    burst.setFrame(frame);
+    this.placeBurst();
+  }
+
+  /** Кадр ролика вписан в прямоугольник креста этого ствола. */
+  private placeBurst(): void {
+    const burst = this.burst;
+    if (!burst) return;
+    const { reach, reachY } = weapons[this.kind];
+    const scale = Math.min((reach * 2) / hitFlash.frameWidth, (reachY * 2) / hitFlash.frameHeight);
+    burst.setPosition(Math.round(this.x), Math.round(this.y)).setDisplaySize(
+      Math.max(1, Math.round(hitFlash.frameWidth * scale)),
+      Math.max(1, Math.round(hitFlash.frameHeight * scale)),
+    );
   }
 
   private draw(): void {
@@ -86,7 +73,6 @@ export class Aim {
     this.gfx.clear();
     this.drawSquare(x, y, reach, reachY, gap, thickness);
     this.drawTriangles(x, y, reach, reachY, gap, thickness, mark);
-    this.drawFlash(x, y);
   }
 
   /** Сторона из двух штрихов: разрыв посередине, углы целые. */
@@ -144,28 +130,6 @@ export class Aim {
       const half = Math.floor(span / 2);
       if (dy !== 0) this.gfx.fillRect(x - half, y + dy * i, span, 1);
       else this.gfx.fillRect(x + dx * i, y - half, 1, span);
-    }
-  }
-
-  /**
-   * Тот же ком, что на кадре: жёлтая середина, оранжевая кромка, рваный край.
-   * Пиксель кома растёт вместе со стороной креста.
-   */
-  private drawFlash(x: number, y: number): void {
-    if (this.flashLeft <= 0) return;
-    const rows = this.flashLeft > hitFlashMs * 0.45 ? fireBurst : fireEmber;
-    const cell = Math.max(1, Math.round(this.flashHalf / 4));
-    const cols = rows[0].length;
-    const originX = Math.round(x - (cols * cell) / 2);
-    const originY = Math.round(y - (rows.length * cell) / 2);
-    for (let row = 0; row < rows.length; row += 1) {
-      const line = rows[row];
-      for (let col = 0; col < line.length; col += 1) {
-        const color = fireColor[line[col]];
-        if (color === undefined) continue;
-        this.gfx.fillStyle(color, 1);
-        this.gfx.fillRect(originX + col * cell, originY + row * cell, cell, cell);
-      }
     }
   }
 }
