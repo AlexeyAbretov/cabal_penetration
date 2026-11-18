@@ -35,7 +35,7 @@ import { FrontWall } from './play/wall';
 /**
  * Картинка из маршрута. Гранаты, счёт и жизни приходят с захода, ствол — нет.
  * Куст, ящик, короткий кирпич и мешки роняют на дорожку пачку, ствол или звезду. Подбор телом.
- * Удар — прямоугольник креста: частый уже, широкий шире и ниже, и больнее. На конце сцены оба сгорают.
+ * Удар — прямоугольник креста: частый уже, широкий шире и ниже, и больнее. Оба держат десять секунд и сгорают на конце сцены.
  * Танк-прямоугольник ест полоску. Очки за него и за крупные объекты выше, чем за зелёного.
  * Глубина сзади вперёд: небо и дома, замах, дорожка, кусты и ящики, зелёные и танк,
  * стена, дроп, солдат, очередь, прицел, рамка.
@@ -224,7 +224,7 @@ export class Play extends Phaser.Scene {
       this.drawBattle();
       return;
     }
-    this.gun.step(step, {
+    const weaponSpent = this.gun.step(step, {
       rolling: this.soldier.rolling,
       triggerDown: input.firing,
       aimX: this.aim.x,
@@ -235,6 +235,7 @@ export class Play extends Phaser.Scene {
         this.resolvePlayerShot(from, at, mark);
       },
     });
+    if (weaponSpent) this.restoreRifle();
     if (this.cleared) {
       this.stepClear(step);
       this.drawBattle();
@@ -459,13 +460,18 @@ export class Play extends Phaser.Scene {
     this.hud.setWeapon(kind);
   }
 
+  /** Десять секунд вышли или сцена кончилась: крест и значок снова от автомата. */
+  private restoreRifle(): void {
+    this.aim.setWeapon('rifle');
+    this.hud.setWeapon('rifle');
+  }
+
   private finish(): void {
     if (this.cleared) return;
     this.cleared = true;
     this.enemies.freeze();
     this.gun.burn();
-    this.aim.setWeapon('rifle');
-    this.hud.setWeapon('rifle');
+    this.restoreRifle();
     this.drops.freeze();
     this.houses.fall();
   }

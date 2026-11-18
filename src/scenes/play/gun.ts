@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { muzzleFlashMs, palette, weapons, type WeaponId } from '../../constants';
+import { muzzleFlashMs, palette, weaponHoldMs, weapons, type WeaponId } from '../../constants';
 
 export type ShotMark = {
   damage: number;
@@ -16,12 +16,13 @@ type ShotFrame = {
   onShot: (from: { x: number; y: number }, at: { x: number; y: number }, mark: ShotMark) => void;
 };
 
-/** Очередь. Кувырок её обрывает. Временный ствол живёт до границы сцены, автомат — всегда. */
+/** Очередь. Кувырок её обрывает. Временный ствол держит десять секунд, автомат — всегда. */
 export class Gun {
   /** Очередь не переживает кувырок: кнопку надо отпустить и нажать снова. */
   private blockFire = false;
   private fireCooldown = 0;
   private muzzleLife = 0;
+  private holdLeft = 0;
   private weapon: WeaponId = 'rifle';
   private readonly gfx: Phaser.GameObjects.Graphics;
 
@@ -29,16 +30,18 @@ export class Gun {
     this.gfx = scene.add.graphics().setDepth(4.6);
   }
 
-  /** Частый или широкий. Автомат на это время уступает, патроны не кончаются. */
+  /** Частый или широкий на десять секунд. Повторный подбор начинает срок заново. */
   equip(kind: Exclude<WeaponId, 'rifle'>): void {
     this.weapon = kind;
     this.fireCooldown = 0;
+    this.holdLeft = weaponHoldMs;
   }
 
-  /** Граница сцены. Оба временных ствола сгорают. */
+  /** Граница сцены. Оба временных ствола сгорают, даже если десять секунд не вышли. */
   burn(): void {
     this.weapon = 'rifle';
     this.fireCooldown = 0;
+    this.holdLeft = 0;
   }
 
   /** Сброс очереди в кадр, когда кувырок только начался. */
@@ -52,9 +55,22 @@ export class Gun {
     return !this.blockFire;
   }
 
-  step(delta: number, frame: ShotFrame): void {
+  /** true — десять секунд вышли в этом кадре, в руках снова автомат. */
+  step(delta: number, frame: ShotFrame): boolean {
+    const expired = this.stepHold(delta);
     this.stepFire(delta, frame);
     this.stepMuzzle(delta, frame);
+    return expired;
+  }
+
+  private stepHold(delta: number): boolean {
+    if (this.weapon === 'rifle') return false;
+    this.holdLeft -= delta;
+    if (this.holdLeft > 0) return false;
+    this.weapon = 'rifle';
+    this.fireCooldown = 0;
+    this.holdLeft = 0;
+    return true;
   }
 
   private stepFire(delta: number, frame: ShotFrame): void {
