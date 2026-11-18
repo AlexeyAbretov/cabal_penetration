@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { afterPicture, marchFrom, marchPicture, type March } from '../campaign/march';
 import type { Picture } from '../campaign/picture';
-import { resolveColumnHit } from '../combat';
-import { hud as hudNumbers, palette, pickup, star, type DropKind } from '../constants';
+import { circleHitsRect, resolveColumnHit } from '../combat';
+import { grenade, hud as hudNumbers, palette, pickup, star, type DropKind } from '../constants';
 import { waveQuota, type FenceKind, type FenceMark } from '../data/wave';
 import { frameLayout, type FrameLayout } from '../layout';
 import { loadFenceSheets, registerFenceAnims } from '../fenceSheet';
@@ -103,6 +103,7 @@ export class Play extends Phaser.Scene {
       if (this.cleared) return;
       this.enemies.blast(x, y);
       this.props.blast(x, y);
+      this.blastFrontWall(x, y);
     });
     this.controls = new Controls(this, () => this.onRightClick());
     this.hud.setQuota(waveQuota(this.picture.wave));
@@ -250,6 +251,23 @@ export class Play extends Phaser.Scene {
 
   private placeSoldier(): void {
     this.soldier.place();
+  }
+
+  /** Разрыв снимает переднюю стену, если кладка входит в круг. Пустое место рядом стену не берёт. */
+  private blastFrontWall(x: number, y: number): void {
+    const doomed = new Set(this.fences.blastColumns(x, y, grenade.blastRadius));
+    const sheet = this.fences.columns();
+    for (let column = 0; column < this.wall.count(); column += 1) {
+      if (sheet.has(column)) continue;
+      const face = this.wall.stoneRect(this.view, column);
+      if (!face || !circleHitsRect(x, y, grenade.blastRadius, face)) continue;
+      doomed.add(column);
+    }
+    const geom = this.wall.geom(this.view);
+    const mid = geom.top + geom.height / 2;
+    for (const column of doomed) {
+      this.wall.ruin(column, this.wall.columnCenter(this.view, column), mid, this.sparks);
+    }
   }
 
   private throwGrenade(): void {

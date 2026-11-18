@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { circleHitsRect } from '../../combat';
 import { fence, wall } from '../../constants';
 import type { FenceMark } from '../../data/wave';
 import { fenceBreakKey, fenceIdleKey, fenceInk } from '../../fenceSheet';
@@ -64,6 +65,18 @@ export class Fences {
   /** Секция, чья кладка закрывает эту точку по горизонтали. */
   sectionAt(x: number): number | null {
     return this.pick(x, undefined, false);
+  }
+
+  /** Живые секции, чья кладка входит в круг разрыва. */
+  blastColumns(x: number, y: number, radius: number): number[] {
+    const columns: number[] = [];
+    for (const piece of this.pieces) {
+      const hit = piece.hit;
+      if (!hit || piece.gone || piece.breaking) continue;
+      if (!circleHitsRect(x, y, radius, hit)) continue;
+      columns.push(piece.column);
+    }
+    return columns;
   }
 
   sync(view: FrameLayout, front: FrontWall): void {

@@ -40,6 +40,18 @@ export function arcPoint(
   };
 }
 
+/** Круг касается прямоугольника, включая кромку. */
+export function circleHitsRect(
+  x: number,
+  y: number,
+  radius: number,
+  rect: { left: number; right: number; top: number; bottom: number },
+): boolean {
+  const nearestX = Math.min(rect.right, Math.max(rect.left, x));
+  const nearestY = Math.min(rect.bottom, Math.max(rect.top, y));
+  return Math.hypot(x - nearestX, y - nearestY) <= radius;
+}
+
 /** Дистанция от точки до отрезка и доля вдоль отрезка от начала к концу. */
 export function distanceToSegment(
   px: number,

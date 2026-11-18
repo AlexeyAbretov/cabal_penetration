@@ -26,6 +26,10 @@ export class FrontWall {
     return (this.hp[column] ?? 0) > 0;
   }
 
+  count(): number {
+    return this.hp.length;
+  }
+
   columnWidth(view: FrameLayout): number {
     return view.track.width / this.hp.length;
   }
@@ -62,6 +66,23 @@ export class FrontWall {
     if (hp <= 0) return;
     this.hp[column] = hp - 1;
     sparks.add(x, y, 90, 'chip');
+  }
+
+  /** Граната снимает секцию целиком. Очередь по-прежнему колет по одному удару. */
+  ruin(column: number, x: number, y: number, sparks: Sparks): void {
+    if ((this.hp[column] ?? 0) <= 0) return;
+    this.hp[column] = 0;
+    sparks.add(x, y, 160, 'land');
+  }
+
+  /** Лицо секции без листа. Кладку листа считает забор. */
+  stoneRect(view: FrameLayout, column: number): { left: number; right: number; top: number; bottom: number } | null {
+    if ((this.hp[column] ?? 0) <= 0) return null;
+    const geom = this.geom(view);
+    const left = Math.round(geom.trackX + column * geom.colW + wall.seam / 2);
+    const width = Math.round(geom.colW - wall.seam);
+    if (width <= 0) return null;
+    return { left, right: left + width, top: geom.top, bottom: geom.top + geom.height };
   }
 
   geom(view: FrameLayout): WallGeom {
