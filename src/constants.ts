@@ -173,7 +173,7 @@ export const hitFlash = {
   frameWidth: 92,
   frameHeight: 69,
   frames: 8,
-  frameMs: 50,
+  frameMs: 30,
 } as const;
 
 /** Толщина штриха прерывистого квадрата. */
