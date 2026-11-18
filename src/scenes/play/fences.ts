@@ -88,7 +88,7 @@ export class Fences {
 /**
  * Кладка соседних секций сходится встык. Ширина и высота кадра те же:
  * сдвигается только середина, прозрачные поля наезжают друг на друга.
- * Кусок у дыры прижат к ней, запасная земля остаётся с внешнего края.
+ * Кусок у края сцены начинается от этого края. Запасная земля остаётся у дыры.
  */
 function joinedCenters(
   runs: readonly Piece[][],
@@ -98,6 +98,7 @@ function joinedCenters(
   columnCount: number,
 ): Map<number, number> {
   const centers = new Map<number, number>();
+  const sceneRight = geom.trackX + columnCount * geom.colW;
   for (const run of runs) {
     const first = run[0];
     const last = run[run.length - 1];
@@ -109,12 +110,18 @@ function joinedCenters(
     }
     const colLeft = geom.trackX + first.column * geom.colW;
     const colRight = geom.trackX + (last.column + 1) * geom.colW;
+    const atSceneLeft = first.column === 0;
+    const atSceneRight = last.column === columnCount - 1;
     const openLeft = first.column > 0 && !owned.has(first.column - 1);
     const openRight = last.column < columnCount - 1 && !owned.has(last.column + 1);
     const firstLeft = inkLeft(first.kind, scaleX);
     const lastRight = inkRight(last.kind, scaleX);
     let origin: number;
-    if (openRight && !openLeft) {
+    if (atSceneLeft) {
+      origin = geom.trackX - firstLeft;
+    } else if (atSceneRight) {
+      origin = sceneRight - lastRight - rel[rel.length - 1];
+    } else if (openRight && !openLeft) {
       origin = colRight - lastRight - rel[rel.length - 1];
     } else if (openLeft && !openRight) {
       origin = colLeft - firstLeft;
