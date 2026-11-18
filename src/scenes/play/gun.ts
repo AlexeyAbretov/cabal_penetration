@@ -14,6 +14,7 @@ type Shot = {
 export type ShotMark = {
   damage: number;
   reach: number;
+  reachY: number;
 };
 
 type ShotFrame = {
@@ -96,7 +97,11 @@ export class Gun {
     const spec = weapons[this.weapon];
     this.flashColor = this.weapon === 'rifle' ? palette.muzzle : spec.tracer;
     const muzzle = frame.muzzlePoint();
-    frame.onShot(muzzle, { x: frame.aimX, y: frame.aimY }, { damage: spec.damage, reach: spec.reach });
+    frame.onShot(muzzle, { x: frame.aimX, y: frame.aimY }, {
+      damage: spec.damage,
+      reach: spec.reach,
+      reachY: spec.reachY,
+    });
     for (const at of traces(this.weapon, frame.aimX, frame.aimY)) {
       this.shots.push({
         x1: muzzle.x,
@@ -157,16 +162,16 @@ export class Gun {
   }
 }
 
-/** Автомат и частый — штрих в дырку креста. Широкий — ещё четыре к концам плеч, по квадрату удара. */
+/** Автомат и частый — штрих в дырку креста. Широкий — ещё четыре к концам плеч, по прямоугольнику удара. */
 function traces(kind: WeaponId, aimX: number, aimY: number): { x: number; y: number }[] {
   const center = { x: aimX, y: aimY };
   if (kind !== 'spread') return [center];
-  const reach = weapons.spread.reach;
+  const { reach, reachY } = weapons.spread;
   return [
     center,
     { x: aimX - reach, y: aimY },
     { x: aimX + reach, y: aimY },
-    { x: aimX, y: aimY - reach },
-    { x: aimX, y: aimY + reach },
+    { x: aimX, y: aimY - reachY },
+    { x: aimX, y: aimY + reachY },
   ];
 }

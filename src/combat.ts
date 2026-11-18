@@ -48,9 +48,9 @@ export type HitBox = {
   bottom: number;
 };
 
-/** Прямоугольник вокруг центра. reach — половина стороны креста. */
-export function hitBox(x: number, y: number, reach: number): HitBox {
-  return centerBox(x, y, reach * 2, reach * 2);
+/** Прямоугольник вокруг центра. reach — половина ширины креста, reachY — половина высоты. */
+export function hitBox(x: number, y: number, reach: number, reachY = reach): HitBox {
+  return centerBox(x, y, reach * 2, reachY * 2);
 }
 
 /** Хитбокс фигуры, центр в (x, y). */

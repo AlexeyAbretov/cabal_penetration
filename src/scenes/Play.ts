@@ -35,7 +35,7 @@ import { FrontWall } from './play/wall';
 /**
  * Картинка из маршрута. Гранаты, счёт и жизни приходят с захода, ствол — нет.
  * Куст, ящик, короткий кирпич и мешки роняют на дорожку пачку, ствол или звезду. Подбор телом.
- * Удар — квадрат креста: частый уже, широкий больше и больнее. На конце сцены оба сгорают.
+ * Удар — прямоугольник креста: частый уже, широкий шире и ниже, и больнее. На конце сцены оба сгорают.
  * Танк-прямоугольник ест полоску. Очки за него и за крупные объекты выше, чем за зелёного.
  * Глубина сзади вперёд: небо и дома, замах, дорожка, кусты и ящики, зелёные и танк,
  * стена, дроп, солдат, очередь, прицел, рамка.
@@ -194,6 +194,7 @@ export class Play extends Phaser.Scene {
     }
     this.grenades.step(Math.min(delta, 50));
     if (this.cleared) {
+      this.aim.step(Math.min(delta, 50));
       const pointer = this.controls.pointer;
       if (pointer) this.aim.aimAt(pointer.x, pointer.y, this.view.field);
       this.stepClear(Math.min(delta, 50));
@@ -203,10 +204,10 @@ export class Play extends Phaser.Scene {
 
     const input = this.controls.sample();
     const pointer = this.controls.pointer;
+    const step = Math.min(delta, 50);
+    this.aim.step(step);
     if (pointer) this.aim.aimAt(pointer.x, pointer.y, this.view.field);
     if (input.grenadePressed) this.throwGrenade();
-
-    const step = Math.min(delta, 50);
     if (this.soldier.tryRoll(input)) this.gun.interrupt(input.firing);
     if (this.soldier.rolling) this.soldier.advanceRoll(step);
     else this.soldier.step(step, input, input.firing && this.gun.acceptsTrigger(), this.aim.x, this.aim.y);
@@ -223,7 +224,10 @@ export class Play extends Phaser.Scene {
       aimX: this.aim.x,
       aimY: this.aim.y,
       muzzlePoint: () => this.soldier.barrelPoint(),
-      onShot: (from, at, mark) => this.resolvePlayerShot(from, at, mark),
+      onShot: (from, at, mark) => {
+        this.aim.flash();
+        this.resolvePlayerShot(from, at, mark);
+      },
     });
     if (this.cleared) {
       this.stepClear(step);
@@ -310,12 +314,12 @@ export class Play extends Phaser.Scene {
   }
 
   /**
-   * Квадрат креста бьёт всех, кто в него попал. Узкий выстрел, поймавший гранату
-   * на луче, до поля не доходит. Широкий снимает гранаты в квадрате и всё равно бьёт.
+   * Прямоугольник креста бьёт всех, кто в него попал. Узкий выстрел, поймавший гранату
+   * на луче, до поля не доходит. Широкий снимает гранаты в кресте и всё равно бьёт.
    */
   private resolvePlayerShot(from: { x: number; y: number }, at: { x: number; y: number }, shot: ShotMark): void {
     if (this.cleared || !this.view) return;
-    const box = hitBox(at.x, at.y, shot.reach);
+    const box = hitBox(at.x, at.y, shot.reach, shot.reachY);
     const along = this.grenades.intercept(from.x, from.y, at.x, at.y);
     const inCross = this.grenades.sweep(box);
     if (shot.reach <= weapons.rifle.reach && (along || inCross)) return;

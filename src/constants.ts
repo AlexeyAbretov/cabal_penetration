@@ -170,22 +170,58 @@ export const tracerLength = 18;
 /** Вспышка у ствола на один выстрел. */
 export const muzzleFlashMs = 36;
 
-/** Толщина штриха креста. Плечо и дырка живут у ствола: они же сторона удара. */
+/** Вспышка в кресте: полный ком, потом огарок. Короче паузы автомата, длиннее паузы частого. */
+export const hitFlashMs = 90;
+
+/** Толщина штриха прерывистого квадрата. */
 export const aimMark = {
   thickness: 2,
 } as const;
 
 /**
  * Три креста аркады, в пикселях кадра 512 (на экране 256 это вдвое меньше).
- * reach — половина стороны. Квадрат креста и есть попадание, дырка в середине тоже.
- * Автомат средний. Частый — вдвое уже и чаще, удар тот же. Широкий — почти вдвое
- * больше и реже, удар 3: площадь креста около трёх автоматных, зелёный снимается залпом.
- * На границе сцены оба временных сгорают.
+ * reach — половина ширины. reachY — половина высоты. Прямоугольник креста и есть попадание.
+ * gap — разрыв посередине каждой стороны: туда смотрит треугольник.
+ * mark — цвет четырёх треугольников. Рамка у всех одного рисунка.
+ * Автомат средний, квадрат. Частый — вдвое уже и чаще, удар тот же. Широкий — почти вдвое
+ * шире автомата и вдвое ниже своей ширины, реже, удар 3: зелёный снимается залпом.
+ * flash — доля меньшей стороны креста. Из неё берётся пиксель огненного кома: частый мелкий,
+ * широкий почти на всю свою высоту. На границе сцены оба временных сгорают.
  */
 export const weapons = {
-  rifle: { intervalMs: fireIntervalMs, damage: 1, reach: 16, gap: 4, thick: 1.5, tracer: palette.tracer },
-  rapid: { intervalMs: 34, damage: 1, reach: 8, gap: 2, thick: 1, tracer: palette.rapidTracer },
-  spread: { intervalMs: 210, damage: 3, reach: 28, gap: 6, thick: 2.4, tracer: palette.spreadTracer },
+  rifle: {
+    intervalMs: fireIntervalMs,
+    damage: 1,
+    reach: 16,
+    reachY: 16,
+    gap: 4,
+    thick: 1.5,
+    flash: 0.56,
+    tracer: palette.tracer,
+    mark: palette.enemyLane,
+  },
+  rapid: {
+    intervalMs: 34,
+    damage: 1,
+    reach: 8,
+    reachY: 8,
+    gap: 2,
+    thick: 1,
+    flash: 0.5,
+    tracer: palette.rapidTracer,
+    mark: palette.rapid,
+  },
+  spread: {
+    intervalMs: 210,
+    damage: 3,
+    reach: 28,
+    reachY: 14,
+    gap: 6,
+    thick: 2.4,
+    flash: 0.82,
+    tracer: palette.spreadTracer,
+    mark: palette.spread,
+  },
 } as const;
 
 export type WeaponId = keyof typeof weapons;
