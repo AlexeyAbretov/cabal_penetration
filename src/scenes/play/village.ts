@@ -88,10 +88,10 @@ function paintField(w: number, h: number): Pix {
 }
 
 function grassTone(x: number, y: number): number {
-  const patch = hash(x >> 4, y >> 4) % 8;
-  if (patch === 0) return palette.grassDark;
-  if (patch === 1) return palette.grassDeep;
-  if (hash(x, y) % 31 === 0) return palette.grassLite;
+  const n = hash(x, y);
+  if (n % 37 === 0) return palette.grassDark;
+  if (n % 41 === 0) return palette.grassDeep;
+  if (n % 29 === 0) return palette.grassLite;
   return palette.grass;
 }
 
@@ -134,9 +134,7 @@ function sow(pix: Pix, dirt: Uint8Array, w: number, h: number, fit: number): voi
       const jy = y + (hash(y, x) % 5) - 2;
       if (jx < 1 || jy < 1 || jx >= w - 1 || jy >= h) continue;
       if (dirt[jy * w + jx]) continue;
-      const tall = Math.round((6 + (hash(jx, jy) % 5)) * Math.max(1, fit));
-      if (hash(jx, jy) % 3 === 0) clump(pix, jx, jy, tall + 3);
-      else blades(pix, jx, jy, tall);
+      dots(pix, dirt, w, jx, jy);
       if (hash(jx, jy) % 6 === 0) flower(pix, jx + 2, jy);
     }
   }
@@ -149,22 +147,16 @@ function sow(pix: Pix, dirt: Uint8Array, w: number, h: number, fit: number): voi
   }
 }
 
-function blades(pix: Pix, x: number, y: number, height: number): void {
-  for (const dx of [-1, 0, 1]) {
-    const tall = height - (hash(x + dx, y) % 3);
-    for (let i = 0; i < tall; i += 1) {
-      pix.px(x + dx, y - i, i > tall - 2 ? palette.grassLite : palette.grass);
-    }
-  }
-}
+const grassDots = [palette.grassDark, palette.grassDeep, palette.grassLite] as const;
 
-function clump(pix: Pix, x: number, y: number, height: number): void {
-  for (const dx of [-2, 0, 1, 3]) {
-    const tall = height - (hash(x + dx, y) % 4);
-    for (let i = 0; i < tall; i += 1) {
-      const color = i < 2 ? palette.grassDeep : i > tall - 3 ? palette.grassLite : palette.grass;
-      pix.px(x + dx, y - i, color);
-    }
+/** Крапинки газона: один пиксель, без стебля. На дорогу не садятся. */
+function dots(pix: Pix, dirt: Uint8Array, w: number, x: number, y: number): void {
+  for (let i = 0; i < 4; i += 1) {
+    const px = x + (hash(x + i, y) % 5) - 2;
+    const py = y + (hash(y, x + i) % 3) - 1;
+    if (px < 0 || py < 0 || px >= w || py >= pix.h) continue;
+    if (dirt[py * w + px]) continue;
+    pix.px(px, py, grassDots[hash(px, py) % grassDots.length]!);
   }
 }
 
@@ -466,23 +458,4 @@ function horizon(pix: Pix, skyH: number): void {
     pix.fill(x, top, 2, skyH - top, palette.hillFar);
     pix.fill(x, top, 2, 1, palette.grassDeep);
   }
-  for (let x = 6; x < pix.w - 6; x += 14 + (hash(x, 11) % 16)) {
-    const height = 8 + (hash(x, 5) % 14);
-    const ground = skyH - (hash(x, 9) % 4);
-    if (hash(x, 8) % 2 === 0) cone(pix, x, ground, height);
-    else mound(pix, x, ground, height);
-  }
-}
-
-function cone(pix: Pix, x: number, ground: number, height: number): void {
-  for (let i = 0; i < height; i += 1) {
-    const half = Math.max(0, Math.round((height - i) * 0.42));
-    pix.fill(x - half, ground - height + i, half * 2 + 1, 1, palette.hill);
-  }
-}
-
-function mound(pix: Pix, x: number, ground: number, height: number): void {
-  const rx = Math.max(3, Math.round(height * 0.7));
-  const ry = Math.max(3, height);
-  disc(pix, x, ground - ry * 0.45, rx, ry * 0.7, palette.hill);
 }
