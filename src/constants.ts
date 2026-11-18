@@ -27,7 +27,6 @@ export const palette = {
   dirt: 0xc6a24e,
   dirtDark: 0x8d6a32,
   dirtLite: 0xe4c67c,
-  dirtRut: 0x6a4c22,
   pebble: 0x9a9078,
   cream: 0xe7d7b4,
   creamDark: 0xc2ae84,

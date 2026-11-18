@@ -111,11 +111,7 @@ export class FrontWall {
       const hp = this.hp[i] ?? 0;
       const x = Math.round(geom.trackX + i * geom.colW + wall.seam / 2);
       const width = Math.round(geom.colW - wall.seam);
-      if (width <= 0) continue;
-      if (hp <= 0) {
-        rubble(gfx, x, geom.trackY, width, i);
-        continue;
-      }
+      if (width <= 0 || hp <= 0) continue;
       const gone = Math.min(courses - 1, Math.floor((wall.hits - hp) / per));
       const chipped = (wall.hits - hp) % per !== 0;
       const y0 = Math.round(geom.top + gone * (courseH + gap));
@@ -131,17 +127,6 @@ export class FrontWall {
         stones(gfx, x, y, width, ch, i, course, hurt, hp <= per);
       }
     }
-  }
-}
-
-function rubble(gfx: Phaser.GameObjects.Graphics, x: number, y: number, width: number, column: number): void {
-  for (let k = 0; k < 4; k += 1) {
-    const n = hash(column * 9 + k, 4);
-    const rw = 4 + (n % 6);
-    const rh = 3 + (n % 3);
-    const span = Math.max(1, width - rw);
-    gfx.fillStyle(k % 2 === 0 ? palette.wall : palette.brickDark, 1);
-    gfx.fillRect(x + (n % span), y + (n % 7), rw, rh);
   }
 }
 

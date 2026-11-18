@@ -99,12 +99,7 @@ function dirtTone(x: number, y: number, edges: { left: number; right: number }):
   const width = Math.max(1, edges.right - edges.left);
   const u = (x - edges.left) / width;
   const n = hash(x, y);
-  const edge = u < 0.035 || u > 0.965;
-  const rut = (Math.abs(u - 0.3) < 0.018 || Math.abs(u - 0.7) < 0.018) && n % 4 !== 0;
-  if (edge) return palette.dirtDark;
-  if (rut) return n % 7 === 0 ? palette.dirt : palette.dirtRut;
-  const patch = hash(x >> 3, y >> 2) % 7;
-  if (patch === 0) return palette.dirtDark;
+  if (u < 0.035 || u > 0.965) return palette.dirtDark;
   if (n % 29 === 0) return palette.dirtLite;
   if (n % 43 === 0) return palette.pebble;
   return palette.dirt;
