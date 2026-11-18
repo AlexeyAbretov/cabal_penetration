@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { afterPicture, marchFrom, marchPicture, type March } from '../campaign/march';
 import type { Picture } from '../campaign/picture';
-import { circleHitsRect, resolveColumnHit } from '../combat';
-import { grenade, hud as hudNumbers, palette, pickup, star, type DropKind } from '../constants';
+import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat';
+import { grenade, hud as hudNumbers, palette, pickup, star, weapons, type DropKind } from '../constants';
 import { waveQuota, type FenceKind, type FenceMark } from '../data/wave';
 import { frameLayout, type FrameLayout } from '../layout';
 import { loadFenceSheets, registerFenceAnims } from '../fenceSheet';
@@ -12,7 +12,7 @@ import { Drops } from './play/drops';
 import { Enemies } from './play/enemies';
 import { Fences } from './play/fences';
 import { Grenades } from './play/grenades';
-import { Gun } from './play/gun';
+import { Gun, type ShotMark } from './play/gun';
 import { Houses } from './play/houses';
 import { Hud, hudIcons } from './play/hud';
 import { Props } from './play/props';
@@ -25,7 +25,7 @@ import { FrontWall } from './play/wall';
 /**
  * Картинка из маршрута. Гранаты, счёт и жизни приходят с захода, ствол — нет.
  * Куст и ящик проходят стадии и роняют на дорожку пачку, ствол или звезду. Подбор телом.
- * Частый ствол бьёт в точку, широкий — пятном. На конце сцены оба сгорают, автомат остаётся.
+ * Удар — квадрат креста: частый уже, широкий больше и больнее. На конце сцены оба сгорают.
  * Танк-прямоугольник ест полоску. Очки за него и за крупные объекты выше, чем за зелёного.
  * Глубина сзади вперёд: небо и дома, замах, дорожка, кусты и ящики, зелёные и танк,
  * стена, дроп, солдат, очередь, прицел, рамка.
@@ -199,7 +199,7 @@ export class Play extends Phaser.Scene {
       aimX: this.aim.x,
       aimY: this.aim.y,
       muzzlePoint: () => this.soldier.barrelPoint(),
-      onShot: (from, at) => this.resolvePlayerShot(from, at),
+      onShot: (from, at, mark) => this.resolvePlayerShot(from, at, mark),
     });
     if (this.cleared) {
       this.stepClear(step);
@@ -281,18 +281,32 @@ export class Play extends Phaser.Scene {
     this.hud.setGrenades(this.grenades.count());
   }
 
-  private resolvePlayerShot(from: { x: number; y: number }, at: { x: number; y: number }): void {
-    if (this.cleared) return;
-    if (this.grenades.intercept(from.x, from.y, at.x, at.y)) return;
-    if (this.enemies.hit(at.x, at.y)) return;
-    if (this.props.hit(at.x, at.y)) return;
-    const painted = this.fences.hitColumn(at.x, at.y);
-    if (painted !== null) {
-      this.wall.chip(painted, at.x, at.y, this.sparks);
-      return;
+  /**
+   * Квадрат креста бьёт всех, кто в него попал. Узкий выстрел, поймавший гранату
+   * на луче, до поля не доходит. Широкий снимает гранаты в квадрате и всё равно бьёт.
+   */
+  private resolvePlayerShot(from: { x: number; y: number }, at: { x: number; y: number }, shot: ShotMark): void {
+    if (this.cleared || !this.view) return;
+    const box = hitBox(at.x, at.y, shot.reach);
+    const along = this.grenades.intercept(from.x, from.y, at.x, at.y);
+    const inCross = this.grenades.sweep(box);
+    if (shot.reach <= weapons.rifle.reach && (along || inCross)) return;
+    this.enemies.hit(box, shot.damage);
+    this.props.hit(box, shot.damage);
+    this.chipCover(box, shot.damage, at);
+  }
+
+  /** Каждая секция стены, чья кладка входит в крест, теряет удар ствола. */
+  private chipCover(box: HitBox, amount: number, at: { x: number; y: number }): void {
+    const hit = new Set<number>();
+    for (const column of this.fences.hitColumns(box)) hit.add(column);
+    const sheet = this.fences.columns();
+    for (const column of this.wall.hitColumns(this.view, box)) {
+      if (!sheet.has(column)) hit.add(column);
     }
-    const column = this.wall.aimColumn(this.view, at.x, at.y);
-    if (column !== null && !this.fences.columns().has(column)) this.wall.chip(column, at.x, at.y, this.sparks);
+    for (const column of hit) {
+      this.wall.chip(column, this.wall.columnCenter(this.view, column), at.y, this.sparks, amount);
+    }
   }
 
   private resolveIncoming(column: number): void {

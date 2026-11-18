@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { arcPoint, distanceToSegment } from '../../combat';
+import { arcPoint, centerBox, distanceToSegment, rectsOverlap, type HitBox } from '../../combat';
 import { grenade, palette } from '../../constants';
 import type { FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
@@ -87,6 +87,20 @@ export class Grenades {
       onComplete: () => this.land(item),
     });
     this.grenades.push(item);
+  }
+
+  /** Гранаты, чьё тело попало в квадрат креста. Широкий крест снимает пачку. */
+  sweep(box: HitBox): boolean {
+    let hit = false;
+    for (const item of [...this.grenades]) {
+      if (!item.alive) continue;
+      if (item.t < grenade.armT || item.t > grenade.lateT) continue;
+      const point = this.point(item);
+      if (!rectsOverlap(box, centerBox(point.x, point.y, grenade.body, grenade.body))) continue;
+      this.pop(item);
+      hit = true;
+    }
+    return hit;
   }
 
   /**

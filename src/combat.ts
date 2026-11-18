@@ -40,6 +40,29 @@ export function arcPoint(
   };
 }
 
+/** Квадрат креста. Кромка входит в удар. */
+export type HitBox = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
+/** Прямоугольник вокруг центра. reach — половина стороны креста. */
+export function hitBox(x: number, y: number, reach: number): HitBox {
+  return centerBox(x, y, reach * 2, reach * 2);
+}
+
+/** Хитбокс фигуры, центр в (x, y). */
+export function centerBox(x: number, y: number, w: number, h: number): HitBox {
+  return { left: x - w / 2, right: x + w / 2, top: y - h / 2, bottom: y + h / 2 };
+}
+
+/** Два прямоугольника делят хотя бы точку, включая кромку. */
+export function rectsOverlap(a: HitBox, b: HitBox): boolean {
+  return a.left <= b.right && b.left <= a.right && a.top <= b.bottom && b.top <= a.bottom;
+}
+
 /** Круг касается прямоугольника, включая кромку. */
 export function circleHitsRect(
   x: number,

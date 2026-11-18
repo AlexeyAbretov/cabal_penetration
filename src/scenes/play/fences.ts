@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { circleHitsRect } from '../../combat';
+import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import { fence, wall } from '../../constants';
 import type { FenceMark } from '../../data/wave';
 import { fenceBreakKey, fenceIdleKey, fenceInk } from '../../fenceSheet';
@@ -57,14 +57,28 @@ export class Fences {
     return this.owned;
   }
 
-  /** Секция, в чью кладку попала точка. Колонка дорожки здесь ни при чём. */
-  hitColumn(x: number, y: number): number | null {
-    return this.pick(x, y, true);
+  /** Живые секции, чья кладка входит в квадрат креста. */
+  hitColumns(box: HitBox): number[] {
+    const columns: number[] = [];
+    for (const piece of this.pieces) {
+      const hit = piece.hit;
+      if (!hit || piece.gone || piece.breaking) continue;
+      if (!rectsOverlap(box, hit)) continue;
+      columns.push(piece.column);
+    }
+    return columns;
   }
 
   /** Секция, чья кладка закрывает эту точку по горизонтали. */
   sectionAt(x: number): number | null {
-    return this.pick(x, undefined, false);
+    let found: number | null = null;
+    for (const piece of this.pieces) {
+      const hit = piece.hit;
+      if (!hit || piece.gone) continue;
+      if (x < hit.left || x >= hit.right) continue;
+      found = piece.column;
+    }
+    return found;
   }
 
   /** Живые секции, чья кладка входит в круг разрыва. */
@@ -120,17 +134,6 @@ export class Fences {
     return runs;
   }
 
-  private pick(x: number, y: number | undefined, vertical: boolean): number | null {
-    let found: number | null = null;
-    for (const piece of this.pieces) {
-      const hit = piece.hit;
-      if (!hit || piece.gone) continue;
-      if (x < hit.left || x >= hit.right) continue;
-      if (vertical && (y === undefined || y < hit.top || y >= hit.bottom)) continue;
-      found = piece.column;
-    }
-    return found;
-  }
 }
 
 /**

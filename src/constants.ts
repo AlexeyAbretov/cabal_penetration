@@ -172,32 +172,25 @@ export const tracerLength = 18;
 /** Вспышка у ствола на один выстрел. */
 export const muzzleFlashMs = 36;
 
-/** Прицел: плечо от точки выстрела, зазор в центре, толщина. */
+/** Толщина штриха креста. Плечо и дырка живут у ствола: они же сторона удара. */
 export const aimMark = {
-  arm: 12,
-  gap: 3,
   thickness: 2,
 } as const;
 
 /**
- * Два временных ствола против бесконечного автомата.
- * rapid — часто и в точку. spread — реже, пятно fan в пикселях вокруг прицела.
- * На границе сцены оба сгорают, снова автомат.
+ * Три креста аркады, в пикселях кадра 512 (на экране 256 это вдвое меньше).
+ * reach — половина стороны. Квадрат креста и есть попадание, дырка в середине тоже.
+ * Автомат средний. Частый — вдвое уже и чаще, удар тот же. Широкий — почти вдвое
+ * больше и реже, удар 3: площадь креста около трёх автоматных, зелёный снимается залпом.
+ * На границе сцены оба временных сгорают.
  */
 export const weapons = {
-  rifle: { intervalMs: fireIntervalMs, pellets: 1, fan: 0, thick: 1.5, tracer: palette.tracer },
-  rapid: { intervalMs: 34, pellets: 1, fan: 0, thick: 1, tracer: palette.rapidTracer },
-  spread: { intervalMs: 210, pellets: 5, fan: 40, thick: 2.4, tracer: palette.spreadTracer },
+  rifle: { intervalMs: fireIntervalMs, damage: 1, reach: 16, gap: 4, thick: 1.5, tracer: palette.tracer },
+  rapid: { intervalMs: 34, damage: 1, reach: 8, gap: 2, thick: 1, tracer: palette.rapidTracer },
+  spread: { intervalMs: 210, damage: 3, reach: 28, gap: 6, thick: 2.4, tracer: palette.spreadTracer },
 } as const;
 
 export type WeaponId = keyof typeof weapons;
-
-/** Крест сужается на частом стволе и раскрывается на широком. Точка выстрела — всё ещё курсор. */
-export const weaponMark = {
-  rifle: { arm: aimMark.arm, gap: aimMark.gap },
-  rapid: { arm: 7, gap: 2 },
-  spread: { arm: 15, gap: 4 },
-} as const;
 
 /** Доля роста стойки. Колено — поза, колонку попадания не меняет. */
 export const kneelScale = 0.62;

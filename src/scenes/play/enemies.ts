@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { centerBox, rectsOverlap, type HitBox } from '../../combat';
 import { frame, green, grenade, palette, tank, tankVolley, truck, volley, wall, wheel } from '../../constants';
 import { type EnemyKind, type WaveGroup } from '../../data/wave';
 import { fieldScale, wallTopY, type FrameLayout } from '../../layout';
@@ -128,24 +129,20 @@ export class Enemies {
     return landed;
   }
 
-  /** Точка прицела на теле. Ближний к дорожке забирает пулю, если фигуры наложились. */
-  hit(aimX: number, aimY: number): boolean {
-    let target: Actor | null = null;
+  /** Квадрат креста. Каждый, кто в него попал, получает удар, а не только ближний. */
+  hit(box: HitBox, amount: number): void {
     for (const enemy of this.units) {
-      if (!enemy.alive || !covers(enemy, aimX, aimY)) continue;
-      if (!target || enemy.y > target.y) target = enemy;
+      if (!enemy.alive || !rectsOverlap(box, centerBox(enemy.x, enemy.y, enemy.w, enemy.h))) continue;
+      this.wound(enemy, amount);
     }
-    if (!target) return false;
-    this.wound(target, false);
     this.bury();
-    return true;
   }
 
   blast(x: number, y: number): void {
     for (const enemy of [...this.units]) {
       if (!enemy.alive) continue;
       if (Math.hypot(enemy.x - x, enemy.y - y) > grenade.blastRadius) continue;
-      this.wound(enemy, true);
+      this.wound(enemy, enemy.hp);
     }
     this.bury();
   }
@@ -505,15 +502,13 @@ export class Enemies {
     }
   }
 
-  private wound(enemy: Actor, lethal: boolean): void {
-    if (!enemy.alive) return;
-    if (!lethal) {
-      enemy.hp -= 1;
+  private wound(enemy: Actor, amount: number): void {
+    if (!enemy.alive || amount <= 0) return;
+    enemy.hp -= amount;
+    if (enemy.hp > 0) {
       enemy.flash = 70;
-      if (enemy.hp > 0) {
-        this.sparks.add(enemy.x, enemy.y, 80, 'pop');
-        return;
-      }
+      this.sparks.add(enemy.x, enemy.y, 80, 'pop');
+      return;
     }
     enemy.alive = false;
     this.sparks.add(enemy.x, enemy.y, 160, 'land');
@@ -730,11 +725,3 @@ export class Enemies {
   }
 }
 
-function covers(enemy: Actor, aimX: number, aimY: number): boolean {
-  return (
-    aimX >= enemy.x - enemy.w / 2 &&
-    aimX <= enemy.x + enemy.w / 2 &&
-    aimY >= enemy.y - enemy.h / 2 &&
-    aimY <= enemy.y + enemy.h / 2
-  );
-}

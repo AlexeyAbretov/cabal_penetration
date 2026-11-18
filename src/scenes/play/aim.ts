@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import { aimMark, palette, weaponMark, weapons, type WeaponId } from '../../constants';
+import { aimMark, palette, weapons, type WeaponId } from '../../constants';
 import { clampToRect, type Rect } from '../../layout';
 
-/** Прицел. Точка внутри поля и есть точка выстрела. Ствол меняет размер креста, не точку. */
+/** Крест. Сторона квадрата зависит от ствола, и этот квадрат бьёт. */
 export class Aim {
   x = 0;
   y = 0;
@@ -28,20 +28,16 @@ export class Aim {
   private draw(): void {
     const x = this.x;
     const y = this.y;
-    const { arm, gap } = weaponMark[this.kind];
+    const { reach, gap } = weapons[this.kind];
     const { thickness } = aimMark;
     const half = Math.floor(thickness / 2);
-    const reach = arm - gap;
+    const bar = reach - gap;
     this.gfx.clear();
+    if (bar <= 0) return;
     this.gfx.fillStyle(palette.aim, 1);
-    this.gfx.fillRect(x - arm, y - half, reach, thickness);
-    this.gfx.fillRect(x + gap, y - half, reach, thickness);
-    this.gfx.fillRect(x - half, y - arm, thickness, reach);
-    this.gfx.fillRect(x - half, y + gap, thickness, reach);
-    if (this.kind !== 'spread') return;
-    const fan = weapons.spread.fan;
-    this.gfx.fillStyle(palette.spread, 1);
-    this.gfx.fillRect(x - fan - 1, y - 7, 2, 14);
-    this.gfx.fillRect(x + fan - 1, y - 7, 2, 14);
+    this.gfx.fillRect(x - reach, y - half, bar, thickness);
+    this.gfx.fillRect(x + gap, y - half, bar, thickness);
+    this.gfx.fillRect(x - half, y - reach, thickness, bar);
+    this.gfx.fillRect(x - half, y + gap, thickness, bar);
   }
 }

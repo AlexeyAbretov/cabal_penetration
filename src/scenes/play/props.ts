@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { centerBox, rectsOverlap, type HitBox } from '../../combat';
 import { grenade, palette, scenery, type DropKind, type PropKind } from '../../constants';
 import type { PropMark } from '../../data/wave';
 import { fieldScale, fitScale, wallTopY, type FrameLayout } from '../../layout';
@@ -91,12 +92,15 @@ export class Props {
     this.place();
   }
 
-  hit(aimX: number, aimY: number): boolean {
-    const target = this.pick(aimX, aimY);
-    if (!target) return false;
-    this.wound(target, 1);
-    this.bury();
-    return true;
+  /** Квадрат креста бьёт каждый куст и ящик, который в него попал. */
+  hit(box: HitBox, amount: number): void {
+    let any = false;
+    for (const prop of this.props) {
+      if (!prop.alive || !rectsOverlap(box, centerBox(prop.x, prop.y, prop.w, prop.h))) continue;
+      this.wound(prop, amount);
+      any = true;
+    }
+    if (any) this.bury();
   }
 
   blast(x: number, y: number): void {
@@ -140,15 +144,6 @@ export class Props {
       prop.w = prop.baseW * scale;
       prop.h = h;
     }
-  }
-
-  private pick(x: number, y: number): Prop | null {
-    let target: Prop | null = null;
-    for (const prop of this.props) {
-      if (!prop.alive || !covers(prop, x, y)) continue;
-      if (!target || prop.y > target.y) target = prop;
-    }
-    return target;
   }
 
   private wound(prop: Prop, amount: number): void {
@@ -230,11 +225,3 @@ function stageOf(kind: PropKind, hp: number): number {
   return Math.min(spec.stages - 1, Math.ceil(lost / (spec.hp / spec.stages)));
 }
 
-function covers(prop: Prop, aimX: number, aimY: number): boolean {
-  return (
-    aimX >= prop.x - prop.w / 2 &&
-    aimX <= prop.x + prop.w / 2 &&
-    aimY >= prop.y - prop.h / 2 &&
-    aimY <= prop.y + prop.h / 2
-  );
-}

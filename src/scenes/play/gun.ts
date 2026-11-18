@@ -11,13 +11,18 @@ type Shot = {
   thick: number;
 };
 
+export type ShotMark = {
+  damage: number;
+  reach: number;
+};
+
 type ShotFrame = {
   rolling: boolean;
   triggerDown: boolean;
   aimX: number;
   aimY: number;
   muzzlePoint: () => { x: number; y: number };
-  onShot: (from: { x: number; y: number }, at: { x: number; y: number }) => void;
+  onShot: (from: { x: number; y: number }, at: { x: number; y: number }, mark: ShotMark) => void;
 };
 
 /** Очередь. Кувырок её обрывает. Временный ствол живёт до границы сцены, автомат — всегда. */
@@ -91,8 +96,8 @@ export class Gun {
     const spec = weapons[this.weapon];
     this.flashColor = this.weapon === 'rifle' ? palette.muzzle : spec.tracer;
     const muzzle = frame.muzzlePoint();
-    for (const at of pattern(this.weapon, frame.aimX, frame.aimY)) {
-      frame.onShot(muzzle, at);
+    frame.onShot(muzzle, { x: frame.aimX, y: frame.aimY }, { damage: spec.damage, reach: spec.reach });
+    for (const at of traces(this.weapon, frame.aimX, frame.aimY)) {
       this.shots.push({
         x1: muzzle.x,
         y1: muzzle.y,
@@ -152,18 +157,16 @@ export class Gun {
   }
 }
 
-/** Узкий ствол — одна точка. Широкий — пятно вокруг прицела, крайние дробины чуть ниже. */
-function pattern(kind: WeaponId, aimX: number, aimY: number): { x: number; y: number }[] {
-  const spec = weapons[kind];
-  if (spec.pellets <= 1 || spec.fan <= 0) return [{ x: aimX, y: aimY }];
-  const mid = (spec.pellets - 1) / 2;
-  const points: { x: number; y: number }[] = [];
-  for (let i = 0; i < spec.pellets; i += 1) {
-    const t = (i - mid) / mid;
-    points.push({
-      x: aimX + t * spec.fan,
-      y: aimY + Math.abs(t) * spec.fan * 0.28,
-    });
-  }
-  return points;
+/** Автомат и частый — штрих в дырку креста. Широкий — ещё четыре к концам плеч, по квадрату удара. */
+function traces(kind: WeaponId, aimX: number, aimY: number): { x: number; y: number }[] {
+  const center = { x: aimX, y: aimY };
+  if (kind !== 'spread') return [center];
+  const reach = weapons.spread.reach;
+  return [
+    center,
+    { x: aimX - reach, y: aimY },
+    { x: aimX + reach, y: aimY },
+    { x: aimX, y: aimY - reach },
+    { x: aimX, y: aimY + reach },
+  ];
 }

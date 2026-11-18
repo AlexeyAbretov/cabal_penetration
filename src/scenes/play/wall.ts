@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { columnIndex } from '../../combat';
+import { columnIndex, rectsOverlap, type HitBox } from '../../combat';
 import { palette, wall } from '../../constants';
 import { soldierBodyY, wallBottomY, wallTopY, type FrameLayout } from '../../layout';
 import { hash } from './pix';
@@ -44,14 +44,15 @@ export class FrontWall {
     return geom.trackX + (column + 0.5) * geom.colW;
   }
 
-  /** Колонка прицела, если точка лежит на лице живой секции. Иначе выстрел стену не берёт. */
-  aimColumn(view: FrameLayout, aimX: number, aimY: number): number | null {
-    const track = view.track;
-    const top = wallTopY(track);
-    const bottom = wallBottomY(track);
-    if (aimY < top || aimY >= bottom) return null;
-    const index = this.columnAt(view, aimX);
-    return this.hp[index] > 0 ? index : null;
+  /** Живые секции, чьё лицо входит в квадрат креста. */
+  hitColumns(view: FrameLayout, box: HitBox): number[] {
+    const columns: number[] = [];
+    for (let column = 0; column < this.hp.length; column += 1) {
+      const face = this.stoneRect(view, column);
+      if (!face || !rectsOverlap(box, face)) continue;
+      columns.push(column);
+    }
+    return columns;
   }
 
   /** Точка, куда прилетает пуля: макушка секции или середина тела, если секции нет. */
@@ -61,14 +62,14 @@ export class FrontWall {
     return { x: this.columnCenter(view, column), y };
   }
 
-  chip(column: number, x: number, y: number, sparks: Sparks): void {
+  chip(column: number, x: number, y: number, sparks: Sparks, amount = 1): void {
     const hp = this.hp[column] ?? 0;
-    if (hp <= 0) return;
-    this.hp[column] = hp - 1;
+    if (hp <= 0 || amount <= 0) return;
+    this.hp[column] = Math.max(0, hp - amount);
     sparks.add(x, y, 90, 'chip');
   }
 
-  /** Граната снимает секцию целиком. Очередь по-прежнему колет по одному удару. */
+  /** Граната снимает секцию целиком. Очередь колет на удар ствола. */
   ruin(column: number, x: number, y: number, sparks: Sparks): void {
     if ((this.hp[column] ?? 0) <= 0) return;
     this.hp[column] = 0;
