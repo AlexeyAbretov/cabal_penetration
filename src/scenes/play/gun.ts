@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { muzzleFlashMs, palette, weaponHoldMs, weapons, type WeaponId } from '../../constants';
+import { gunFire, muzzleFlashMs, palette, weaponHoldMs, weapons, type WeaponId } from '../../constants';
 
 export type ShotMark = {
   damage: number;
@@ -25,9 +25,20 @@ export class Gun {
   private holdLeft = 0;
   private weapon: WeaponId = 'rifle';
   private readonly gfx: Phaser.GameObjects.Graphics;
+  private readonly scene: Phaser.Scene;
+  /** Крутится, пока зажат спуск. Узел Web Audio, чтобы стык был в том же сэмпле. */
+  private stream: AudioBufferSourceNode | null = null;
+  private streamGain: GainNode | null = null;
+  /** Запасной путь, если браузер без Web Audio. */
+  private fallback: Phaser.Sound.BaseSound | null = null;
 
   constructor(scene: Phaser.Scene) {
+    this.scene = scene;
     this.gfx = scene.add.graphics().setDepth(4.6);
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.quiet();
+      this.fallback?.destroy();
+    });
   }
 
   /** Частый или широкий на десять секунд. Повторный подбор начинает срок заново. */
@@ -73,10 +84,28 @@ export class Gun {
     return true;
   }
 
+  /** Спуск отпущен, кувырок, пауза, смена картинки. Хвост гасится коротко, без щелчка. */
+  quiet(): void {
+    const source = this.stream;
+    const gain = this.streamGain;
+    this.stream = null;
+    this.streamGain = null;
+    if (source && gain && 'context' in this.scene.sound) {
+      const now = this.scene.sound.context.currentTime;
+      const release = 0.012;
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(gain.gain.value, now);
+      gain.gain.linearRampToValueAtTime(0, now + release);
+      source.stop(now + release);
+    }
+    if (this.fallback?.isPlaying) this.fallback.stop();
+  }
+
   private stepFire(delta: number, frame: ShotFrame): void {
     const down = frame.triggerDown;
     if (frame.rolling) {
       if (down) this.blockFire = true;
+      this.quiet();
       return;
     }
     if (this.blockFire) {
@@ -84,17 +113,46 @@ export class Gun {
         this.blockFire = false;
         this.fireCooldown = 0;
       }
+      this.quiet();
       return;
     }
     if (!down) {
       this.fireCooldown = 0;
+      this.quiet();
       return;
     }
 
+    this.roar();
     this.fireCooldown -= delta;
     if (this.fireCooldown > 0) return;
     this.shoot(frame);
     this.fireCooldown = weapons[this.weapon].intervalMs;
+  }
+
+  /** Один и тот же круг на автомат, частый и широкий, пока кнопка зажата. */
+  private roar(): void {
+    if (this.stream || this.fallback?.isPlaying) return;
+    const cached = this.scene.cache.audio.get(gunFire.key);
+    const sound = this.scene.sound;
+    if (cached instanceof AudioBuffer && 'context' in sound) {
+      const source = sound.context.createBufferSource();
+      source.buffer = cached;
+      source.loop = true;
+      const gain = sound.context.createGain();
+      source.connect(gain);
+      gain.connect(sound.destination);
+      source.onended = () => {
+        source.disconnect();
+        gain.disconnect();
+      };
+      source.start();
+      this.stream = source;
+      this.streamGain = gain;
+      return;
+    }
+    if (!this.scene.cache.audio.exists(gunFire.key)) return;
+    if (!this.fallback) this.fallback = sound.add(gunFire.key, { loop: true });
+    this.fallback.play();
   }
 
   private shoot(frame: ShotFrame): void {

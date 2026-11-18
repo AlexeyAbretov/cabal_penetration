@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { afterPicture, marchFrom, marchPicture, type March } from '../campaign/march';
 import type { Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat';
-import { bonus, grenade, grenadeFly, hitFlash, hud as hudNumbers, palette, pickup, star, weapons, type DropKind } from '../constants';
+import { bonus, grenade, grenadeFly, gunFire, hitFlash, hud as hudNumbers, palette, pickup, star, weapons, type DropKind } from '../constants';
 import { waveQuota, type FenceKind, type FenceMark } from '../data/wave';
 import { loadExplosion } from '../explosionSheet';
 import { frameLayout, type FrameLayout } from '../layout';
@@ -85,6 +85,7 @@ export class Play extends Phaser.Scene {
     loadFenceSheets(this, fenceKinds(this.picture.fences));
     if (this.picture.shorts.length > 0) loadShortFence(this);
     if (this.picture.sandbags.length > 0) loadSandbag(this);
+    if (!this.cache.audio.exists(gunFire.key)) this.load.audio(gunFire.key, gunFire.url);
   }
 
   init(data?: object): void {
@@ -189,17 +190,20 @@ export class Play extends Phaser.Scene {
     if (this.handoff) {
       const next = this.handoff;
       this.handoff = null;
+      this.gun.quiet();
       this.scene.restart(next);
       return;
     }
     if (this.controls.escPressed() && !this.down) this.setPaused(!this.paused);
     if (this.paused || this.down) {
+      this.gun.quiet();
       this.controls.sample();
       if (this.down === 'continue' && this.controls.enterPressed()) this.acceptContinue();
       return;
     }
     this.grenades.step(Math.min(delta, 50));
     if (this.cleared) {
+      this.gun.quiet();
       this.aim.step(Math.min(delta, 50));
       const pointer = this.controls.pointer;
       if (pointer) this.aim.aimAt(pointer.x, pointer.y, this.view.field);
@@ -220,6 +224,7 @@ export class Play extends Phaser.Scene {
 
     this.enemies.step(step, this.soldier.column(), this.view, this.wall);
     if (this.cleared) {
+      this.gun.quiet();
       this.stepClear(step);
       this.drawBattle();
       return;
@@ -237,6 +242,7 @@ export class Play extends Phaser.Scene {
     });
     if (weaponSpent) this.restoreRifle();
     if (this.cleared) {
+      this.gun.quiet();
       this.stepClear(step);
       this.drawBattle();
       return;
@@ -383,9 +389,11 @@ export class Play extends Phaser.Scene {
     this.march.grenades = this.grenades.count();
     if (this.picture.boss && this.march.lives > 0) {
       this.handoff = { ...this.march };
+      this.gun.quiet();
       return;
     }
     if (!spent) return;
+    this.gun.quiet();
     if (this.march.continues > 0) {
       this.down = 'continue';
       this.hud.setHold('continue', this.march.continues);
