@@ -268,20 +268,29 @@ export class Play extends Phaser.Scene {
     if (this.grenades.intercept(from.x, from.y, at.x, at.y)) return;
     if (this.enemies.hit(at.x, at.y)) return;
     if (this.props.hit(at.x, at.y)) return;
+    const painted = this.fences.hitColumn(at.x, at.y);
+    if (painted !== null) {
+      this.wall.chip(painted, at.x, at.y, this.sparks);
+      return;
+    }
     const column = this.wall.aimColumn(this.view, at.x, at.y);
-    if (column !== null) this.wall.chip(column, at.x, at.y, this.sparks);
+    if (column !== null && !this.fences.columns().has(column)) this.wall.chip(column, at.x, at.y, this.sparks);
   }
 
   private resolveIncoming(column: number): void {
+    const x = this.wall.columnCenter(this.view, column);
+    const section = this.fences.sectionAt(x);
+    const cover = section !== null && this.wall.up(section);
+    const wallUp = cover || (!this.fences.columns().has(column) && this.wall.up(column));
     const verdict = resolveColumnHit({
       column,
       soldierColumn: this.soldier.column(),
-      wallUp: this.wall.up(column),
+      wallUp,
       invulnerable: this.soldier.rolling || this.hud.hurt,
     });
-    const point = this.wall.impact(this.view, column);
+    const point = cover ? { x, y: this.wall.geom(this.view).top } : this.wall.impact(this.view, column);
     if (verdict === 'wall') {
-      this.wall.chip(column, point.x, point.y, this.sparks);
+      this.wall.chip(section ?? column, point.x, point.y, this.sparks);
       return;
     }
     this.sparks.add(point.x, point.y, 120, 'puff');

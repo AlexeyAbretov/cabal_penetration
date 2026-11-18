@@ -27,11 +27,11 @@ function pad(index: number): string {
  * Поля кадра в стык не входят: секция на экране от этого не растёт.
  */
 const ink = {
-  stone: { x: 22, w: 53 },
-  rust: { x: 14, w: 68 },
+  stone: { x: 22, y: 12, w: 53, h: 26 },
+  rust: { x: 14, y: 11, w: 68, h: 34 },
 } as const;
 
-export function fenceInk(kind: FenceKind): { x: number; w: number } {
+export function fenceInk(kind: FenceKind): { x: number; y: number; w: number; h: number } {
   return ink[kind];
 }
 

@@ -5,12 +5,21 @@ import { fenceBreakKey, fenceIdleKey, fenceInk } from '../../fenceSheet';
 import type { FrameLayout } from '../../layout';
 import { type FrontWall, type WallGeom } from './wall';
 
+type InkRect = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
 type Piece = {
   column: number;
   kind: FenceMark['kind'];
   sprite: Phaser.GameObjects.Sprite;
   breaking: boolean;
   gone: boolean;
+  /** Кладка на экране. Пустые поля листа сюда не входят. */
+  hit: InkRect | null;
 };
 
 /**
@@ -37,7 +46,7 @@ export class Fences {
           .setOrigin(0.5, 1)
           .setDepth(3.5)
           .setVisible(false);
-        this.pieces.push({ column, kind: mark.kind, sprite, breaking: false, gone: false });
+        this.pieces.push({ column, kind: mark.kind, sprite, breaking: false, gone: false, hit: null });
       }
     }
   }
@@ -45,6 +54,16 @@ export class Fences {
   /** Колонки, которые рисует лист. Заглушка их не закрашивает. */
   columns(): ReadonlySet<number> {
     return this.owned;
+  }
+
+  /** Секция, в чью кладку попала точка. Колонка дорожки здесь ни при чём. */
+  hitColumn(x: number, y: number): number | null {
+    return this.pick(x, y, true);
+  }
+
+  /** Секция, чья кладка закрывает эту точку по горизонтали. */
+  sectionAt(x: number): number | null {
+    return this.pick(x, undefined, false);
   }
 
   sync(view: FrameLayout, front: FrontWall): void {
@@ -56,17 +75,21 @@ export class Fences {
     for (const piece of this.pieces) {
       const sprite = piece.sprite;
       if (piece.gone) {
+        piece.hit = null;
         sprite.setVisible(false);
         continue;
       }
-      sprite.setPosition(centers.get(piece.column) ?? Math.round(front.columnCenter(view, piece.column)), bottom);
+      const x = centers.get(piece.column) ?? Math.round(front.columnCenter(view, piece.column));
+      sprite.setPosition(x, bottom);
       sprite.setDisplaySize(width, height);
+      piece.hit = inkRect(piece.kind, x, bottom, width, height);
       sprite.setVisible(true);
       if (front.up(piece.column) || piece.breaking) continue;
       piece.breaking = true;
       sprite.play(fenceBreakKey(piece.kind));
       sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
         piece.gone = true;
+        piece.hit = null;
         sprite.setVisible(false);
       });
     }
@@ -82,6 +105,18 @@ export class Fences {
       else runs.push([piece]);
     }
     return runs;
+  }
+
+  private pick(x: number, y: number | undefined, vertical: boolean): number | null {
+    let found: number | null = null;
+    for (const piece of this.pieces) {
+      const hit = piece.hit;
+      if (!hit || piece.gone) continue;
+      if (x < hit.left || x >= hit.right) continue;
+      if (vertical && (y === undefined || y < hit.top || y >= hit.bottom)) continue;
+      found = piece.column;
+    }
+    return found;
   }
 }
 
@@ -132,6 +167,18 @@ function joinedCenters(
     for (let i = 0; i < run.length; i += 1) centers.set(run[i].column, Math.round(origin + rel[i]));
   }
   return centers;
+}
+
+function inkRect(kind: Piece['kind'], center: number, bottom: number, displayW: number, displayH: number): InkRect {
+  const box = fenceInk(kind);
+  const scaleX = displayW / fence.width;
+  const scaleY = displayH / fence.height;
+  return {
+    left: center + (box.x - fence.width / 2) * scaleX,
+    right: center + (box.x + box.w - fence.width / 2) * scaleX,
+    top: bottom - (fence.height - box.y) * scaleY,
+    bottom: bottom - (fence.height - box.y - box.h) * scaleY,
+  };
 }
 
 function inkLeft(kind: Piece['kind'], scaleX: number): number {
