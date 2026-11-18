@@ -22,6 +22,19 @@ function pad(index: number): string {
   return index.toString().padStart(3, '0');
 }
 
+/**
+ * Непрозрачная кладка внутри кадра 96×48.
+ * Поля кадра в стык не входят: секция на экране от этого не растёт.
+ */
+const ink = {
+  stone: { x: 22, w: 53 },
+  rust: { x: 14, w: 68 },
+} as const;
+
+export function fenceInk(kind: FenceKind): { x: number; w: number } {
+  return ink[kind];
+}
+
 export function fenceIdleKey(kind: FenceKind): string {
   return `fence-${kind}`;
 }
