@@ -31,7 +31,7 @@ type Blast = {
   life: number;
 };
 
-/** Одна граната за нажатие. Дуга видна, пока она в воздухе. Число запаса рисует рамка. */
+/** Одна граната за нажатие. В воздухе видна сама граната. Число запаса рисует рамка. */
 export class Grenades {
   private stock: number = grenade.stock;
   private grenades: Grenade[] = [];
@@ -154,11 +154,6 @@ export class Grenades {
   draw(gfx: Phaser.GameObjects.Graphics): void {
     for (const item of this.grenades) {
       if (!item.alive) continue;
-      gfx.fillStyle(palette.grenadeArc, 1);
-      for (let step = 0; step <= 16; step += 1) {
-        const point = arcPoint(step / 16, item.fromX, item.fromY, item.ctrlX, item.ctrlY, item.toX, item.toY);
-        gfx.fillRect(Math.round(point.x) - 1, Math.round(point.y) - 1, 3, 3);
-      }
       const body = this.point(item);
       if (item.sprite) {
         this.spin(item, body);

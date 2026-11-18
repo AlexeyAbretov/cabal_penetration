@@ -71,7 +71,6 @@ export const palette = {
   ink: 0xe7dcc4,
   soldier: 0x243044,
   aim: 0xf2e27a,
-  tracer: 0xfff1c2,
   muzzle: 0xfff6d0,
   soldierRoll: 0x3d5c82,
   wall: 0xa89880,
@@ -99,9 +98,7 @@ export const palette = {
   crateHurt: 0xa85a32,
   crateCrit: 0x6e3a28,
   rapid: 0x3c7edb,
-  rapidTracer: 0xc5ddff,
   spread: 0xd24b3a,
-  spreadTracer: 0xffb089,
   star: 0xf2c14e,
   tank: 0x5c6770,
   tankShade: 0x2a3138,
@@ -161,12 +158,6 @@ export const aimFan = {
 /** Интервал очереди, пока левая кнопка зажата. */
 export const fireIntervalMs = 70;
 
-/** Сколько летит один трассер от ствола до точки. */
-export const tracerTravelMs = 140;
-
-/** Длина видимого штриха. Короче промежутка между выстрелами, чтобы очередь не сливалась в луч. */
-export const tracerLength = 18;
-
 /** Вспышка у ствола на один выстрел. */
 export const muzzleFlashMs = 36;
 
@@ -207,8 +198,6 @@ export const weapons = {
     reach: 16,
     reachY: 16,
     gap: 4,
-    thick: 1.5,
-    tracer: palette.tracer,
     mark: palette.enemyLane,
   },
   rapid: {
@@ -217,8 +206,6 @@ export const weapons = {
     reach: 8,
     reachY: 8,
     gap: 2,
-    thick: 1,
-    tracer: palette.rapidTracer,
     mark: palette.rapid,
   },
   spread: {
@@ -227,8 +214,6 @@ export const weapons = {
     reach: 28,
     reachY: 14,
     gap: 6,
-    thick: 2.4,
-    tracer: palette.spreadTracer,
     mark: palette.spread,
   },
 } as const;

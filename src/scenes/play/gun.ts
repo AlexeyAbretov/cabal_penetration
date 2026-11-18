@@ -1,15 +1,5 @@
 import Phaser from 'phaser';
-import { muzzleFlashMs, palette, tracerLength, tracerTravelMs, weapons, type WeaponId } from '../../constants';
-
-type Shot = {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  life: number;
-  color: number;
-  thick: number;
-};
+import { muzzleFlashMs, palette, weapons, type WeaponId } from '../../constants';
 
 export type ShotMark = {
   damage: number;
@@ -33,8 +23,6 @@ export class Gun {
   private fireCooldown = 0;
   private muzzleLife = 0;
   private weapon: WeaponId = 'rifle';
-  private flashColor: number = palette.muzzle;
-  private shots: Shot[] = [];
   private readonly gfx: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene) {
@@ -66,7 +54,7 @@ export class Gun {
 
   step(delta: number, frame: ShotFrame): void {
     this.stepFire(delta, frame);
-    this.stepShots(delta, frame);
+    this.stepMuzzle(delta, frame);
   }
 
   private stepFire(delta: number, frame: ShotFrame): void {
@@ -95,83 +83,21 @@ export class Gun {
 
   private shoot(frame: ShotFrame): void {
     const spec = weapons[this.weapon];
-    this.flashColor = this.weapon === 'rifle' ? palette.muzzle : spec.tracer;
     const muzzle = frame.muzzlePoint();
     frame.onShot(muzzle, { x: frame.aimX, y: frame.aimY }, {
       damage: spec.damage,
       reach: spec.reach,
       reachY: spec.reachY,
     });
-    for (const at of traces(this.weapon, frame.aimX, frame.aimY)) {
-      this.shots.push({
-        x1: muzzle.x,
-        y1: muzzle.y,
-        x2: at.x,
-        y2: at.y,
-        life: tracerTravelMs,
-        color: spec.tracer,
-        thick: spec.thick,
-      });
-    }
     this.muzzleLife = muzzleFlashMs;
   }
 
-  private stepShots(delta: number, frame: ShotFrame): void {
+  private stepMuzzle(delta: number, frame: ShotFrame): void {
     this.muzzleLife = Math.max(0, this.muzzleLife - delta);
-
-    let any = false;
-    for (const shot of this.shots) {
-      shot.life -= delta;
-      if (shot.life > 0) any = true;
-    }
-    if (!any) this.shots.length = 0;
-    else this.shots = this.shots.filter((shot) => shot.life > 0);
-
     this.gfx.clear();
-    if (this.muzzleLife > 0 && !frame.rolling) {
-      const muzzle = frame.muzzlePoint();
-      this.gfx.fillStyle(this.flashColor, 1);
-      this.gfx.fillRect(muzzle.x - 2, muzzle.y - 2, 4, 4);
-    }
-    for (const shot of this.shots) this.drawShot(shot);
+    if (this.muzzleLife <= 0 || frame.rolling) return;
+    const muzzle = frame.muzzlePoint();
+    this.gfx.fillStyle(palette.muzzle, 1);
+    this.gfx.fillRect(muzzle.x - 2, muzzle.y - 2, 4, 4);
   }
-
-  /** Короткий штрих летит к точке и гаснет. Целая линия от ствола читалась как лазер. */
-  private drawShot(shot: Shot): void {
-    const dx = shot.x2 - shot.x1;
-    const dy = shot.y2 - shot.y1;
-    const len = Math.hypot(dx, dy);
-    if (len < 1) return;
-
-    const head = Math.min(len, (1 - shot.life / tracerTravelMs) * len);
-    const tail = Math.max(0, head - tracerLength);
-    if (head - tail < 1) return;
-
-    const ux = dx / len;
-    const uy = dy / len;
-    const nx = -uy * shot.thick;
-    const ny = ux * shot.thick;
-    const x1 = shot.x1 + ux * tail;
-    const y1 = shot.y1 + uy * tail;
-    const x2 = shot.x1 + ux * head;
-    const y2 = shot.y1 + uy * head;
-
-    this.gfx.fillStyle(shot.color, 1);
-    this.gfx.fillTriangle(x1 + nx, y1 + ny, x1 - nx, y1 - ny, x2 - nx, y2 - ny);
-    this.gfx.fillTriangle(x1 + nx, y1 + ny, x2 - nx, y2 - ny, x2 + nx, y2 + ny);
-  }
-}
-
-/** Автомат и частый — штрих в дырку креста. Широкий — ещё четыре к концам плеч, по прямоугольнику удара. */
-function traces(kind: WeaponId, aimX: number, aimY: number): { x: number; y: number }[] {
-  const center = { x: aimX, y: aimY };
-  if (kind !== 'spread') return [center];
-  const { reach, reachY } = weapons.spread;
-  return [
-    center,
-    { x: aimX - reach, y: aimY },
-    { x: aimX + reach, y: aimY },
-    { x: aimX, y: aimY - reachY },
-    { x: aimX, y: aimY + reachY },
-  ];
 }
