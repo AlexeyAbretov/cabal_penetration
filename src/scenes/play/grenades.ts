@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { arcPoint, centerBox, distanceToSegment, rectsOverlap, type HitBox } from '../../combat';
 import { grenade, palette } from '../../constants';
+import { explosionSheet } from '../../explosionSheet';
 import type { FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
 
@@ -24,10 +25,16 @@ type Throw = {
   aimY: number;
 };
 
+type Blast = {
+  sprite: Phaser.GameObjects.Sprite;
+  life: number;
+};
+
 /** Одна граната за нажатие. Дуга видна, пока она в воздухе. Число запаса рисует рамка. */
 export class Grenades {
   private stock: number = grenade.stock;
   private grenades: Grenade[] = [];
+  private blasts: Blast[] = [];
   private view: FrameLayout | null = null;
   private readonly scene: Phaser.Scene;
   private readonly sparks: Sparks;
@@ -60,6 +67,22 @@ export class Grenades {
   /** Разрыв в точке падения. Сбитая в воздухе граната землю не бьёт. */
   onLand(boom: (x: number, y: number) => void): void {
     this.boom = boom;
+  }
+
+  /** Кадры разрыва. На паузе и на экране смерти сцена этот шаг не зовёт. */
+  step(delta: number): void {
+    const frameMs = explosionSheet.frameMs;
+    const frames = explosionSheet.frames;
+    this.blasts = this.blasts.filter((blast) => {
+      blast.life += delta;
+      const frame = Math.floor(blast.life / frameMs);
+      if (frame >= frames) {
+        blast.sprite.destroy();
+        return false;
+      }
+      blast.sprite.setFrame(frame);
+      return true;
+    });
   }
 
   throw(args: Throw): void {
@@ -146,8 +169,14 @@ export class Grenades {
     if (!item.alive) return;
     item.alive = false;
     this.drop(item);
-    this.sparks.add(item.toX, item.toY, grenade.explodeMs, 'land');
+    this.blast(item.toX, item.toY);
     this.boom?.(item.toX, item.toY);
+  }
+
+  /** Край круглого кадра — это радиус урона. Осколки после пика чуть выходят за круг. */
+  private blast(x: number, y: number): void {
+    const sprite = this.scene.add.sprite(x, y, explosionSheet.key, 0).setOrigin(0.5, 0.5).setDepth(4.4);
+    this.blasts.push({ sprite, life: 0 });
   }
 
   private pop(item: Grenade): void {

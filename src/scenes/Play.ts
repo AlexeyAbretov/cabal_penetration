@@ -4,6 +4,7 @@ import type { Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat';
 import { bonus, grenade, hud as hudNumbers, palette, pickup, star, weapons, type DropKind } from '../constants';
 import { waveQuota, type FenceKind, type FenceMark } from '../data/wave';
+import { loadExplosion } from '../explosionSheet';
 import { frameLayout, type FrameLayout } from '../layout';
 import {
   loadFenceSheets,
@@ -73,6 +74,7 @@ export class Play extends Phaser.Scene {
   preload(): void {
     if (!this.textures.exists(hudIcons.heart)) this.load.image(hudIcons.heart, hudIcons.heartUrl);
     if (!this.textures.exists(hudIcons.grenade)) this.load.image(hudIcons.grenade, hudIcons.grenadeUrl);
+    loadExplosion(this);
     loadFenceSheets(this, fenceKinds(this.picture.fences));
     if (this.picture.shorts.length > 0) loadShortFence(this);
     if (this.picture.sandbags.length > 0) loadSandbag(this);
@@ -189,6 +191,7 @@ export class Play extends Phaser.Scene {
       if (this.down === 'continue' && this.controls.enterPressed()) this.acceptContinue();
       return;
     }
+    this.grenades.step(Math.min(delta, 50));
     if (this.cleared) {
       const pointer = this.controls.pointer;
       if (pointer) this.aim.aimAt(pointer.x, pointer.y, this.view.field);

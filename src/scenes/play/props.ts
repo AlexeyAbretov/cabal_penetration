@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { centerBox, rectsOverlap, type HitBox } from '../../combat';
+import { centerBox, circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import { grenade, palette, scenery, type DropKind, type PropKind } from '../../constants';
 import type { PropMark } from '../../data/wave';
 import { fieldScale, fitScale, wallTopY, type FrameLayout } from '../../layout';
@@ -105,10 +105,16 @@ export class Props {
     if (any) this.bury();
   }
 
+  /** Куст берётся по листве: круг задел прямоугольник кроны. Ящик — по центру. */
   blast(x: number, y: number): void {
     for (const prop of this.props) {
       if (!prop.alive) continue;
-      if (Math.hypot(prop.x - x, prop.y - y) > grenade.blastRadius) continue;
+      const foliage = centerBox(prop.x, prop.y, prop.w, prop.h);
+      const hit =
+        prop.kind === 'bush'
+          ? circleHitsRect(x, y, grenade.blastRadius, foliage)
+          : Math.hypot(prop.x - x, prop.y - y) <= grenade.blastRadius;
+      if (!hit) continue;
       const amount = prop.kind === 'bush' ? prop.hp : grenade.propHits;
       this.wound(prop, amount);
     }
