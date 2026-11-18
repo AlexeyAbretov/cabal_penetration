@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { fence } from './constants';
+import { fence, shortFence } from './constants';
 import type { FenceKind } from './data/wave';
 
 /**
@@ -71,4 +71,42 @@ export function registerFenceAnims(scene: Phaser.Scene, kinds: readonly FenceKin
       repeat: 0,
     });
   }
+}
+
+/** Короткий кирпич. Кадр 96×32, ролик в animation. На переднюю стену не ставится. */
+const shortSheet = {
+  idle: 'assets/fence/short/fence-short.png',
+  frame: (index: number) => `assets/fence/short/animation/frame_${pad(index)}.png`,
+} as const;
+
+export function shortFenceIdleKey(): string {
+  return 'fence-short';
+}
+
+export function shortFenceFrameKey(index: number): string {
+  return `fence-short-${index}`;
+}
+
+export function shortFenceBreakKey(): string {
+  return 'fence-short-break';
+}
+
+export function loadShortFence(scene: Phaser.Scene): void {
+  const idle = shortFenceIdleKey();
+  if (!scene.textures.exists(idle)) scene.load.image(idle, shortSheet.idle);
+  for (let index = 0; index < shortFence.frames; index += 1) {
+    const key = shortFenceFrameKey(index);
+    if (!scene.textures.exists(key)) scene.load.image(key, shortSheet.frame(index));
+  }
+}
+
+export function registerShortFenceAnim(scene: Phaser.Scene): void {
+  const key = shortFenceBreakKey();
+  if (scene.anims.exists(key)) return;
+  scene.anims.create({
+    key,
+    frames: Array.from({ length: shortFence.frames }, (_, index) => ({ key: shortFenceFrameKey(index) })),
+    frameRate: shortFence.frameRate,
+    repeat: 0,
+  });
 }

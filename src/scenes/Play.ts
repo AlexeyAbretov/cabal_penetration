@@ -5,7 +5,7 @@ import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat
 import { grenade, hud as hudNumbers, palette, pickup, star, weapons, type DropKind } from '../constants';
 import { waveQuota, type FenceKind, type FenceMark } from '../data/wave';
 import { frameLayout, type FrameLayout } from '../layout';
-import { loadFenceSheets, registerFenceAnims } from '../fenceSheet';
+import { loadFenceSheets, loadShortFence, registerFenceAnims, registerShortFenceAnim } from '../fenceSheet';
 import { Aim } from './play/aim';
 import { Controls } from './play/input';
 import { Drops } from './play/drops';
@@ -16,6 +16,7 @@ import { Gun, type ShotMark } from './play/gun';
 import { Houses } from './play/houses';
 import { Hud, hudIcons } from './play/hud';
 import { Props } from './play/props';
+import { ShortFences } from './play/shortFence';
 import { registerSoldierAnims, soldierSheet, soldierSheetReady } from '../soldierSheet';
 import { Soldier } from './play/soldier';
 import { Sparks } from './play/sparks';
@@ -24,7 +25,7 @@ import { FrontWall } from './play/wall';
 
 /**
  * Картинка из маршрута. Гранаты, счёт и жизни приходят с захода, ствол — нет.
- * Куст и ящик проходят стадии и роняют на дорожку пачку, ствол или звезду. Подбор телом.
+ * Куст, ящик и короткий кирпич роняют на дорожку пачку, ствол или звезду. Подбор телом.
  * Удар — квадрат креста: частый уже, широкий больше и больнее. На конце сцены оба сгорают.
  * Танк-прямоугольник ест полоску. Очки за него и за крупные объекты выше, чем за зелёного.
  * Глубина сзади вперёд: небо и дома, замах, дорожка, кусты и ящики, зелёные и танк,
@@ -45,6 +46,7 @@ export class Play extends Phaser.Scene {
   private drops!: Drops;
   private houses!: Houses;
   private fences!: Fences;
+  private shorts!: ShortFences;
   private sparks!: Sparks;
   private battleGfx!: Phaser.GameObjects.Graphics;
   private paused = false;
@@ -63,6 +65,7 @@ export class Play extends Phaser.Scene {
     if (!this.textures.exists(hudIcons.heart)) this.load.image(hudIcons.heart, hudIcons.heartUrl);
     if (!this.textures.exists(hudIcons.grenade)) this.load.image(hudIcons.grenade, hudIcons.grenadeUrl);
     loadFenceSheets(this, fenceKinds(this.picture.fences));
+    if (this.picture.shorts.length > 0) loadShortFence(this);
   }
 
   init(data?: object): void {
@@ -89,10 +92,13 @@ export class Play extends Phaser.Scene {
     this.grenades.setStock(this.march.grenades);
     this.hud.setGrenades(this.grenades.count());
     this.drops = new Drops(this, this.sparks, (kind) => this.takeDrop(kind));
-    this.props = new Props(this, this.picture.props, this.sparks, (drop, score, rx, ry) => {
+    const scatter = (drop: DropKind, score: number, rx: number, ry: number): void => {
       this.hud.addScore(score);
       this.drops.spawn(drop, rx, ry);
-    });
+    };
+    this.props = new Props(this, this.picture.props, this.sparks, scatter);
+    if (this.picture.shorts.length > 0) registerShortFenceAnim(this);
+    this.shorts = new ShortFences(this, this.picture.shorts, this.sparks, scatter);
     this.enemies = new Enemies(this, this.picture.wave, this.sparks, (points) => this.onKill(points), (count) =>
       this.onGone(count),
     );
@@ -103,6 +109,7 @@ export class Play extends Phaser.Scene {
       if (this.cleared) return;
       this.enemies.blast(x, y);
       this.props.blast(x, y);
+      this.shorts.blast(x, y);
       this.blastFrontWall(x, y);
     });
     this.controls = new Controls(this, () => this.onRightClick());
@@ -213,6 +220,7 @@ export class Play extends Phaser.Scene {
     this.soldier.setAlpha(this.hud.stepHurt(step));
     this.sparks.step(step);
     this.props.step(step);
+    this.shorts.step(step);
     this.drops.step(this.view, this.soldier.body());
     this.drawBattle();
   }
@@ -236,6 +244,7 @@ export class Play extends Phaser.Scene {
     this.houses.place(this.view);
     this.enemies.bind(this.view);
     this.props.bind(this.view);
+    this.shorts.bind(this.view);
     this.fences.sync(this.view, this.wall);
     this.placeSoldier();
     const pointer = this.controls.pointer;
@@ -293,6 +302,7 @@ export class Play extends Phaser.Scene {
     if (shot.reach <= weapons.rifle.reach && (along || inCross)) return;
     this.enemies.hit(box, shot.damage);
     this.props.hit(box, shot.damage);
+    this.shorts.hit(box, shot.damage);
     this.chipCover(box, shot.damage, at);
   }
 

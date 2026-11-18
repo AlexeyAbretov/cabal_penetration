@@ -77,7 +77,6 @@ function paintField(w: number, h: number): Pix {
   }
   roadside(pix, w, h, fit);
   const aboveWall = h - 60;
-  lowBrick(pix, Math.round(w * 0.78), aboveWall - Math.round(18 * fit), Math.round(78 * fit), Math.round(16 * fit));
   pickets(pix, Math.round(w * 0.02), Math.round(w * 0.3), aboveWall, Math.round(28 * fit));
   hayPile(pix, Math.round(w * 0.5), Math.round(h * 0.52), fit);
   barrel(pix, Math.round(w * 0.3), Math.round(h * 0.56), fit);
@@ -271,27 +270,6 @@ function pickets(pix: Pix, x0: number, x1: number, ground: number, height: numbe
   pix.fill(x0, y1, x1 - x0, 1, palette.woodLite);
   pix.fill(x0, y2, x1 - x0, 2, palette.woodDark);
   pix.fill(x0, y2, x1 - x0, 1, palette.woodLite);
-}
-
-function lowBrick(pix: Pix, x: number, y: number, w: number, h: number): void {
-  if (w < 8 || h < 6) return;
-  const course = Math.max(3, Math.round(h / 3));
-  const brickW = Math.max(6, Math.round(w / 8));
-  pix.fill(x, y, w, 2, palette.mortar);
-  let row = 0;
-  for (let yy = y + 2; yy < y + h; yy += course, row += 1) {
-    const shift = row % 2 === 0 ? 0 : Math.floor(brickW / 2);
-    const ch = Math.min(course, y + h - yy);
-    for (let xx = x - shift; xx < x + w; xx += brickW) {
-      const bx = Math.max(x, xx + 1);
-      const ex = Math.min(x + w - 1, xx + brickW);
-      if (ex - bx < 2) continue;
-      if (row === 1 && xx > x + w * 0.55 && xx < x + w * 0.72) continue;
-      const n = hash(bx, yy);
-      pix.fill(bx, yy, ex - bx - 1, Math.max(1, ch - 1), n % 4 === 0 ? palette.brickDark : palette.brick);
-      pix.fill(bx, yy, ex - bx - 1, 1, palette.brickLite);
-    }
-  }
 }
 
 function tree(pix: Pix, x: number, ground: number, height: number): void {

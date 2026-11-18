@@ -51,6 +51,20 @@ export type FenceMark = {
   to: number;
 };
 
+/**
+ * Короткий кирпич на траве. Ниже стены у ног и её не заменяет.
+ * Правый край — конец прежней кладки. Лишние секции растут влево, к кусту.
+ */
+export type ShortMark = {
+  /** Левый край прежней кладки, доля ширины поля. */
+  x: number;
+  /** Ширина прежней кладки, пиксели опорного кадра. */
+  span: number;
+  /** Секций листа встык. Две — минимум вдвое длиннее одной. */
+  sections: number;
+  drop: DropKind;
+};
+
 /** Грузовик держит на полоске ещё и тех, кого высадит. */
 export function waveQuota(wave: readonly WaveGroup[]): number {
   return wave.reduce((sum, group) => {

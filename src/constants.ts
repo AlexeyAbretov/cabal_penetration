@@ -272,6 +272,20 @@ export const fence = {
   frameRate: 12,
 } as const;
 
+/**
+ * Короткий кирпич на траве. Кадр ниже передней стены: 96×32, кладка внутри.
+ * Очки как за крупный предмет. Гранаты снимает сразу, очередь колет.
+ */
+export const shortFence = {
+  width: 96,
+  height: 32,
+  frames: 9,
+  frameRate: 12,
+  hp: 6,
+  score: 1000,
+  ink: { x: 20, y: 5, w: 57, h: 21 },
+} as const;
+
 export type PropKind = keyof typeof scenery;
 
 /**

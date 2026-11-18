@@ -1,4 +1,4 @@
-import type { FenceMark, HouseMark, PropMark, WaveGroup } from '../../../data/wave';
+import type { FenceMark, HouseMark, PropMark, ShortMark, WaveGroup } from '../../../data/wave';
 import type { Picture } from '../../picture';
 
 /**
@@ -44,6 +44,14 @@ const props: readonly PropMark[] = [
 ];
 
 /**
+ * Короткий кирпич справа на газоне.
+ * Правый край на 20 пикселей правее прежней кладки: от 0.78 на 78 пикселей,
+ * низ на 60 пикселей от низа поля. Две секции встык — минимум вдвое длиннее одного листа,
+ * лишняя длина уходит влево, к кусту. Разрушение роняет широкий ствол.
+ */
+const shorts: readonly ShortMark[] = [{ x: 0.78, span: 78, sections: 2, drop: 'spread' }];
+
+/**
  * Изба слева, сарай справа от дороги, розовый дом ближе справа.
  * y — доля опорного поля вниз от горизонта. Крыша выше неё на небе.
  */
@@ -72,5 +80,6 @@ export const picture: Picture = {
   houses,
   props,
   fences,
+  shorts,
   wave: [],
 };

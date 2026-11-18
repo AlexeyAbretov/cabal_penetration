@@ -1,8 +1,9 @@
-import type { FenceMark, HouseMark, PropMark, WaveGroup } from '../data/wave';
+import type { FenceMark, HouseMark, PropMark, ShortMark, WaveGroup } from '../data/wave';
 
 /**
  * Одна картинка маршрута. Фон рисует сцена: дорожка под солдатом — низ той же земли.
  * Здесь дома, кусты и волна. Забор перед солдатом — свой список колонок.
+ * Короткий кирпич на траве — отдельный список, он стену не закрывает.
  */
 export type Picture = {
   id: string;
@@ -12,6 +13,7 @@ export type Picture = {
   houses: readonly HouseMark[];
   props: readonly PropMark[];
   fences: readonly FenceMark[];
+  shorts: readonly ShortMark[];
   wave: readonly WaveGroup[];
 };
 
