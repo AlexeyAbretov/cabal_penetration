@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { arcPoint, centerBox, distanceToSegment, rectsOverlap, type HitBox } from '../../combat';
-import { grenade, palette } from '../../constants';
+import { grenade, grenadeFly, palette } from '../../constants';
 import { blastSheet } from '../../explosionSheet';
-import type { FrameLayout } from '../../layout';
+import { fieldScale, fitScale, type FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
 
 type Grenade = {
@@ -15,6 +15,7 @@ type Grenade = {
   ctrlY: number;
   alive: boolean;
   tween: Phaser.Tweens.Tween | null;
+  sprite: Phaser.GameObjects.Image | null;
 };
 
 type Throw = {
@@ -103,6 +104,7 @@ export class Grenades {
       ctrlY: Math.max(view.sky.y + 8, Math.min(from.y, args.aimY) - lift),
       alive: true,
       tween: null,
+      sprite: this.flySprite(from.x, from.y),
     };
     item.tween = this.scene.tweens.add({
       targets: item,
@@ -158,6 +160,10 @@ export class Grenades {
         gfx.fillRect(Math.round(point.x) - 1, Math.round(point.y) - 1, 3, 3);
       }
       const body = this.point(item);
+      if (item.sprite) {
+        this.spin(item, body);
+        continue;
+      }
       const size = grenade.body;
       gfx.fillStyle(palette.grenade, 1);
       gfx.fillRect(Math.round(body.x - size / 2), Math.round(body.y - size / 2), size, size);
@@ -195,7 +201,36 @@ export class Grenades {
   }
 
   private drop(item: Grenade): void {
+    item.sprite?.destroy();
+    item.sprite = null;
     this.grenades = this.grenades.filter((other) => other !== item);
+  }
+
+  /** Картинка вместо квадрата. Нет файла — остаётся прямоугольник в draw. */
+  private flySprite(x: number, y: number): Phaser.GameObjects.Image | null {
+    if (!this.scene.textures.exists(grenadeFly.key)) return null;
+    return this.scene.add
+      .image(x, y, grenadeFly.key)
+      .setOrigin(0.5, 0.5)
+      .setDepth(4.7)
+      .setScale(this.flyScale(y));
+  }
+
+  /** Крутится в сторону броска. У горизонта мельче, у дорожки крупнее. */
+  private spin(item: Grenade, body: { x: number; y: number }): void {
+    const sprite = item.sprite;
+    if (!sprite) return;
+    const dir = item.toX >= item.fromX ? 1 : -1;
+    sprite
+      .setPosition(body.x, body.y)
+      .setScale(this.flyScale(body.y))
+      .setRotation(dir * item.t * Math.PI * 2 * grenadeFly.turns);
+  }
+
+  private flyScale(y: number): number {
+    const view = this.view;
+    const fit = view ? fieldScale(y, view.field) * fitScale(view.field) : 1;
+    return (grenadeFly.display / grenadeFly.frame) * fit;
   }
 
   private point(item: Grenade): { x: number; y: number } {
