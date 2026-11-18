@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { arcPoint, centerBox, distanceToSegment, rectsOverlap, type HitBox } from '../../combat';
-import { grenade, grenadeFly, palette } from '../../constants';
+import { grenade, grenadeBoom, grenadeFly, grenadeThrow, palette } from '../../constants';
 import { blastSheet } from '../../explosionSheet';
 import { fieldScale, fitScale, type FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
@@ -91,6 +91,7 @@ export class Grenades {
     const view = this.view;
     if (args.paused || args.rolling || this.stock <= 0 || !view) return;
     this.stock -= 1;
+    this.playThrow();
 
     const from = args.from;
     const lift = Math.min(grenade.arcLift, Math.max(48, view.field.height * 0.45));
@@ -184,6 +185,19 @@ export class Grenades {
       .setScale(sheet.scale)
       .setDepth(4.4);
     this.blasts.push({ sprite, life: 0 });
+    this.playBoom();
+  }
+
+  /** Один бросок — одна запись. Две гранаты подряд звучат вместе. */
+  private playThrow(): void {
+    if (!this.scene.cache.audio.exists(grenadeThrow.key)) return;
+    this.scene.sound.play(grenadeThrow.key);
+  }
+
+  /** Один разрыв — одна запись. Две гранаты рядом звучат вместе. */
+  private playBoom(): void {
+    if (!this.scene.cache.audio.exists(grenadeBoom.key)) return;
+    this.scene.sound.play(grenadeBoom.key);
   }
 
   private pop(item: Grenade): void {

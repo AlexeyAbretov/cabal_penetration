@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { afterPicture, marchFrom, marchPicture, type March } from '../campaign/march';
 import type { Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat';
-import { bonus, grenade, grenadeFly, gunFire, hitFlash, hud as hudNumbers, palette, pickup, star, weapons, type DropKind } from '../constants';
+import { bonus, grenade, grenadeBoom, grenadeFly, grenadeThrow, gunFire, hitFlash, hud as hudNumbers, palette, pickup, star, weapons, type DropKind } from '../constants';
 import { waveQuota, type FenceKind, type FenceMark } from '../data/wave';
 import { loadExplosion } from '../explosionSheet';
 import { frameLayout, type FrameLayout } from '../layout';
@@ -86,6 +86,8 @@ export class Play extends Phaser.Scene {
     if (this.picture.shorts.length > 0) loadShortFence(this);
     if (this.picture.sandbags.length > 0) loadSandbag(this);
     if (!this.cache.audio.exists(gunFire.key)) this.load.audio(gunFire.key, gunFire.url);
+    if (!this.cache.audio.exists(grenadeThrow.key)) this.load.audio(grenadeThrow.key, grenadeThrow.url);
+    if (!this.cache.audio.exists(grenadeBoom.key)) this.load.audio(grenadeBoom.key, grenadeBoom.url);
   }
 
   init(data?: object): void {

@@ -170,6 +170,18 @@ export const gunFire = {
   url: 'sounds/gun-fire-loop.wav',
 } as const;
 
+/** Бросок гранаты. На каждый бросок своя запись. Пустой запас и перекат молчат. */
+export const grenadeThrow = {
+  key: 'grenade-throw',
+  url: 'sounds/grenade_throw.mp3',
+} as const;
+
+/** Разрыв гранаты о землю. На каждый разрыв своя запись. Сбитая в полёте молчит. */
+export const grenadeBoom = {
+  key: 'grenade-boom',
+  url: 'sounds/grenade_exposion.mp3',
+} as const;
+
 /**
  * Вспышка попадания в кресте. Восемь кадров 92×69, как в ролике облака.
  * Кадр 50 мс: облако разгорается и рассыпается за 400 мс.
