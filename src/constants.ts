@@ -246,11 +246,16 @@ export const pickup = {
   feet: 10,
 } as const;
 
-export type DropKind = 'grenades' | 'rapid' | 'spread' | 'star';
+export type DropKind = 'grenades' | 'rapid' | 'spread' | 'star' | 'bonus';
 
 /** Звезда — отдельный номинал, не очки за сам объект. */
 export const star = {
   score: 2000,
+} as const;
+
+/** Табличка с маленького куста. Очки приходят, когда солдат на неё наступает. */
+export const bonus = {
+  score: 500,
 } as const;
 
 /**

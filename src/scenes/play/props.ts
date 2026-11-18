@@ -21,6 +21,7 @@ type Prop = {
   h: number;
   baseW: number;
   baseH: number;
+  score: number;
   sprite: Phaser.GameObjects.Image | null;
   key: string;
   paintedW: number;
@@ -67,10 +68,11 @@ export class Props {
         alive: true,
         x: 0,
         y: 0,
-        w: spec.width,
-        h: spec.height,
-        baseW: spec.width,
-        baseH: spec.height,
+        w: mark.w ?? spec.width,
+        h: mark.h ?? spec.height,
+        baseW: mark.w ?? spec.width,
+        baseH: mark.h ?? spec.height,
+        score: mark.score ?? spec.score,
         sprite,
         key,
         paintedW: 0,
@@ -160,7 +162,7 @@ export class Props {
     const field = view?.field;
     const rx = field ? (prop.x - field.x) / Math.max(1, field.width) : prop.rx;
     const ry = field ? (prop.y - field.y) / Math.max(1, field.height) : prop.ry;
-    this.onBreak(prop.drop, scenery[prop.kind].score, rx, ry);
+    this.onBreak(prop.drop, prop.score, rx, ry);
   }
 
   private bury(): void {

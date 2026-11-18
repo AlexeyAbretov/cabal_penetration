@@ -60,7 +60,8 @@ export class Drops {
     for (const item of this.items) {
       if (!item.landed || item.taken) continue;
       const at = this.point(view, item);
-      if (!overlaps(at.x, at.y, pickup.size, pickup.size, body.x, body.y, body.w, body.h)) continue;
+      const size = item.kind === 'bonus' ? 28 : pickup.size;
+      if (!overlaps(at.x, at.y, size, size, body.x, body.y, body.w, body.h)) continue;
       item.taken = true;
       taken.push(item);
       this.sparks.add(at.x, at.y, 120, 'pop');
@@ -95,6 +96,10 @@ export class Drops {
 }
 
 function paint(gfx: Phaser.GameObjects.Graphics, kind: DropKind, x: number, y: number): void {
+  if (kind === 'bonus') {
+    paintBonus(gfx, x, y);
+    return;
+  }
   const s = pickup.size;
   const left = Math.round(x - s / 2);
   const top = Math.round(y - s / 2);
@@ -123,6 +128,32 @@ function paint(gfx: Phaser.GameObjects.Graphics, kind: DropKind, x: number, y: n
   gfx.fillStyle(palette.star, 1);
   gfx.fillTriangle(x, y - r, x + r, y, x, y + r);
   gfx.fillTriangle(x, y - r, x - r, y, x, y + r);
+}
+
+/** «500»: пятёрка и два нуля, клетка 3×5, точка 2 пикселя. */
+const bonusGlyphs = ['###,#  ,###,  #,###', '###,# #,# #,# #,###', '###,# #,# #,# #,###'] as const;
+
+function paintBonus(gfx: Phaser.GameObjects.Graphics, x: number, y: number): void {
+  const dot = 2;
+  const gap = 2;
+  const digitW = 3 * dot;
+  const digitH = 5 * dot;
+  const width = bonusGlyphs.length * digitW + (bonusGlyphs.length - 1) * gap;
+  const left = Math.round(x - width / 2);
+  const top = Math.round(y - digitH / 2);
+  gfx.fillStyle(palette.black, 1);
+  gfx.fillRect(left - 3, top - 3, width + 6, digitH + 6);
+  gfx.fillStyle(palette.star, 1);
+  gfx.fillRect(left - 2, top - 2, width + 4, digitH + 4);
+  gfx.fillStyle(palette.black, 1);
+  bonusGlyphs.forEach((glyph, index) => {
+    const ox = left + index * (digitW + gap);
+    glyph.split(',').forEach((row, ry) => {
+      for (let rx = 0; rx < row.length; rx += 1) {
+        if (row[rx] === '#') gfx.fillRect(ox + rx * dot, top + ry * dot, dot, dot);
+      }
+    });
+  });
 }
 
 function overlaps(

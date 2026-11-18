@@ -1,7 +1,6 @@
 import { palette } from '../../constants';
 import { picture } from '../../campaign/levels/village/11';
 import { belowHorizon, fitScale, sceneDepth, type Rect } from '../../layout';
-import { paintBush } from './plants';
 import { disc, hash, lerpColor, Pix, stamp } from './pix';
 
 /**
@@ -81,8 +80,6 @@ function paintField(w: number, h: number): Pix {
   barrel(pix, Math.round(w * 0.3), Math.round(h * 0.56), fit);
   kiln(pix, Math.round(w * 0.95), Math.round(h * 0.5), Math.round(30 * fit));
   crops(pix, Math.round(w * 0.03), Math.round(h * 0.58), fit);
-  scenicBush(pix, Math.round(w * 0.05), Math.round(h * 0.42), Math.round(40 * fit), Math.round(32 * fit));
-  scenicBush(pix, Math.round(w * 0.9), Math.round(h * 0.44), Math.round(36 * fit), Math.round(30 * fit));
   return pix;
 }
 
@@ -391,11 +388,6 @@ function crops(pix: Pix, x: number, ground: number, fit: number): void {
     pix.px(px0 + 1, ground - h, palette.leafLite);
     pix.px(px0, ground - h - 1, palette.leafLite);
   }
-}
-
-function scenicBush(pix: Pix, x: number, y: number, w: number, h: number): void {
-  if (w < 8 || h < 8) return;
-  stamp(pix, paintBush(w, h, 0, false), Math.round(x - w / 2), Math.round(y - h / 2));
 }
 
 function cloud(pix: Pix, x: number, y: number, s: number): void {

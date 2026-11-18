@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { afterPicture, marchFrom, marchPicture, type March } from '../campaign/march';
 import type { Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat';
-import { grenade, hud as hudNumbers, palette, pickup, star, weapons, type DropKind } from '../constants';
+import { bonus, grenade, hud as hudNumbers, palette, pickup, star, weapons, type DropKind } from '../constants';
 import { waveQuota, type FenceKind, type FenceMark } from '../data/wave';
 import { frameLayout, type FrameLayout } from '../layout';
 import {
@@ -434,6 +434,10 @@ export class Play extends Phaser.Scene {
     }
     if (kind === 'star') {
       this.hud.addScore(star.score);
+      return;
+    }
+    if (kind === 'bonus') {
+      this.hud.addScore(bonus.score);
       return;
     }
     this.gun.equip(kind);
