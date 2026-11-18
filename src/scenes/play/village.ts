@@ -78,7 +78,6 @@ function paintField(w: number, h: number): Pix {
   roadside(pix, w, h, fit);
   const aboveWall = h - 60;
   pickets(pix, Math.round(w * 0.02), Math.round(w * 0.3), aboveWall, Math.round(28 * fit));
-  hayPile(pix, Math.round(w * 0.5), Math.round(h * 0.52), fit);
   barrel(pix, Math.round(w * 0.3), Math.round(h * 0.56), fit);
   kiln(pix, Math.round(w * 0.95), Math.round(h * 0.5), Math.round(30 * fit));
   crops(pix, Math.round(w * 0.03), Math.round(h * 0.58), fit);
@@ -330,37 +329,6 @@ function canopy(pix: Pix, cx: number, cy: number, rx: number, ry: number, high: 
       if (high && dx < 0 && dy < 0) color = palette.leafLite;
       else if (e > 0.75 || dy > 0) color = hash(x, y) % 2 === 0 ? palette.leafDark : palette.leaf;
       else if (hash(x, y) % 4 === 0) color = palette.leafLite;
-      pix.px(x, y, color);
-    }
-  }
-}
-
-function hayPile(pix: Pix, x: number, y: number, fit: number): void {
-  const spots = [
-    [0, 2, 11, 8],
-    [-16, 4, 10, 7],
-    [14, 5, 10, 7],
-    [-8, -6, 9, 7],
-    [8, -5, 9, 7],
-  ];
-  for (const [dx, dy, rw, rh] of spots) {
-    bale(pix, x + Math.round(dx! * fit), y + Math.round(dy! * fit), Math.max(4, rw! * fit), Math.max(3, rh! * fit));
-  }
-}
-
-function bale(pix: Pix, cx: number, cy: number, rx: number, ry: number): void {
-  const rx2 = rx * rx;
-  const ry2 = ry * ry;
-  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y += 1) {
-    for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x += 1) {
-      const dx = x + 0.5 - cx;
-      const dy = y + 0.5 - cy;
-      const e = (dx * dx) / rx2 + (dy * dy) / ry2;
-      if (e > 1) continue;
-      let color: number = palette.hay;
-      if (dy < -ry * 0.25) color = palette.hayLite;
-      if (e > 0.82) color = palette.hayBand;
-      if (Math.abs(dy) < 1.2) color = palette.hayBand;
       pix.px(x, y, color);
     }
   }

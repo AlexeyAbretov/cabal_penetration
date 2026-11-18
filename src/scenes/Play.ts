@@ -5,7 +5,14 @@ import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat
 import { grenade, hud as hudNumbers, palette, pickup, star, weapons, type DropKind } from '../constants';
 import { waveQuota, type FenceKind, type FenceMark } from '../data/wave';
 import { frameLayout, type FrameLayout } from '../layout';
-import { loadFenceSheets, loadShortFence, registerFenceAnims, registerShortFenceAnim } from '../fenceSheet';
+import {
+  loadFenceSheets,
+  loadSandbag,
+  loadShortFence,
+  registerFenceAnims,
+  registerSandbagAnim,
+  registerShortFenceAnim,
+} from '../fenceSheet';
 import { Aim } from './play/aim';
 import { Controls } from './play/input';
 import { Drops } from './play/drops';
@@ -16,6 +23,7 @@ import { Gun, type ShotMark } from './play/gun';
 import { Houses } from './play/houses';
 import { Hud, hudIcons } from './play/hud';
 import { Props } from './play/props';
+import { Sandbags } from './play/sandbag';
 import { ShortFences } from './play/shortFence';
 import { registerSoldierAnims, soldierSheet, soldierSheetReady } from '../soldierSheet';
 import { Soldier } from './play/soldier';
@@ -25,7 +33,7 @@ import { FrontWall } from './play/wall';
 
 /**
  * Картинка из маршрута. Гранаты, счёт и жизни приходят с захода, ствол — нет.
- * Куст, ящик и короткий кирпич роняют на дорожку пачку, ствол или звезду. Подбор телом.
+ * Куст, ящик, короткий кирпич и мешки роняют на дорожку пачку, ствол или звезду. Подбор телом.
  * Удар — квадрат креста: частый уже, широкий больше и больнее. На конце сцены оба сгорают.
  * Танк-прямоугольник ест полоску. Очки за него и за крупные объекты выше, чем за зелёного.
  * Глубина сзади вперёд: небо и дома, замах, дорожка, кусты и ящики, зелёные и танк,
@@ -47,6 +55,7 @@ export class Play extends Phaser.Scene {
   private houses!: Houses;
   private fences!: Fences;
   private shorts!: ShortFences;
+  private bags!: Sandbags;
   private sparks!: Sparks;
   private battleGfx!: Phaser.GameObjects.Graphics;
   private paused = false;
@@ -66,6 +75,7 @@ export class Play extends Phaser.Scene {
     if (!this.textures.exists(hudIcons.grenade)) this.load.image(hudIcons.grenade, hudIcons.grenadeUrl);
     loadFenceSheets(this, fenceKinds(this.picture.fences));
     if (this.picture.shorts.length > 0) loadShortFence(this);
+    if (this.picture.sandbags.length > 0) loadSandbag(this);
   }
 
   init(data?: object): void {
@@ -99,6 +109,8 @@ export class Play extends Phaser.Scene {
     this.props = new Props(this, this.picture.props, this.sparks, scatter);
     if (this.picture.shorts.length > 0) registerShortFenceAnim(this);
     this.shorts = new ShortFences(this, this.picture.shorts, this.sparks, scatter);
+    if (this.picture.sandbags.length > 0) registerSandbagAnim(this);
+    this.bags = new Sandbags(this, this.picture.sandbags, this.sparks, scatter);
     this.enemies = new Enemies(this, this.picture.wave, this.sparks, (points) => this.onKill(points), (count) =>
       this.onGone(count),
     );
@@ -110,6 +122,7 @@ export class Play extends Phaser.Scene {
       this.enemies.blast(x, y);
       this.props.blast(x, y);
       this.shorts.blast(x, y);
+      this.bags.blast(x, y);
       this.blastFrontWall(x, y);
     });
     this.controls = new Controls(this, () => this.onRightClick());
@@ -221,6 +234,7 @@ export class Play extends Phaser.Scene {
     this.sparks.step(step);
     this.props.step(step);
     this.shorts.step(step);
+    this.bags.step(step);
     this.drops.step(this.view, this.soldier.body());
     this.drawBattle();
   }
@@ -245,6 +259,7 @@ export class Play extends Phaser.Scene {
     this.enemies.bind(this.view);
     this.props.bind(this.view);
     this.shorts.bind(this.view);
+    this.bags.bind(this.view);
     this.fences.sync(this.view, this.wall);
     this.placeSoldier();
     const pointer = this.controls.pointer;
@@ -303,6 +318,7 @@ export class Play extends Phaser.Scene {
     this.enemies.hit(box, shot.damage);
     this.props.hit(box, shot.damage);
     this.shorts.hit(box, shot.damage);
+    this.bags.hit(box, shot.damage);
     this.chipCover(box, shot.damage, at);
   }
 

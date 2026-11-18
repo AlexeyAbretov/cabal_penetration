@@ -1,4 +1,4 @@
-import type { FenceMark, HouseMark, PropMark, ShortMark, WaveGroup } from '../../../data/wave';
+import type { FenceMark, HouseMark, PropMark, SandbagMark, ShortMark, WaveGroup } from '../../../data/wave';
 import type { Picture } from '../../picture';
 
 /**
@@ -52,6 +52,12 @@ const props: readonly PropMark[] = [
 const shorts: readonly ShortMark[] = [{ x: 0.78, span: 78, sections: 2, drop: 'spread' }];
 
 /**
+ * Мешки посреди дороги, на месте прежней кучи.
+ * Разрушение роняет звезду: 2000, когда солдат наступает.
+ */
+const sandbags: readonly SandbagMark[] = [{ x: 0.5, y: 0.52, drop: 'star' }];
+
+/**
  * Изба слева, сарай справа от дороги, розовый дом ближе справа.
  * y — доля опорного поля вниз от горизонта. Крыша выше неё на небе.
  */
@@ -81,5 +87,6 @@ export const picture: Picture = {
   props,
   fences,
   shorts,
+  sandbags,
   wave: [],
 };

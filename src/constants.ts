@@ -24,7 +24,7 @@ export const palette = {
   grassDark: 0x246428,
   grassLite: 0x67ae4a,
   grassDeep: 0x173f1c,
-  dirt: 0xc6a24e,
+  dirt: 0xb59c0d,
   dirtDark: 0x8d6a32,
   dirtLite: 0xe4c67c,
   pebble: 0x9a9078,
@@ -52,9 +52,6 @@ export const palette = {
   leaf: 0x145228,
   leafLite: 0x1e6c34,
   leafDark: 0x0c3018,
-  hay: 0xd6ae46,
-  hayLite: 0xf0d27c,
-  hayBand: 0x7a5424,
   iron: 0x6e6c66,
   ironLite: 0xc8c4b4,
   brass: 0xc6b24a,
@@ -285,6 +282,20 @@ export const shortFence = {
   hp: 6,
   score: 1000,
   ink: { x: 20, y: 5, w: 57, h: 21 },
+} as const;
+
+/**
+ * Мешки посреди дороги. Кадр 96×32, три мешка в ряд.
+ * Очередь колет, граната снимает сразу. Звезда при подборе — отдельно, 2000.
+ */
+export const sandbag = {
+  width: 96,
+  height: 32,
+  frames: 9,
+  frameRate: 12,
+  hp: 6,
+  score: 500,
+  ink: { x: 24, y: 11, w: 48, h: 16 },
 } as const;
 
 export type PropKind = keyof typeof scenery;

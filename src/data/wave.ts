@@ -65,6 +65,17 @@ export type ShortMark = {
   drop: DropKind;
 };
 
+/**
+ * Мешки на дороге. Середина ряда — доля поля.
+ * Стену у ног не закрывает. Разрушение роняет один дроп.
+ */
+export type SandbagMark = {
+  x: number;
+  /** 0 дальний край, 1 у дорожки. Середина мешков. */
+  y: number;
+  drop: DropKind;
+};
+
 /** Грузовик держит на полоске ещё и тех, кого высадит. */
 export function waveQuota(wave: readonly WaveGroup[]): number {
   return wave.reduce((sum, group) => {

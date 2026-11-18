@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { fence, shortFence } from './constants';
+import { fence, sandbag, shortFence } from './constants';
 import type { FenceKind } from './data/wave';
 
 /**
@@ -107,6 +107,44 @@ export function registerShortFenceAnim(scene: Phaser.Scene): void {
     key,
     frames: Array.from({ length: shortFence.frames }, (_, index) => ({ key: shortFenceFrameKey(index) })),
     frameRate: shortFence.frameRate,
+    repeat: 0,
+  });
+}
+
+/** Мешки. Кадр 96×32, ролик в animation. На переднюю стену не ставится. */
+const sandbagSheet = {
+  idle: 'assets/fence/sandbag/fence-sandbag.png',
+  frame: (index: number) => `assets/fence/sandbag/animation/frame_${pad(index)}.png`,
+} as const;
+
+export function sandbagIdleKey(): string {
+  return 'fence-sandbag';
+}
+
+export function sandbagFrameKey(index: number): string {
+  return `fence-sandbag-${index}`;
+}
+
+export function sandbagBreakKey(): string {
+  return 'fence-sandbag-break';
+}
+
+export function loadSandbag(scene: Phaser.Scene): void {
+  const idle = sandbagIdleKey();
+  if (!scene.textures.exists(idle)) scene.load.image(idle, sandbagSheet.idle);
+  for (let index = 0; index < sandbag.frames; index += 1) {
+    const key = sandbagFrameKey(index);
+    if (!scene.textures.exists(key)) scene.load.image(key, sandbagSheet.frame(index));
+  }
+}
+
+export function registerSandbagAnim(scene: Phaser.Scene): void {
+  const key = sandbagBreakKey();
+  if (scene.anims.exists(key)) return;
+  scene.anims.create({
+    key,
+    frames: Array.from({ length: sandbag.frames }, (_, index) => ({ key: sandbagFrameKey(index) })),
+    frameRate: sandbag.frameRate,
     repeat: 0,
   });
 }
