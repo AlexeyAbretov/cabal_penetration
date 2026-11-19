@@ -9,7 +9,7 @@ import { branch, deadTree, dirtTone, fillSky, grassTone, paintMountains, roadEdg
 /**
  * Земля деревни, картинка 1-1. Не рип.
  * Дорога сходится в точку на горизонте. Крыши и кроны заходят на небо,
- * штакетник и растения заполняют двор. Жерди и бочки ставит бой.
+ * растения заполняют двор. Штакетник, жерди и бочки ставит бой.
  * Врагов на этом слое нет.
  */
 export function villageGround(houses: readonly HouseMark[]): Ground {
@@ -77,8 +77,6 @@ function paintField(houses: readonly HouseMark[], w: number, h: number): Pix {
     const pad = house.kind === 'shed' ? 10 : 16;
     yard(pix, house.x * w, belowHorizon(house.y, field) + 2, pad * fit, 7 * fit);
   }
-  const aboveWall = h - 60;
-  pickets(pix, Math.round(w * 0.02), Math.round(w * 0.3), aboveWall, Math.round(28 * fit));
   kiln(pix, Math.round(w * 0.95), Math.round(h * 0.5), Math.round(30 * fit));
   crops(pix, Math.round(w * 0.03), Math.round(h * 0.58), fit);
   return pix;
@@ -141,30 +139,6 @@ function railLayout(w: number, h: number): RailLayout {
     right.push({ x: Math.round(edges.right + 2), y, ph, w: postW });
   }
   return { left, right, fit };
-}
-
-function pickets(pix: Pix, x0: number, x1: number, ground: number, height: number): void {
-  if (x1 <= x0 || height < 6) return;
-  const gap = Math.max(4, Math.round(height / 3.2));
-  const slat = Math.max(2, Math.round(height / 10));
-  for (let x = x0; x < x1; x += gap) {
-    const tall = height - (hash(x, ground) % 3);
-    const wood = hash(x, 8) % 3 === 0 ? palette.woodDark : palette.wood;
-    pix.fill(x, ground - tall, slat, tall, wood);
-    pix.fill(x, ground - tall, 1, tall, palette.woodLite);
-    pix.px(x, ground - tall - 1, palette.woodLite);
-    pix.px(x + slat - 1, ground - tall - 1, palette.wood);
-    if ((x - x0) % (gap * 4) < gap) {
-      pix.fill(x - 1, ground - tall - 3, slat + 2, tall + 4, palette.woodDark);
-      pix.fill(x, ground - tall - 2, 1, tall + 2, palette.woodLite);
-    }
-  }
-  const y1 = ground - Math.round(height * 0.68);
-  const y2 = ground - Math.round(height * 0.36);
-  pix.fill(x0, y1, x1 - x0, 2, palette.woodDark);
-  pix.fill(x0, y1, x1 - x0, 1, palette.woodLite);
-  pix.fill(x0, y2, x1 - x0, 2, palette.woodDark);
-  pix.fill(x0, y2, x1 - x0, 1, palette.woodLite);
 }
 
 function tree(pix: Pix, x: number, ground: number, height: number): void {

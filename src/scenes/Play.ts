@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { afterPicture, marchFrom, marchPicture, type March } from '../campaign/march';
 import { route } from '../campaign/route';
-import { breakableCount, type Picture } from '../campaign/picture';
+import { bonusList, breakableCount, type Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat';
 import { bonus, grenade, grenadeBoom, grenadeFly, grenadeThrow, gunFire, hitFlash, hud as hudNumbers, medal, palette, pickup, star, weapons, type DropKind } from '../constants';
 import type { FenceKind, FenceMark } from '../types/fence';
@@ -28,6 +28,7 @@ import { Houses } from './play/houses';
 import { Hud, hudIcons } from './play/hud';
 import { Props } from './play/props';
 import { plainAt } from './play/seat';
+import { Pickets } from './play/pickets';
 import { Rails } from './play/rails';
 import { Sandbags } from './play/sandbag';
 import { ShortFences } from './play/shortFence';
@@ -39,7 +40,7 @@ import { FrontWall } from './play/wall';
 
 /**
  * Картинка из маршрута. Гранаты, счёт и жизни приходят с захода, ствол — нет.
- * Куст, ящик, короткий кирпич, мешки, заборы у дороги и бочки роняют на дорожку пачку, ствол или звезду. Подбор телом.
+ * Куст, ящик, короткий кирпич, мешки, заборы у дороги, бочки и секции штакетника роняют на дорожку пачку, ствол или звезду. Подбор телом.
  * Удар — прямоугольник креста: частый уже, широкий шире и ниже, и больнее. Оба держат десять секунд и сгорают на конце сцены.
  * Танк-прямоугольник ест полоску. Очки за него и за крупные объекты выше, чем за зелёного.
  * Глубина сзади вперёд: небо и дома, замах, дорожка, кусты и ящики, зелёные и танк,
@@ -63,6 +64,7 @@ export class Play extends Phaser.Scene {
   private shorts!: ShortFences;
   private bags!: Sandbags;
   private rails!: Rails;
+  private pickets!: Pickets;
   private barrels!: Barrels;
   private sparks!: Sparks;
   private battleGfx!: Phaser.GameObjects.Graphics;
@@ -127,7 +129,8 @@ export class Play extends Phaser.Scene {
     this.grenades.setStock(this.march.grenades);
     this.hud.setGrenades(this.grenades.count());
     this.drops = new Drops(this, this.sparks, (kind) => this.takeDrop(kind));
-    const bag = new DropBag(this.picture.drops, breakableCount(this.picture), this.picture.id);
+    const opened = frameLayout(Math.floor(this.scale.gameSize.width), Math.floor(this.scale.gameSize.height)).field;
+    const bag = new DropBag(bonusList(this.picture, opened), breakableCount(this.picture, opened), this.picture.id);
     const scatter = (score: number, rx: number, ry: number): void => {
       this.hud.addScore(score);
       this.drops.spawn(bag.take(), rx, ry);
@@ -142,6 +145,7 @@ export class Play extends Phaser.Scene {
       this.stage.railLayout(width, height),
     );
     this.barrels = new Barrels(this, this.picture.barrels, this.stage.field, scatter);
+    this.pickets = new Pickets(this, this.picture.pickets, this.stage.field, scatter);
     this.enemies = new Enemies(this, this.picture.wave, this.sparks, (points) => this.onKill(points), (count) =>
       this.onGone(count),
     );
@@ -156,6 +160,7 @@ export class Play extends Phaser.Scene {
       this.bags.blast(x, y);
       this.rails.blast(x, y);
       this.barrels.blast(x, y);
+      this.pickets.blast(x, y);
       this.blastFrontWall(x, y);
     });
     this.controls = new Controls(this, () => this.onRightClick());
@@ -281,6 +286,7 @@ export class Play extends Phaser.Scene {
     this.bags.step(step);
     this.rails.step(step);
     this.barrels.step(step);
+    this.pickets.step(step);
     this.drops.step(this.view, this.soldier.body());
     this.drawBattle();
   }
@@ -323,6 +329,7 @@ export class Play extends Phaser.Scene {
     this.bags.bind(this.view);
     this.rails.bind(this.view);
     this.barrels.bind(this.view);
+    this.pickets.bind(this.view);
     this.fences.sync(this.view, this.wall);
     this.placeSoldier();
     const pointer = this.controls.pointer;
@@ -384,6 +391,7 @@ export class Play extends Phaser.Scene {
     this.bags.hit(box, shot.damage);
     this.rails.hit(box, shot.damage);
     this.barrels.hit(box, shot.damage);
+    this.pickets.hit(box, shot.damage);
     this.chipCover(box, shot.damage, at);
   }
 
@@ -468,6 +476,7 @@ export class Play extends Phaser.Scene {
     this.sparks.step(delta);
     this.rails.step(delta);
     this.barrels.step(delta);
+    this.pickets.step(delta);
     if (this.settled) return;
     if (!this.soldier.leave(delta)) return;
     this.march.lives = this.hud.livesLeft;
@@ -549,6 +558,7 @@ export class Play extends Phaser.Scene {
     this.sparks.draw(gfx);
     this.rails.draw();
     this.barrels.draw();
+    this.pickets.draw();
   }
 
   private setPaused(paused: boolean): void {
