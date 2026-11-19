@@ -291,7 +291,7 @@ function paintBarrel(w: number, h: number, broken: boolean): Pix {
       const dx = x + 0.5 - cx;
       const dy = y + 0.5 - cy;
       if ((dx * dx) / rx2 + (dy * dy) / ry2 > 1) continue;
-      const edge = lipY(x, cy, ry);
+      const edge = lipY(x, cy);
       if (broken && y < edge) continue;
       if (broken && y < edge + 2 && hash(x, y) % 4 === 0) continue;
       const stave = Math.floor((x - (cx - rx)) / 3) % 2 === 0;
@@ -312,7 +312,7 @@ function paintBarrel(w: number, h: number, broken: boolean): Pix {
   }
   for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x += 1) {
     if (hash(x, 4) % 3 !== 0) continue;
-    const top = lipY(x, cy, ry);
+    const top = lipY(x, cy);
     const n = 1 + (hash(x, 6) % 3);
     for (let k = 1; k <= n; k += 1) pix.px(x, Math.round(top) - k, k === n ? palette.woodLite : palette.wood);
   }
@@ -320,7 +320,7 @@ function paintBarrel(w: number, h: number, broken: boolean): Pix {
 }
 
 /** Верх оставшейся половины. Столбик клёпки то короче, то торчит щепкой. */
-function lipY(x: number, cy: number, ry: number): number {
+function lipY(x: number, cy: number): number {
   const n = hash(Math.round(x), 9);
   let y = cy + ((n % 5) - 2);
   if (n % 5 === 0) y += 2 + (n % 3);
