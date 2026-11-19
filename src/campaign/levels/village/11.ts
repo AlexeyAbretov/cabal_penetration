@@ -1,6 +1,14 @@
 import type { DropKind } from '../../../constants';
-import type { FenceMark, HouseMark, PropMark, SandbagMark, ShortMark, WaveGroup } from '../../../data/wave';
+import type { BarrelMark } from '../../../types/barrel';
+import type { FenceMark } from '../../../types/fence';
+import type { HouseMark } from '../../../types/house';
+import type { PropMark } from '../../../types/prop';
+import type { RailMark } from '../../../types/rail';
+import type { SandbagMark } from '../../../types/sandbag';
+import type { ShortMark } from '../../../types/shortFence';
+import type { WaveGroup } from '../../../wave';
 import type { Picture } from '../../picture';
+import { villageGround } from './ground';
 
 /**
  * Бой 1-1. Сейчас картинка без врагов: сначала окружение.
@@ -80,10 +88,23 @@ const houses: readonly HouseMark[] = [
 ];
 
 /**
- * Бонусы кустов, короткого кирпича и секций блокпоста. Забор перед солдатом не роняет.
- * Записей не меньше, чем этих объектов: одиннадцать. Каждый забирает одну случайную.
+ * Жерди слева и справа от дороги.
+ * Каждый забор ломается целиком, остаётся сломанным и берёт один бонус из списка.
+ */
+const rails: readonly RailMark[] = [{ side: 'left' }, { side: 'right' }];
+
+/**
+ * Бочка слева у дороги, перед жердями. То же место, где она была на земле.
+ * Ломается щепой, оставляет нижнюю треть и берёт один бонус из списка.
+ */
+const barrels: readonly BarrelMark[] = [{ x: 0.3, y: 0.56 }];
+
+/**
+ * Бонусы кустов, короткого кирпича, секций блокпоста, двух заборов у дороги и бочки.
+ * Забор перед солдатом не роняет.
+ * Записей не меньше, чем этих объектов: четырнадцать. Каждый забирает одну случайную.
  * Пачка, частый ствол, табличка 500, широкий ствол, звезда 2000,
- * ещё две пачки, две таблички 500 и две таблички 1000.
+ * ещё четыре пачки, три таблички 500 и две таблички 1000.
  * Бонусы врагов сюда не писать.
  */
 const drops: readonly DropKind[] = [
@@ -94,6 +115,9 @@ const drops: readonly DropKind[] = [
   'star',
   'grenades',
   'grenades',
+  'grenades',
+  'grenades',
+  'bonus',
   'bonus',
   'bonus',
   'medal',
@@ -115,12 +139,15 @@ const fences: readonly FenceMark[] = [
 export const picture: Picture = {
   id: '1-1',
   boss: false,
+  ground: villageGround(houses),
   wall,
   houses,
   props,
   fences,
   shorts,
   sandbags,
+  rails,
+  barrels,
   drops,
   wave: [],
 };

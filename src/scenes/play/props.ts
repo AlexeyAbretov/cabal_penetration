@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { centerBox, circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import { grenade, palette, scenery, type PropKind } from '../../constants';
-import type { PropMark } from '../../data/wave';
+import type { PropMark } from '../../types/prop';
 import { fieldScale, fitScale, wallTopY, type FrameLayout } from '../../layout';
 import { blit, ensureCanvas } from './blit';
 import { paintBush } from './plants';

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { centerBox, rectsOverlap, type HitBox } from '../../combat';
 import { frame, green, grenade, palette, tank, tankVolley, truck, volley, wall, wheel } from '../../constants';
-import { type EnemyKind, type WaveGroup } from '../../data/wave';
+import { type EnemyKind, type WaveGroup } from '../../wave';
 import { fieldScale, wallTopY, type FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
 import type { FrontWall } from './wall';

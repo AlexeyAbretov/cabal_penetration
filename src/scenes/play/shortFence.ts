@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import { grenade, palette, shortFence } from '../../constants';
-import type { ShortMark } from '../../data/wave';
+import type { GroundAt } from '../../campaign/ground';
+import type { ShortMark } from '../../types/shortFence';
 import { shortFenceBreakKey, shortFenceIdleKey } from '../../fenceSheet';
 import { fieldScale, fitScale, type FrameLayout } from '../../layout';
 import { paintSeat } from './seat';
@@ -37,16 +38,19 @@ export class ShortFences {
   private readonly seatGfx: Phaser.GameObjects.Graphics;
   private seatSig = '';
   private readonly onBreak: (score: number, rx: number, ry: number) => void;
+  private readonly at: GroundAt;
 
   constructor(
     scene: Phaser.Scene,
     marks: readonly ShortMark[],
     private readonly sparks: Sparks,
     onBreak: (score: number, rx: number, ry: number) => void,
+    at: GroundAt,
   ) {
     this.scene = scene;
     this.seatGfx = scene.add.graphics().setDepth(2.51);
     this.onBreak = onBreak;
+    this.at = at;
     this.runs = marks.map((mark) => ({
       mark,
       hp: shortFence.hp,
@@ -161,7 +165,7 @@ export class ShortFences {
             left: index === 0,
             right: index === run.sprites.length - 1,
             tuft: true,
-          }) && ready;
+          }, this.at) && ready;
       });
     }
     this.seatGfx.setDepth(depth + 0.002);

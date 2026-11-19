@@ -1,5 +1,5 @@
 import { palette } from '../../constants';
-import type { BuildingKind } from '../../data/wave';
+import type { BuildingKind } from '../../types/house';
 import { belowHorizon, fieldScale, fitScale, type Rect } from '../../layout';
 import { hash, inkOutline, Pix } from './pix';
 

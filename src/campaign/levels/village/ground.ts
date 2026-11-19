@@ -1,19 +1,30 @@
-import { palette } from '../../constants';
-import { picture } from '../../campaign/levels/village/11';
-import { belowHorizon, fitScale, sceneDepth, type Rect } from '../../layout';
-import { disc, hash, lerpColor, Pix, stamp } from './pix';
+import { palette } from '../../../constants';
+import type { Ground } from '../../ground';
+import { belowHorizon, fitScale, sceneDepth, type Rect } from '../../../layout';
+import type { HouseMark } from '../../../types/house';
+import type { RailLayout, RailPost } from '../../../types/rail';
+import { disc, hash, lerpColor, Pix, stamp } from '../../../scenes/play/pix';
 
 /**
- * Своя картинка 1-1, не рип.
+ * Земля деревни, картинка 1-1. Не рип.
  * Дорога сходится в точку на горизонте. Крыши и кроны заходят на небо,
- * заборы и растения заполняют двор. Врагов на этом слое нет.
+ * штакетник и растения заполняют двор. Жерди и бочки ставит бой.
+ * Врагов на этом слое нет.
  */
+export function villageGround(houses: readonly HouseMark[]): Ground {
+  return {
+    backdrop: (width, skyH, fieldH) => paintBackdrop(houses, width, skyH, fieldH),
+    track: paintTrack,
+    at: groundAt,
+    rails: railLayout,
+  };
+}
 
 /** Небо и поле одним листом: крона выше горизонта остаётся на небе, а не обрезается. */
-export function paintVillageBackdrop(w: number, skyH: number, fieldH: number): Pix {
+function paintBackdrop(houses: readonly HouseMark[], w: number, skyH: number, fieldH: number): Pix {
   const pix = new Pix(w, Math.max(1, skyH + fieldH));
   if (skyH > 0) stamp(pix, paintSky(w, skyH), 0, 0);
-  if (fieldH > 0) stamp(pix, paintField(w, fieldH), 0, skyH);
+  if (fieldH > 0) stamp(pix, paintField(houses, w, fieldH), 0, skyH);
   const field: Rect = { x: 0, y: 0, width: w, height: fieldH };
   const fit = fitScale(field);
   const ground = (fraction: number) => skyH + Math.round(belowHorizon(fraction, field));
@@ -38,7 +49,7 @@ function paintSky(w: number, h: number): Pix {
 }
 
 /** Земля под ногами — нижние ряды той же дороги и того же газона, без своей кромки. */
-export function paintTrack(w: number, h: number, fieldH: number): Pix {
+function paintTrack(w: number, h: number, fieldH: number): Pix {
   const pix = new Pix(w, h);
   const groundH = Math.max(1, fieldH);
   for (let y = 0; y < h; y += 1) {
@@ -52,7 +63,7 @@ export function paintTrack(w: number, h: number, fieldH: number): Pix {
   return pix;
 }
 
-function paintField(w: number, h: number): Pix {
+function paintField(houses: readonly HouseMark[], w: number, h: number): Pix {
   const pix = new Pix(w, h);
   const dirt = new Uint8Array(w * h);
   for (let y = 0; y < h; y += 1) {
@@ -70,14 +81,12 @@ function paintField(w: number, h: number): Pix {
   const field: Rect = { x: 0, y: 0, width: w, height: h };
   const fit = fitScale(field);
   sow(pix, dirt, w, h, fit);
-  for (const house of picture.houses) {
+  for (const house of houses) {
     const pad = house.kind === 'shed' ? 10 : 16;
     yard(pix, house.x * w, belowHorizon(house.y, field) + 2, pad * fit, 7 * fit);
   }
-  roadside(pix, w, h, fit);
   const aboveWall = h - 60;
   pickets(pix, Math.round(w * 0.02), Math.round(w * 0.3), aboveWall, Math.round(28 * fit));
-  barrel(pix, Math.round(w * 0.3), Math.round(h * 0.56), fit);
   kiln(pix, Math.round(w * 0.95), Math.round(h * 0.5), Math.round(30 * fit));
   crops(pix, Math.round(w * 0.03), Math.round(h * 0.58), fit);
   return pix;
@@ -106,7 +115,7 @@ function dirtTone(x: number, y: number, edges: { left: number; right: number }):
  * Тот же газон и та же дорога, что в листе картинки: посадка забора
  * перекрывает кромку спрайта этими пикселями, а не своим пятном.
  */
-export function groundAt(x: number, y: number, field: Rect, track: Rect): { tone: number; dirt: boolean } {
+function groundAt(x: number, y: number, field: Rect, track: Rect): { tone: number; dirt: boolean } {
   const xi = Math.floor(x);
   const yi = Math.floor(y);
   if (yi >= track.y) {
@@ -206,52 +215,25 @@ function yard(pix: Pix, cx: number, cy: number, rx: number, ry: number): void {
   }
 }
 
-function roadside(pix: Pix, w: number, h: number, fit: number): void {
-  const top = Math.round(belowHorizon(0.52, { x: 0, y: 0, width: w, height: h }));
+/**
+ * Столбы жердей слева и справа от кромки этой дороги.
+ * Те же места, что раньше были впечатаны в землю. Бой рисует их сам.
+ */
+function railLayout(w: number, h: number): RailLayout {
+  const field: Rect = { x: 0, y: 0, width: w, height: h };
+  const fit = fitScale(field);
+  const top = Math.round(belowHorizon(0.52, field));
   const step = Math.max(16, Math.round(28 * fit));
-  const left: { x: number; y: number; ph: number }[] = [];
-  const right: { x: number; y: number; ph: number }[] = [];
+  const left: RailPost[] = [];
+  const right: RailPost[] = [];
   for (let y = top; y < h - 64; y += step) {
     const edges = roadEdges(y, w, h);
-    if (!edges) continue;
     const ph = Math.round((12 + 16 * (y / h)) * fit);
     const postW = Math.max(2, Math.round(3 * fit));
-    const lx = Math.round(edges.left - postW - 2);
-    const rx = Math.round(edges.right + 2);
-    post(pix, lx, y, ph, postW);
-    post(pix, rx, y, ph, postW);
-    left.push({ x: lx, y, ph });
-    right.push({ x: rx, y, ph });
+    left.push({ x: Math.round(edges.left - postW - 2), y, ph, w: postW });
+    right.push({ x: Math.round(edges.right + 2), y, ph, w: postW });
   }
-  rails(pix, left, fit);
-  rails(pix, right, fit);
-}
-
-function post(pix: Pix, x: number, ground: number, height: number, width: number): void {
-  pix.fill(x, ground - height, width, height, palette.woodDark);
-  pix.fill(x, ground - height, 1, height, palette.woodLite);
-  pix.fill(x - 1, ground - height - 1, width + 2, 2, palette.wood);
-}
-
-function rails(pix: Pix, posts: { x: number; y: number; ph: number }[], fit: number): void {
-  const thick = Math.max(1, Math.round(2 * fit));
-  for (let i = 1; i < posts.length; i += 1) {
-    const a = posts[i - 1]!;
-    const b = posts[i]!;
-    rail(pix, a.x, a.y - Math.round(a.ph * 0.72), b.x, b.y - Math.round(b.ph * 0.72), thick);
-    rail(pix, a.x, a.y - Math.round(a.ph * 0.38), b.x, b.y - Math.round(b.ph * 0.38), thick);
-  }
-}
-
-function rail(pix: Pix, x0: number, y0: number, x1: number, y1: number, thick: number): void {
-  const steps = Math.max(1, Math.abs(x1 - x0) + Math.abs(y1 - y0));
-  for (let i = 0; i <= steps; i += 1) {
-    const t = i / steps;
-    const x = Math.round(x0 + (x1 - x0) * t);
-    const y = Math.round(y0 + (y1 - y0) * t);
-    pix.fill(x, y, Math.max(2, thick + 1), thick, palette.wood);
-    pix.px(x, y, palette.woodLite);
-  }
+  return { left, right, fit };
 }
 
 function pickets(pix: Pix, x0: number, x1: number, ground: number, height: number): void {
@@ -352,28 +334,6 @@ function canopy(pix: Pix, cx: number, cy: number, rx: number, ry: number, high: 
       pix.px(x, y, color);
     }
   }
-}
-
-function barrel(pix: Pix, cx: number, cy: number, fit: number): void {
-  const rx = Math.max(5, 8 * fit);
-  const ry = Math.max(6, 11 * fit);
-  const rx2 = rx * rx;
-  const ry2 = ry * ry;
-  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y += 1) {
-    for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x += 1) {
-      const dx = x + 0.5 - cx;
-      const dy = y + 0.5 - cy;
-      if ((dx * dx) / rx2 + (dy * dy) / ry2 > 1) continue;
-      const stave = Math.floor((x - (cx - rx)) / 3) % 2 === 0;
-      let color: number = stave ? palette.wood : palette.woodDark;
-      if (Math.abs(dy + ry * 0.35) < 1.2 || Math.abs(dy - ry * 0.15) < 1.2) color = palette.iron;
-      if (dx < -rx * 0.6) color = palette.woodLite;
-      pix.px(x, y, color);
-    }
-  }
-  disc(pix, cx, cy - ry * 0.72, rx * 0.72, ry * 0.28, palette.woodDark);
-  disc(pix, cx, cy - ry * 0.78, rx * 0.4, ry * 0.12, palette.line);
-  pix.px(Math.round(cx - rx * 0.2), Math.round(cy - ry * 0.86), palette.ironLite);
 }
 
 function kiln(pix: Pix, cx: number, ground: number, r: number): void {

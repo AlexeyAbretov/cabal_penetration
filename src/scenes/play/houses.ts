@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { HouseMark } from '../../data/wave';
+import type { HouseMark } from '../../types/house';
 import { belowHorizon, type FrameLayout } from '../../layout';
 import { blit, ensureCanvas } from './blit';
 import { buildingBox, drawBuilding } from './buildings';

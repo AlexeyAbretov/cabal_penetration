@@ -10,6 +10,14 @@ export class Pix {
     this.data = new Uint8ClampedArray(Math.max(0, w) * Math.max(0, h) * 4);
   }
 
+  /** Снимает пиксель. Сквозь дыру виден слой под спрайтом. */
+  erase(x: number, y: number): void {
+    const xi = x | 0;
+    const yi = y | 0;
+    if (xi < 0 || yi < 0 || xi >= this.w || yi >= this.h) return;
+    this.data[(yi * this.w + xi) * 4 + 3] = 0;
+  }
+
   px(x: number, y: number, color: number): void {
     const xi = x | 0;
     const yi = y | 0;

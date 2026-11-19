@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { fence, sandbag, shortFence } from './constants';
-import type { FenceKind } from './data/wave';
+import type { FenceKind } from './types/fence';
 
 /**
  * Секция заграждения. Целый блок и ролик разрушения лежат отдельно:

@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import { fence, wall } from '../../constants';
-import type { FenceMark } from '../../data/wave';
+import type { GroundAt } from '../../campaign/ground';
+import type { FenceMark } from '../../types/fence';
 import { fenceBreakKey, fenceIdleKey, fenceInk } from '../../fenceSheet';
 import type { FrameLayout } from '../../layout';
 import { paintSeat } from './seat';
@@ -35,10 +36,12 @@ export class Fences {
   private readonly columnCount: number;
   private readonly scene: Phaser.Scene;
   private readonly seatGfx: Phaser.GameObjects.Graphics;
+  private readonly at: GroundAt;
   private seatSig = '';
 
-  constructor(scene: Phaser.Scene, marks: readonly FenceMark[], mask: readonly boolean[]) {
+  constructor(scene: Phaser.Scene, marks: readonly FenceMark[], mask: readonly boolean[], at: GroundAt) {
     this.scene = scene;
+    this.at = at;
     this.seatGfx = scene.add.graphics().setDepth(3.52);
     this.pieces = [];
     this.owned = new Set();
@@ -149,7 +152,7 @@ export class Fences {
             left: index === 0,
             right: index === live.length - 1,
             tuft: true,
-          }) && ready;
+          }, this.at) && ready;
       });
     }
     if (ready) this.seatSig = sig;

@@ -3,7 +3,8 @@ import { afterPicture, marchFrom, marchPicture, type March } from '../campaign/m
 import { breakableCount, type Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat';
 import { bonus, grenade, grenadeBoom, grenadeFly, grenadeThrow, gunFire, hitFlash, hud as hudNumbers, medal, palette, pickup, star, weapons, type DropKind } from '../constants';
-import { waveQuota, type FenceKind, type FenceMark } from '../data/wave';
+import type { FenceKind, FenceMark } from '../types/fence';
+import { waveQuota } from '../wave';
 import { loadExplosion } from '../explosionSheet';
 import { frameLayout, type FrameLayout } from '../layout';
 import {
@@ -15,6 +16,7 @@ import {
   registerShortFenceAnim,
 } from '../fenceSheet';
 import { Aim } from './play/aim';
+import { Barrels } from './play/barrels';
 import { Controls } from './play/input';
 import { DropBag, Drops } from './play/drops';
 import { Enemies } from './play/enemies';
@@ -24,6 +26,8 @@ import { Gun, type ShotMark } from './play/gun';
 import { Houses } from './play/houses';
 import { Hud, hudIcons } from './play/hud';
 import { Props } from './play/props';
+import { plainAt } from './play/seat';
+import { Rails } from './play/rails';
 import { Sandbags } from './play/sandbag';
 import { ShortFences } from './play/shortFence';
 import { registerSoldierAnims, soldierSheet, soldierSheetReady } from '../soldierSheet';
@@ -34,7 +38,7 @@ import { FrontWall } from './play/wall';
 
 /**
  * Картинка из маршрута. Гранаты, счёт и жизни приходят с захода, ствол — нет.
- * Куст, ящик, короткий кирпич и мешки роняют на дорожку пачку, ствол или звезду. Подбор телом.
+ * Куст, ящик, короткий кирпич, мешки, заборы у дороги и бочки роняют на дорожку пачку, ствол или звезду. Подбор телом.
  * Удар — прямоугольник креста: частый уже, широкий шире и ниже, и больнее. Оба держат десять секунд и сгорают на конце сцены.
  * Танк-прямоугольник ест полоску. Очки за него и за крупные объекты выше, чем за зелёного.
  * Глубина сзади вперёд: небо и дома, замах, дорожка, кусты и ящики, зелёные и танк,
@@ -57,6 +61,8 @@ export class Play extends Phaser.Scene {
   private fences!: Fences;
   private shorts!: ShortFences;
   private bags!: Sandbags;
+  private rails!: Rails;
+  private barrels!: Barrels;
   private sparks!: Sparks;
   private battleGfx!: Phaser.GameObjects.Graphics;
   private paused = false;
@@ -120,22 +126,29 @@ export class Play extends Phaser.Scene {
       this.drops.spawn(bag.take(), rx, ry);
     };
     this.props = new Props(this, this.picture.props, this.sparks, scatter);
+    const earth = this.picture.ground?.at ?? plainAt;
     if (this.picture.shorts.length > 0) registerShortFenceAnim(this);
-    this.shorts = new ShortFences(this, this.picture.shorts, this.sparks, scatter);
+    this.shorts = new ShortFences(this, this.picture.shorts, this.sparks, scatter, earth);
     if (this.picture.sandbags.length > 0) registerSandbagAnim(this);
-    this.bags = new Sandbags(this, this.picture.sandbags, this.sparks, scatter);
+    this.bags = new Sandbags(this, this.picture.sandbags, this.sparks, scatter, earth);
+    this.rails = new Rails(this, this.picture.rails, this.stage.field, scatter, (width, height) =>
+      this.stage.railLayout(width, height),
+    );
+    this.barrels = new Barrels(this, this.picture.barrels, this.stage.field, scatter);
     this.enemies = new Enemies(this, this.picture.wave, this.sparks, (points) => this.onKill(points), (count) =>
       this.onGone(count),
     );
     this.houses = new Houses(this, this.picture.houses, this.stage.field);
     registerFenceAnims(this, fenceKinds(this.picture.fences));
-    this.fences = new Fences(this, this.picture.fences, this.picture.wall);
+    this.fences = new Fences(this, this.picture.fences, this.picture.wall, earth);
     this.grenades.onLand((x, y) => {
       if (this.cleared) return;
       this.enemies.blast(x, y);
       this.props.blast(x, y);
       this.shorts.blast(x, y);
       this.bags.blast(x, y);
+      this.rails.blast(x, y);
+      this.barrels.blast(x, y);
       this.blastFrontWall(x, y);
     });
     this.controls = new Controls(this, () => this.onRightClick());
@@ -259,6 +272,8 @@ export class Play extends Phaser.Scene {
     this.props.step(step);
     this.shorts.step(step);
     this.bags.step(step);
+    this.rails.step(step);
+    this.barrels.step(step);
     this.drops.step(this.view, this.soldier.body());
     this.drawBattle();
   }
@@ -276,7 +291,7 @@ export class Play extends Phaser.Scene {
     const height = Math.floor(this.scale.gameSize.height);
     this.cameras.resize(width, height);
     this.view = frameLayout(width, height);
-    this.stage.paint(this.view, this.picture.id);
+    this.stage.paint(this.view, this.picture.ground ?? null);
     this.soldier.bind(this.view, this.wall);
     this.grenades.bind(this.view);
     this.houses.place(this.view);
@@ -284,6 +299,8 @@ export class Play extends Phaser.Scene {
     this.props.bind(this.view);
     this.shorts.bind(this.view);
     this.bags.bind(this.view);
+    this.rails.bind(this.view);
+    this.barrels.bind(this.view);
     this.fences.sync(this.view, this.wall);
     this.placeSoldier();
     const pointer = this.controls.pointer;
@@ -343,6 +360,8 @@ export class Play extends Phaser.Scene {
     this.props.hit(box, shot.damage);
     this.shorts.hit(box, shot.damage);
     this.bags.hit(box, shot.damage);
+    this.rails.hit(box, shot.damage);
+    this.barrels.hit(box, shot.damage);
     this.chipCover(box, shot.damage, at);
   }
 
@@ -425,6 +444,8 @@ export class Play extends Phaser.Scene {
   /** Дома уже падают. Солдат убегает, затем следующая картинка или лишняя жизнь. */
   private stepClear(delta: number): void {
     this.sparks.step(delta);
+    this.rails.step(delta);
+    this.barrels.step(delta);
     if (this.settled) return;
     if (!this.soldier.leave(delta)) return;
     this.march.lives = this.hud.livesLeft;
@@ -504,6 +525,8 @@ export class Play extends Phaser.Scene {
     this.enemies.drawBullets(gfx, this.view, this.wall);
     this.grenades.draw(gfx);
     this.sparks.draw(gfx);
+    this.rails.draw();
+    this.barrels.draw();
   }
 
   private setPaused(paused: boolean): void {

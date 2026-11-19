@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import { grenade, palette, sandbag } from '../../constants';
-import type { SandbagMark } from '../../data/wave';
+import type { GroundAt } from '../../campaign/ground';
+import type { SandbagMark } from '../../types/sandbag';
 import { sandbagBreakKey, sandbagIdleKey } from '../../fenceSheet';
 import { fieldScale, fitScale, type FrameLayout } from '../../layout';
 import { paintSeat } from './seat';
@@ -37,15 +38,18 @@ export class Sandbags {
   private view: FrameLayout | null = null;
   private readonly scene: Phaser.Scene;
   private readonly onBreak: (score: number, rx: number, ry: number) => void;
+  private readonly at: GroundAt;
 
   constructor(
     scene: Phaser.Scene,
     marks: readonly SandbagMark[],
     private readonly sparks: Sparks,
     onBreak: (score: number, rx: number, ry: number) => void,
+    at: GroundAt,
   ) {
     this.scene = scene;
     this.onBreak = onBreak;
+    this.at = at;
     this.piles = marks.map((mark) => ({
       mark,
       hp: sandbag.hp,
@@ -137,7 +141,7 @@ export class Sandbags {
       left: true,
       right: true,
       tuft: true,
-    });
+    }, this.at);
     if (ready) pile.seatSig = sig;
   }
 

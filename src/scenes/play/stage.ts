@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
+import type { Ground } from '../../campaign/ground';
 import { palette } from '../../constants';
 import type { FrameLayout, Rect } from '../../layout';
+import type { RailLayout } from '../../types/rail';
 import { blit, ensureCanvas } from './blit';
 import type { Pix } from './pix';
-import { paintTrack, paintVillageBackdrop } from './village';
 
 /**
  * Полосы кадра снизу вверх по глубине: небо, поле, дорожка, рамка.
@@ -20,6 +21,7 @@ export class Stage {
   private readonly trackImage: Phaser.GameObjects.Image;
   private readonly hudFill: Phaser.GameObjects.Graphics;
   private readonly flat: Phaser.GameObjects.Graphics;
+  private ground: Ground | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -38,15 +40,22 @@ export class Stage {
     this.hud.add(this.hudFill);
   }
 
-  paint(view: FrameLayout, pictureId: string): void {
-    if (pictureId === '1-1') this.paintVillage(view);
+  paint(view: FrameLayout, ground: Ground | null): void {
+    this.ground = ground;
+    if (ground) this.paintGround(view, ground);
     else this.paintFlat(view);
     paint(this.hudFill, view.hud, palette.hud);
   }
 
-  private paintVillage(view: FrameLayout): void {
+  /** Столбы жердей этой земли. Без своей земли столбов нет. */
+  railLayout(width: number, height: number): RailLayout {
+    if (this.ground) return this.ground.rails(width, height);
+    return { left: [], right: [], fit: 1 };
+  }
+
+  private paintGround(view: FrameLayout, ground: Ground): void {
     this.flat.clear();
-    const backdrop = paintVillageBackdrop(view.sky.width, view.sky.height, view.field.height);
+    const backdrop = ground.backdrop(view.sky.width, view.sky.height, view.field.height);
     put(this.scene, this.skyImage, 'band-sky', backdrop, {
       x: 0,
       y: 0,
@@ -58,7 +67,7 @@ export class Stage {
       this.scene,
       this.trackImage,
       'band-track',
-      paintTrack(view.track.width, view.track.height, view.field.height),
+      ground.track(view.track.width, view.track.height, view.field.height),
       view.track,
     );
   }

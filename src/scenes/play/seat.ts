@@ -1,8 +1,11 @@
 import Phaser from 'phaser';
+import type { GroundAt, GroundTone } from '../../campaign/ground';
 import { palette } from '../../constants';
 import type { Rect } from '../../layout';
 import { hash } from './pix';
-import { groundAt } from './village';
+
+/** Заливка поля, когда у картинки нет своей земли. */
+export const plainAt: GroundAt = (): GroundTone => ({ tone: palette.field, dirt: false });
 
 /**
  * Подошва листа на земле. Генерация обрезает низ прямой линией,
@@ -89,6 +92,7 @@ export function paintSeat(
   track: Rect,
   buryCap: number,
   ends: { left: boolean; right: boolean; tuft: boolean },
+  at: GroundAt,
 ): boolean {
   const sole = readSole(scene, sprite.texture.key);
   if (!sole || sprite.displayWidth < 1 || sprite.displayHeight < 1) return false;
@@ -117,11 +121,11 @@ export function paintSeat(
   }
   cols.forEach((col, index) => {
     const end = (ends.left && index === 0) || (ends.right && index === cols.length - 1);
-    cover(gfx, col, field, track, buryCap, ends.tuft, end);
+    cover(gfx, col, field, track, buryCap, ends.tuft, end, at);
   });
   const last = cols[cols.length - 1];
-  if (ends.left && cols[0]) spill(gfx, cols[0], -1, field, track);
-  if (ends.right && last) spill(gfx, last, 1, field, track);
+  if (ends.left && cols[0]) spill(gfx, cols[0], -1, field, track, at);
+  if (ends.right && last) spill(gfx, last, 1, field, track, at);
   return true;
 }
 
@@ -133,6 +137,7 @@ function cover(
   buryCap: number,
   tuft: boolean,
   end: boolean,
+  at: GroundAt,
 ): void {
   const n = hash(col.x, col.cut);
   let bury = 1 + (n % Math.max(1, buryCap));
@@ -140,7 +145,7 @@ function cover(
   if (end) bury += 1;
   for (let k = 0; k < bury; k += 1) {
     const py = col.cut - k;
-    gfx.fillStyle(groundAt(col.x, py, field, track).tone, 1);
+    gfx.fillStyle(at(col.x, py, field, track).tone, 1);
     gfx.fillRect(col.x, py, 1, 1);
   }
   if (col.lip >= 0 && n % 6 === 0) {
@@ -148,7 +153,7 @@ function cover(
     gfx.fillRect(col.x, col.cut + 1, 1, 1);
     return;
   }
-  shade(gfx, col.x, col.cut, 2 + (n % 3), field, track);
+  shade(gfx, col.x, col.cut, 2 + (n % 3), field, track, at);
 }
 
 function spill(
@@ -157,11 +162,12 @@ function spill(
   dir: number,
   field: Rect,
   track: Rect,
+  at: GroundAt,
 ): void {
   for (let i = 1; i <= 2; i += 1) {
     const x = col.x + dir * i;
     if (hash(x, col.cut) % 3 === 0) continue;
-    shade(gfx, x, col.cut, i === 1 ? 2 : 1, field, track);
+    shade(gfx, x, col.cut, i === 1 ? 2 : 1, field, track, at);
   }
 }
 
@@ -173,6 +179,7 @@ function shade(
   reach: number,
   field: Rect,
   track: Rect,
+  at: GroundAt,
 ): void {
   for (let dy = 0; dy < reach; dy += 1) {
     const py = cut + 1 + dy;
@@ -180,8 +187,8 @@ function shade(
     if (dy === 0 && roll > 2) continue;
     if (dy === 1 && roll > 1) continue;
     if (dy >= 2 && roll !== 0) continue;
-    const at = groundAt(x, py, field, track);
-    const deep = at.dirt ? palette.dirtDark : roll === 0 ? palette.grassDeep : palette.grassDark;
+    const sample = at(x, py, field, track);
+    const deep = sample.dirt ? palette.dirtDark : roll === 0 ? palette.grassDeep : palette.grassDark;
     gfx.fillStyle(deep, 1);
     gfx.fillRect(x, py, 1, 1);
   }
