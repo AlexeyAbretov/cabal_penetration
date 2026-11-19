@@ -4,6 +4,7 @@ import { fence, wall } from '../../constants';
 import type { FenceMark } from '../../data/wave';
 import { fenceBreakKey, fenceIdleKey, fenceInk } from '../../fenceSheet';
 import type { FrameLayout } from '../../layout';
+import { paintSeat } from './seat';
 import { type FrontWall, type WallGeom } from './wall';
 
 type InkRect = {
@@ -32,8 +33,13 @@ export class Fences {
   private readonly pieces: Piece[];
   private readonly owned: Set<number>;
   private readonly columnCount: number;
+  private readonly scene: Phaser.Scene;
+  private readonly seatGfx: Phaser.GameObjects.Graphics;
+  private seatSig = '';
 
   constructor(scene: Phaser.Scene, marks: readonly FenceMark[], mask: readonly boolean[]) {
+    this.scene = scene;
+    this.seatGfx = scene.add.graphics().setDepth(3.52);
     this.pieces = [];
     this.owned = new Set();
     this.columnCount = mask.length;
@@ -120,6 +126,33 @@ export class Fences {
         sprite.setVisible(false);
       });
     }
+    this.paintSeats(view);
+  }
+
+  /** Прямую подошву листа закрывает земля картинки. На сломе посадка уходит вместе с секцией. */
+  private paintSeats(view: FrameLayout): void {
+    const sig = this.pieces
+      .map((piece) => {
+        const sprite = piece.sprite;
+        if (piece.gone || piece.breaking) return '0';
+        return `${sprite.x},${sprite.y},${sprite.displayWidth},${sprite.displayHeight}`;
+      })
+      .join('|');
+    if (sig === this.seatSig) return;
+    this.seatGfx.clear();
+    let ready = true;
+    for (const run of this.runs()) {
+      const live = run.filter((piece) => !piece.gone && !piece.breaking);
+      live.forEach((piece, index) => {
+        ready =
+          paintSeat(this.seatGfx, this.scene, piece.sprite, view.field, view.track, 3, {
+            left: index === 0,
+            right: index === live.length - 1,
+            tuft: true,
+          }) && ready;
+      });
+    }
+    if (ready) this.seatSig = sig;
   }
 
   /** Соседние колонки одним куском. Дыра маски кусок рвёт и в стык не входит. */

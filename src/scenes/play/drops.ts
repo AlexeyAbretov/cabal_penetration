@@ -91,7 +91,7 @@ export class Drops {
     for (const item of this.items) {
       if (!item.landed || item.taken) continue;
       const at = this.point(view, item);
-      const size = item.kind === 'bonus' ? 28 : pickup.size;
+      const size = pickupSpan(item.kind);
       if (!overlaps(at.x, at.y, size, size, body.x, body.y, body.w, body.h)) continue;
       item.taken = true;
       taken.push(item);
@@ -128,7 +128,11 @@ export class Drops {
 
 function paint(gfx: Phaser.GameObjects.Graphics, kind: DropKind, x: number, y: number): void {
   if (kind === 'bonus') {
-    paintBonus(gfx, x, y);
+    paintPlaque(gfx, x, y, plaque500);
+    return;
+  }
+  if (kind === 'medal') {
+    paintPlaque(gfx, x, y, plaque1000);
     return;
   }
   const s = pickup.size;
@@ -161,15 +165,27 @@ function paint(gfx: Phaser.GameObjects.Graphics, kind: DropKind, x: number, y: n
   gfx.fillTriangle(x, y - r, x - r, y, x, y + r);
 }
 
-/** «500»: пятёрка и два нуля, клетка 3×5, точка 2 пикселя. */
-const bonusGlyphs = ['###,#  ,###,  #,###', '###,# #,# #,# #,###', '###,# #,# #,# #,###'] as const;
+/** «500» и «1000». Клетка 3×5, точка 2 пикселя. */
+const plaque500 = ['###,#  ,###,  #,###', '###,# #,# #,# #,###', '###,# #,# #,# #,###'] as const;
+const plaque1000 = [
+  '#  ,## , # , # ,###',
+  '###,# #,# #,# #,###',
+  '###,# #,# #,# #,###',
+  '###,# #,# #,# #,###',
+] as const;
 
-function paintBonus(gfx: Phaser.GameObjects.Graphics, x: number, y: number): void {
+function pickupSpan(kind: DropKind): number {
+  if (kind === 'medal') return 36;
+  if (kind === 'bonus') return 28;
+  return pickup.size;
+}
+
+function paintPlaque(gfx: Phaser.GameObjects.Graphics, x: number, y: number, glyphs: readonly string[]): void {
   const dot = 2;
   const gap = 2;
   const digitW = 3 * dot;
   const digitH = 5 * dot;
-  const width = bonusGlyphs.length * digitW + (bonusGlyphs.length - 1) * gap;
+  const width = glyphs.length * digitW + (glyphs.length - 1) * gap;
   const left = Math.round(x - width / 2);
   const top = Math.round(y - digitH / 2);
   gfx.fillStyle(palette.black, 1);
@@ -177,7 +193,7 @@ function paintBonus(gfx: Phaser.GameObjects.Graphics, x: number, y: number): voi
   gfx.fillStyle(palette.star, 1);
   gfx.fillRect(left - 2, top - 2, width + 4, digitH + 4);
   gfx.fillStyle(palette.black, 1);
-  bonusGlyphs.forEach((glyph, index) => {
+  glyphs.forEach((glyph, index) => {
     const ox = left + index * (digitW + gap);
     glyph.split(',').forEach((row, ry) => {
       for (let rx = 0; rx < row.length; rx += 1) {

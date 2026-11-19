@@ -102,6 +102,29 @@ function dirtTone(x: number, y: number, edges: { left: number; right: number }):
 }
 
 /**
+ * Цвет уже нарисованной земли в точке кадра.
+ * Тот же газон и та же дорога, что в листе картинки: посадка забора
+ * перекрывает кромку спрайта этими пикселями, а не своим пятном.
+ */
+export function groundAt(x: number, y: number, field: Rect, track: Rect): { tone: number; dirt: boolean } {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  if (yi >= track.y) {
+    const gy = field.height + (yi - track.y);
+    const tx = xi - track.x;
+    const edges = roadEdges(gy, track.width, field.height, true);
+    const dirt = tx >= edges.left && tx <= edges.right;
+    return { tone: dirt ? dirtTone(tx, gy, edges) : grassTone(tx, gy), dirt };
+  }
+  const gy = yi - field.y;
+  const tx = xi - field.x;
+  if (gy < 0) return { tone: palette.grass, dirt: false };
+  const edges = roadEdges(gy, field.width, field.height);
+  const dirt = tx >= edges.left && tx <= edges.right;
+  return { tone: dirt ? dirtTone(tx, gy, edges) : grassTone(tx, gy), dirt };
+}
+
+/**
  * Дорога с точки на горизонте (y = 0) до переднего плана.
  * Дальше опорной глубины поле почти не ширится.
  * Под ногами наклон тот же, что над забором: иначе кромка встаёт вертикально.

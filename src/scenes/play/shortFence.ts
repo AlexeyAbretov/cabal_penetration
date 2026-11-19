@@ -4,6 +4,7 @@ import { grenade, palette, shortFence } from '../../constants';
 import type { ShortMark } from '../../data/wave';
 import { shortFenceBreakKey, shortFenceIdleKey } from '../../fenceSheet';
 import { fieldScale, fitScale, type FrameLayout } from '../../layout';
+import { paintSeat } from './seat';
 import type { Sparks } from './sparks';
 
 type InkRect = {
@@ -32,6 +33,9 @@ type Run = {
 export class ShortFences {
   private readonly runs: Run[];
   private view: FrameLayout | null = null;
+  private readonly scene: Phaser.Scene;
+  private readonly seatGfx: Phaser.GameObjects.Graphics;
+  private seatSig = '';
   private readonly onBreak: (score: number, rx: number, ry: number) => void;
 
   constructor(
@@ -40,6 +44,8 @@ export class ShortFences {
     private readonly sparks: Sparks,
     onBreak: (score: number, rx: number, ry: number) => void,
   ) {
+    this.scene = scene;
+    this.seatGfx = scene.add.graphics().setDepth(2.51);
     this.onBreak = onBreak;
     this.runs = marks.map((mark) => ({
       mark,
@@ -127,6 +133,39 @@ export class ShortFences {
       }
       run.hit = run.alive ? { left, right: edge, top, bottom } : null;
     }
+    this.paintSeats();
+  }
+
+  /** Прямой низ кирпича закрывает газон. На сломе посадка пропадает. */
+  private paintSeats(): void {
+    const view = this.view;
+    if (!view) return;
+    const sig = this.runs
+      .map((run) => {
+        if (run.gone || run.breaking) return '0';
+        return run.sprites
+          .map((sprite) => `${sprite.x},${sprite.y},${sprite.displayWidth},${sprite.displayHeight}`)
+          .join(',');
+      })
+      .join('|');
+    if (sig === this.seatSig) return;
+    this.seatGfx.clear();
+    let depth = 2.5;
+    let ready = true;
+    for (const run of this.runs) {
+      if (run.gone || run.breaking) continue;
+      depth = Math.max(depth, run.sprites[0]?.depth ?? depth);
+      run.sprites.forEach((sprite, index) => {
+        ready =
+          paintSeat(this.seatGfx, this.scene, sprite, view.field, view.track, 3, {
+            left: index === 0,
+            right: index === run.sprites.length - 1,
+            tuft: true,
+          }) && ready;
+      });
+    }
+    this.seatGfx.setDepth(depth + 0.002);
+    if (ready) this.seatSig = sig;
   }
 
   private wound(run: Run, amount: number): void {

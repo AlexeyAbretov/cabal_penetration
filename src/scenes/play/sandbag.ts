@@ -4,6 +4,7 @@ import { grenade, palette, sandbag } from '../../constants';
 import type { SandbagMark } from '../../data/wave';
 import { sandbagBreakKey, sandbagIdleKey } from '../../fenceSheet';
 import { fieldScale, fitScale, type FrameLayout } from '../../layout';
+import { paintSeat } from './seat';
 import type { Sparks } from './sparks';
 
 type InkRect = {
@@ -22,16 +23,19 @@ type Pile = {
   gone: boolean;
   hit: InkRect | null;
   sprite: Phaser.GameObjects.Sprite;
+  seat: Phaser.GameObjects.Graphics;
+  seatSig: string;
 };
 
 /**
  * Мешки на дороге. Стену у ног не закрывают.
- * Середина ряда стоит там, где была нарисованная куча.
+ * Секции одного блокпоста стоят рядом и ломаются по одной.
  * Разрушение берёт один бонус из списка картинки.
  */
 export class Sandbags {
   private readonly piles: Pile[];
   private view: FrameLayout | null = null;
+  private readonly scene: Phaser.Scene;
   private readonly onBreak: (score: number, rx: number, ry: number) => void;
 
   constructor(
@@ -40,6 +44,7 @@ export class Sandbags {
     private readonly sparks: Sparks,
     onBreak: (score: number, rx: number, ry: number) => void,
   ) {
+    this.scene = scene;
     this.onBreak = onBreak;
     this.piles = marks.map((mark) => ({
       mark,
@@ -50,6 +55,8 @@ export class Sandbags {
       gone: false,
       hit: null,
       sprite: scene.add.sprite(0, 0, sandbagIdleKey()).setOrigin(0.5, 1).setDepth(2.5).setVisible(false),
+      seat: scene.add.graphics().setDepth(2.51),
+      seatSig: '',
     }));
   }
 
@@ -91,6 +98,7 @@ export class Sandbags {
       if (pile.gone) {
         pile.hit = null;
         sprite.setVisible(false);
+        this.seatPile(pile, 0, 0);
         continue;
       }
       const anchor = field.y + pile.mark.y * field.height;
@@ -100,7 +108,7 @@ export class Sandbags {
       const scaleY = displayH / sandbag.height;
       const lift = sandbag.height - sandbag.ink.y - sandbag.ink.h / 2;
       const ground = Math.round(anchor + lift * scaleY);
-      const x = Math.round(field.x + pile.mark.x * field.width);
+      const x = Math.round(field.x + pile.mark.x * field.width + (pile.mark.dx ?? 0) * scale);
       sprite.setPosition(x, ground);
       sprite.setDisplaySize(displayW, displayH);
       sprite.setDepth(2.5 + ground / 10000);
@@ -108,7 +116,29 @@ export class Sandbags {
       if (pile.flash > 0 && pile.alive) sprite.setTint(palette.ink);
       else sprite.clearTint();
       pile.hit = pile.alive ? inkRect(x, ground, displayW, displayH) : null;
+      this.seatPile(pile, displayW, displayH);
     }
+  }
+
+  /** Ровный низ мешков закрывает дорога. На сломе посадка пропадает. */
+  private seatPile(pile: Pile, displayW: number, displayH: number): void {
+    const view = this.view;
+    if (!view) return;
+    const sprite = pile.sprite;
+    const sig = pile.gone || pile.breaking ? '' : `${sprite.x},${sprite.y},${displayW},${displayH}`;
+    if (sig === pile.seatSig) return;
+    pile.seat.clear();
+    if (!sig) {
+      pile.seatSig = sig;
+      return;
+    }
+    pile.seat.setDepth(sprite.depth + 0.002);
+    const ready = paintSeat(pile.seat, this.scene, sprite, view.field, view.track, 2, {
+      left: true,
+      right: true,
+      tuft: true,
+    });
+    if (ready) pile.seatSig = sig;
   }
 
   private wound(pile: Pile, amount: number): void {
