@@ -2,13 +2,15 @@ import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import { barrel, grenade, palette } from '../../constants';
 import type { BarrelMark } from '../../types/barrel';
-import { fieldScale, fitScale, type FrameLayout } from '../../layout';
+import { belowHorizon, fieldScale, fitScale, type FrameLayout } from '../../layout';
 import { blit, ensureCanvas } from './blit';
 import { disc, hash, Pix } from './pix';
 
 type Keg = {
   rx: number;
   ry: number;
+  dx: number;
+  horizon: boolean;
   score: number;
   hp: number;
   flash: number;
@@ -40,7 +42,7 @@ const woods = [palette.wood, palette.woodLite, palette.woodDark] as const;
 /**
  * Бочки на поле. Стоят перед жердями: свой спрайт, не дырка в заборе.
  * Очередь колет, граната снимает сразу. Щепа летит, как у жердей.
- * Сломанная не пропадает: остаётся рваная нижняя треть.
+ * Сломанная не пропадает: остаётся рваная нижняя половина.
  * Один бонус из списка картинки.
  */
 export class Barrels {
@@ -71,6 +73,8 @@ export class Barrels {
       return {
         rx: mark.x,
         ry: mark.y,
+        dx: mark.dx ?? 0,
+        horizon: mark.horizon ?? false,
         score: mark.score ?? barrel.score,
         hp: barrel.hp,
         flash: 0,
@@ -143,9 +147,18 @@ export class Barrels {
     if (!view) return;
     const field = view.field;
     for (const keg of this.kegs) {
-      const y = field.y + keg.ry * field.height;
-      const scale = fieldScale(y, field) * fitScale(field);
-      keg.x = field.x + keg.rx * field.width;
+      const ground = keg.horizon
+        ? field.y + belowHorizon(keg.ry, field)
+        : field.y + keg.ry * field.height;
+      let y = ground;
+      let scale = fieldScale(y, field) * fitScale(field);
+      if (keg.horizon) {
+        const stand = Math.max(10, Math.round(barrel.height * scale));
+        y = ground - stand / 2;
+        scale = fieldScale(y, field) * fitScale(field);
+        y = ground - Math.max(10, Math.round(barrel.height * scale)) / 2;
+      }
+      keg.x = field.x + keg.rx * field.width + keg.dx * scale;
       keg.y = y;
       keg.w = Math.max(8, Math.round(barrel.width * scale));
       keg.h = Math.max(10, Math.round(barrel.height * scale));
@@ -264,7 +277,7 @@ function chip(
   return { x: x - w / 2, y: y - h / 2, vx, vy, w, h, color, life, max: life, spin };
 }
 
-/** Целая бочка или её нижняя треть с рваным краем. Холст тот же: низ не прыгает. */
+/** Целая бочка или её нижняя половина с рваным краем. Холст тот же: низ не прыгает. */
 function paintBarrel(w: number, h: number, broken: boolean): Pix {
   const pix = new Pix(w, h);
   const cx = (w - 1) / 2;
@@ -283,7 +296,9 @@ function paintBarrel(w: number, h: number, broken: boolean): Pix {
       if (broken && y < edge + 2 && hash(x, y) % 4 === 0) continue;
       const stave = Math.floor((x - (cx - rx)) / 3) % 2 === 0;
       let color: number = stave ? palette.wood : palette.woodDark;
-      if (!broken && (Math.abs(dy + ry * 0.35) < 1.2 || Math.abs(dy - ry * 0.15) < 1.2)) color = palette.iron;
+      const lowerHoop = Math.abs(dy - ry * 0.15) < 1.2;
+      const upperHoop = Math.abs(dy + ry * 0.35) < 1.2;
+      if (lowerHoop || (!broken && upperHoop)) color = palette.iron;
       if (dx < -rx * 0.6) color = palette.woodLite;
       if (broken && y <= edge + 1) color = hash(x, y) % 2 === 0 ? palette.woodLite : palette.woodDark;
       pix.px(x, y, color);
@@ -301,21 +316,13 @@ function paintBarrel(w: number, h: number, broken: boolean): Pix {
     const n = 1 + (hash(x, 6) % 3);
     for (let k = 1; k <= n; k += 1) pix.px(x, Math.round(top) - k, k === n ? palette.woodLite : palette.wood);
   }
-  const band = Math.round(cy + ry * 0.55);
-  for (let x = Math.floor(cx - rx * 0.8); x <= Math.ceil(cx + rx * 0.8); x += 1) {
-    if (hash(x, 2) % 5 === 0) continue;
-    const dx = x + 0.5 - cx;
-    const dy = band + 0.5 - cy;
-    if ((dx * dx) / rx2 + (dy * dy) / ry2 > 1) continue;
-    pix.px(x, band, palette.iron);
-  }
   return pix;
 }
 
-/** Верх оставшейся трети. Столбик клёпки то короче, то торчит щепкой. */
+/** Верх оставшейся половины. Столбик клёпки то короче, то торчит щепкой. */
 function lipY(x: number, cy: number, ry: number): number {
   const n = hash(Math.round(x), 9);
-  let y = cy + ry / 3 + ((n % 5) - 2);
+  let y = cy + ((n % 5) - 2);
   if (n % 5 === 0) y += 2 + (n % 3);
   return y;
 }
