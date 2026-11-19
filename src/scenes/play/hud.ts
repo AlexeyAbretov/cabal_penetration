@@ -13,6 +13,8 @@ type HudFigures = {
   grenades: HTMLSpanElement;
 };
 
+type PicturePick = (index: number) => void;
+
 /**
  * Значки PixelLab 48×48, в рамке пиксель в пиксель.
  * right и bottom — край непрозрачных пикселей, не включая его.
@@ -52,6 +54,8 @@ export class Hud {
   private readonly pauseVeil: Phaser.GameObjects.Graphics;
   private readonly pauseLabel: Phaser.GameObjects.Text;
   private readonly edge: Phaser.GameObjects.Graphics;
+  private pictureButtons: HTMLButtonElement[] = [];
+  private onPicture: PicturePick | null = null;
 
   constructor(scene: Phaser.Scene, layer: Phaser.GameObjects.Container) {
     this.scene = scene;
@@ -98,6 +102,28 @@ export class Hud {
 
   get points(): number {
     return this.score;
+  }
+
+  /**
+   * Подписи картинок справа в рамке. Щелчок зовёт pick.
+   * Текущая подчёркнута. Кнопка не забирает фокус: пробел остаётся перекатом.
+   */
+  setPictures(ids: readonly string[], current: number, pick: PicturePick): void {
+    this.onPicture = pick;
+    for (const button of this.pictureButtons) button.remove();
+    this.pictureButtons = ids.map((id, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = index === current ? 'hud-picture is-current' : 'hud-picture';
+      button.textContent = id;
+      button.addEventListener('mousedown', (event) => event.preventDefault());
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        this.onPicture?.(index);
+      });
+      this.figures.root.append(button);
+      return button;
+    });
   }
 
   /** Заход или континуэ. Полоска сцены при этом не трогается. */
@@ -218,6 +244,25 @@ export class Hud {
     this.placeFigure(this.figures.lives, this.livesText, scaleX, scaleY, fontPx);
     this.placeFigure(this.figures.score, this.scoreText, scaleX, scaleY, fontPx);
     this.placeFigure(this.figures.grenades, this.grenadeText, scaleX, scaleY, fontPx);
+    this.placePictures(scaleX, scaleY, fontPx);
+  }
+
+  /** Справа в рамке, от правого края. Текущая картинка уже помечена классом. */
+  private placePictures(scaleX: number, scaleY: number, fontPx: number): void {
+    const band = this.band;
+    if (!band || this.pictureButtons.length === 0) return;
+    const canvas = this.scene.game.canvas;
+    const mid = band.y + band.height / 2;
+    let cursor = canvas.offsetLeft + (band.x + band.width - 12) * scaleX;
+    const gap = 6 * scaleX;
+    for (let i = this.pictureButtons.length - 1; i >= 0; i -= 1) {
+      const button = this.pictureButtons[i]!;
+      button.style.fontSize = `${fontPx}px`;
+      cursor -= button.offsetWidth;
+      button.style.left = `${cursor}px`;
+      button.style.top = `${canvas.offsetTop + mid * scaleY}px`;
+      cursor -= gap;
+    }
   }
 
   private placeFigure(
@@ -269,7 +314,8 @@ export class Hud {
     this.weaponGfx.clear();
     if (!band || this.weapon === 'rifle' || this.frameWidth <= 0) return;
     const mid = band.y + Math.round(band.height / 2);
-    const x = this.frameWidth - 36;
+    const reserve = this.pictureButtons.length > 1 ? 150 : 0;
+    const x = this.frameWidth - 36 - reserve;
     if (this.weapon === 'rapid') {
       this.weaponGfx.fillStyle(palette.rapid, 1);
       for (let i = 0; i < 3; i += 1) this.weaponGfx.fillRect(x + i * 5, mid - 8, 3, 16);

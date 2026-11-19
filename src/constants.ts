@@ -54,6 +54,10 @@ export const palette = {
   leafDark: 0x0c3018,
   iron: 0x6e6c66,
   ironLite: 0xc8c4b4,
+  /** Синяя дверь 1-2 и дальние ангары. Плоская крыша, не черепица деревни. */
+  steel: 0x3a5c9a,
+  steelLite: 0x7aa4d4,
+  steelDark: 0x1e3358,
   brass: 0xc6b24a,
   flower: 0xe6d25a,
   petal: 0xf4f0e6,

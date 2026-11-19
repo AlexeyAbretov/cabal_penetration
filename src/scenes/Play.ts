@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { afterPicture, marchFrom, marchPicture, type March } from '../campaign/march';
+import { route } from '../campaign/route';
 import { breakableCount, type Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat';
 import { bonus, grenade, grenadeBoom, grenadeFly, grenadeThrow, gunFire, hitFlash, hud as hudNumbers, medal, palette, pickup, star, weapons, type DropKind } from '../constants';
@@ -116,6 +117,12 @@ export class Play extends Phaser.Scene {
     this.aim = new Aim(this);
     this.soldier = new Soldier(this);
     this.hud = new Hud(this, this.stage.hud);
+    const level = route[this.march.level];
+    this.hud.setPictures(
+      level?.pictures.map((row) => row.id) ?? [this.picture.id],
+      this.march.picture,
+      (index) => this.jumpPicture(index),
+    );
     this.grenades = new Grenades(this, this.sparks);
     this.grenades.setStock(this.march.grenades);
     this.hud.setGrenades(this.grenades.count());
@@ -276,6 +283,21 @@ export class Play extends Phaser.Scene {
     this.barrels.step(step);
     this.drops.step(this.view, this.soldier.body());
     this.drawBattle();
+  }
+
+  /** Смена картинки из рамки. Счёт, жизни и гранаты остаются, ствол сгорает вместе со сценой. */
+  private jumpPicture(index: number): void {
+    if (index === this.march.picture || this.handoff || this.cleared || this.down) return;
+    const level = route[this.march.level];
+    if (!level || index < 0 || index >= level.pictures.length) return;
+    this.handoff = {
+      ...this.march,
+      picture: index,
+      lives: this.hud.livesLeft,
+      score: this.hud.points,
+      grenades: this.grenades.count(),
+    };
+    this.gun.quiet();
   }
 
   private onRightClick(): void {

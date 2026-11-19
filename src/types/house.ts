@@ -1,4 +1,4 @@
-export type BuildingKind = 'cottage' | 'shed' | 'manor';
+export type BuildingKind = 'cottage' | 'shed' | 'manor' | 'hut' | 'ruin' | 'gate';
 
 export type HouseMark = {
   kind: BuildingKind;

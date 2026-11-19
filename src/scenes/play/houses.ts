@@ -14,7 +14,7 @@ type House = {
   falling: boolean;
 };
 
-/** Дома 1-1. Пустая полоска роняет уцелевшие. Пока по ним не стреляют. */
+/** Дома картинки. Пустая полоска роняет уцелевшие. Пока по ним не стреляют. */
 export class Houses {
   private readonly houses: House[];
   private readonly scene: Phaser.Scene;

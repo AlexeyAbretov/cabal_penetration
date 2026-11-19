@@ -17,6 +17,9 @@ export function drawBuilding(kind: BuildingKind, w: number, h: number): Pix {
   const pix = new Pix(w, h);
   if (kind === 'cottage') cottage(pix);
   else if (kind === 'manor') manor(pix);
+  else if (kind === 'hut') hut(pix);
+  else if (kind === 'ruin') ruin(pix);
+  else if (kind === 'gate') gate(pix);
   else shed(pix);
   inkOutline(pix, palette.line);
   return pix;
@@ -221,6 +224,96 @@ function door(pix: Pix, x: number, y: number, w: number, h: number): void {
   pix.px(x + w - 3, y + Math.round(h * 0.55), palette.brass);
   pix.fill(x - 2, y + h, w + 4, 2, palette.mortar);
   pix.fill(x - 2, y + h, w + 4, 1, palette.creamLite);
+}
+
+/** Изба 1-2: низкая черепица, штукатурка, дверь на нас. */
+function hut(pix: Pix): void {
+  const w = pix.w;
+  const h = pix.h;
+  const roofTop = 2;
+  const roofBot = Math.round(h * 0.4);
+  const found = Math.round(h * 0.82);
+  hip(pix, roofTop, roofBot);
+  const wallX = Math.round(w * 0.08);
+  const wallW = w - wallX * 2;
+  plaster(pix, wallX, roofBot - 2, wallW, found - (roofBot - 2), palette.cream, palette.creamDark, palette.creamLite);
+  brickCourses(pix, wallX - 1, found, wallW + 2, h - found - 2);
+  const doorW = Math.max(8, Math.round(w * 0.22));
+  const doorH = Math.max(12, found - (roofBot + Math.round(h * 0.08)));
+  door(pix, wallX + Math.round(wallW * 0.18), found - doorH, doorW, doorH);
+}
+
+/** Руина 1-2: рваный верх, два зелёных проёма, крыши нет. */
+function ruin(pix: Pix): void {
+  const w = pix.w;
+  const h = pix.h;
+  const course = Math.max(3, Math.round(h / 16));
+  const brickW = Math.max(5, Math.round(w / 8));
+  for (let x = 2; x < w - 2; x += 1) {
+    const jag = (hash(x, 4) % 5) * Math.max(1, Math.round(h * 0.012));
+    const top = Math.round(h * 0.06) + jag;
+    for (let y = top; y < h - 2; y += 1) {
+      const row = Math.floor((y - top) / course);
+      const shift = row % 2 === 0 ? 0 : Math.floor(brickW / 2);
+      const seam = (x + shift) % brickW === 0 || (y - top) % course === 0;
+      if (seam) {
+        pix.px(x, y, palette.mortar);
+        continue;
+      }
+      const n = hash(x, row);
+      pix.px(x, y, n % 6 === 0 ? palette.brickDark : n % 5 === 0 ? palette.brickLite : palette.brick);
+    }
+  }
+  opening(pix, Math.round(w * 0.16), Math.round(h * 0.34), Math.round(w * 0.24), Math.round(h * 0.16));
+  opening(pix, Math.round(w * 0.56), Math.round(h * 0.42), Math.round(w * 0.22), Math.round(h * 0.15));
+}
+
+/** Синяя дверь перед избой. Стоит ближе и рисуется поверх. */
+function gate(pix: Pix): void {
+  const w = pix.w;
+  const h = pix.h;
+  pix.fill(2, 2, w - 4, h - 4, palette.steel);
+  pix.fill(2, 2, Math.max(2, Math.round(w * 0.08)), h - 4, palette.steelLite);
+  pix.fill(w - 2 - Math.max(2, Math.round(w * 0.08)), 2, Math.max(2, Math.round(w * 0.08)), h - 4, palette.steelDark);
+  for (let i = 1; i <= 3; i += 1) {
+    const y = Math.round((h * i) / 4);
+    pix.fill(4, y, w - 8, 1, palette.steelDark);
+  }
+  const signW = Math.max(6, Math.round(w * 0.46));
+  const signH = Math.max(3, Math.round(h * 0.07));
+  const sx = Math.round(w * 0.27);
+  const sy = Math.round(h * 0.1);
+  pix.fill(sx, sy, signW, signH, palette.petal);
+  pix.fill(sx, sy, Math.max(2, Math.round(signW * 0.34)), signH, palette.bloom);
+}
+
+function hip(pix: Pix, top: number, bot: number): void {
+  const w = pix.w;
+  const tileH = Math.max(3, Math.round((bot - top) / 4));
+  const tileW = Math.max(4, Math.round(w / 10));
+  for (let y = top; y < bot; y += 1) {
+    const t = (y - top) / Math.max(1, bot - top - 1);
+    const inset = Math.round((1 - t) * w * 0.16);
+    const left = 2 + inset;
+    const right = w - 3 - inset;
+    const row = Math.floor((y - top) / tileH);
+    const rowEdge = (y - top) % tileH === 0;
+    for (let x = left; x <= right; x += 1) {
+      const col = Math.floor((x - left) / tileW);
+      const colEdge = (x - left) % tileW === 0;
+      let color: number = (col + row) % 2 === 0 ? palette.roof : palette.roofDark;
+      if (hash(x, y) % 9 === 0) color = palette.roofLite;
+      if (y === top || rowEdge || colEdge || x === left || x === right) color = palette.roofDark;
+      pix.px(x, y, color);
+    }
+  }
+}
+
+function opening(pix: Pix, x: number, y: number, w: number, h: number): void {
+  if (w < 6 || h < 5) return;
+  pix.fill(x, y, w, h, palette.line);
+  pix.fill(x + 2, y + 2, w - 4, h - 4, palette.leaf);
+  pix.fill(x + 3, y + 3, Math.max(1, w - 6), Math.max(1, Math.round((h - 6) * 0.45)), palette.leafLite);
 }
 
 function flowerBox(pix: Pix, x: number, y: number, w: number): void {
