@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
-import { grenade, palette, shortFence, type DropKind } from '../../constants';
+import { grenade, palette, shortFence } from '../../constants';
 import type { ShortMark } from '../../data/wave';
 import { shortFenceBreakKey, shortFenceIdleKey } from '../../fenceSheet';
 import { fieldScale, fitScale, type FrameLayout } from '../../layout';
@@ -26,19 +26,19 @@ type Run = {
 
 /**
  * Короткий кирпич на траве. Стену у ног не закрывает.
- * Секции одного забора стоят встык и ломаются вместе: один дроп на весь прогон.
+ * Секции одного забора стоят встык и ломаются вместе: один бонус из списка картинки на весь прогон.
  * Подошва на линии прежней кладки, выше низа сцены, чем одиночный лист у стены.
  */
 export class ShortFences {
   private readonly runs: Run[];
   private view: FrameLayout | null = null;
-  private readonly onBreak: (drop: DropKind, score: number, rx: number, ry: number) => void;
+  private readonly onBreak: (score: number, rx: number, ry: number) => void;
 
   constructor(
     scene: Phaser.Scene,
     marks: readonly ShortMark[],
     private readonly sparks: Sparks,
-    onBreak: (drop: DropKind, score: number, rx: number, ry: number) => void,
+    onBreak: (score: number, rx: number, ry: number) => void,
   ) {
     this.onBreak = onBreak;
     this.runs = marks.map((mark) => ({
@@ -148,7 +148,7 @@ export class ShortFences {
     const field = view?.field;
     const rx = field ? (sx - field.x) / Math.max(1, field.width) : run.mark.x;
     const ry = field ? (sy - field.y) / Math.max(1, field.height) : 0.7;
-    this.onBreak(run.mark.drop, shortFence.score, rx, ry);
+    this.onBreak(shortFence.score, rx, ry);
     const key = shortFenceBreakKey();
     for (const sprite of run.sprites) sprite.play(key);
     run.sprites[0]?.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {

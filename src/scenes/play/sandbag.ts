@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
-import { grenade, palette, sandbag, type DropKind } from '../../constants';
+import { grenade, palette, sandbag } from '../../constants';
 import type { SandbagMark } from '../../data/wave';
 import { sandbagBreakKey, sandbagIdleKey } from '../../fenceSheet';
 import { fieldScale, fitScale, type FrameLayout } from '../../layout';
@@ -27,18 +27,18 @@ type Pile = {
 /**
  * Мешки на дороге. Стену у ног не закрывают.
  * Середина ряда стоит там, где была нарисованная куча.
- * Разрушение роняет один дроп.
+ * Разрушение берёт один бонус из списка картинки.
  */
 export class Sandbags {
   private readonly piles: Pile[];
   private view: FrameLayout | null = null;
-  private readonly onBreak: (drop: DropKind, score: number, rx: number, ry: number) => void;
+  private readonly onBreak: (score: number, rx: number, ry: number) => void;
 
   constructor(
     scene: Phaser.Scene,
     marks: readonly SandbagMark[],
     private readonly sparks: Sparks,
-    onBreak: (drop: DropKind, score: number, rx: number, ry: number) => void,
+    onBreak: (score: number, rx: number, ry: number) => void,
   ) {
     this.onBreak = onBreak;
     this.piles = marks.map((mark) => ({
@@ -130,7 +130,7 @@ export class Sandbags {
     const field = view?.field;
     const rx = field ? (sx - field.x) / Math.max(1, field.width) : pile.mark.x;
     const ry = field ? (sy - field.y) / Math.max(1, field.height) : pile.mark.y;
-    this.onBreak(pile.mark.drop, sandbag.score, rx, ry);
+    this.onBreak(sandbag.score, rx, ry);
     pile.sprite.play(sandbagBreakKey());
     pile.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       pile.gone = true;

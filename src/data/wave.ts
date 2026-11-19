@@ -1,4 +1,4 @@
-import { truck, type DropKind, type PropKind } from '../constants';
+import { truck, type PropKind } from '../constants';
 
 export type EnemyKind = 'green' | 'tank' | 'wheel' | 'truck';
 
@@ -37,11 +37,10 @@ export type PropMark = {
   /** Доля поля, как у точки волны. */
   x: number;
   y: number;
-  drop: DropKind;
   /** Пиксели до масштаба глубины. Нет — размер вида. */
   w?: number;
   h?: number;
-  /** Очки в момент разрушения. Нет — номинал вида. */
+  /** Очки в момент разрушения. Нет — номинал вида. Бонус берётся из списка картинки. */
   score?: number;
 };
 
@@ -67,18 +66,16 @@ export type ShortMark = {
   span: number;
   /** Секций листа встык. Две — минимум вдвое длиннее одной. */
   sections: number;
-  drop: DropKind;
 };
 
 /**
  * Мешки на дороге. Середина ряда — доля поля.
- * Стену у ног не закрывает. Разрушение роняет один дроп.
+ * Стену у ног не закрывает. Разрушение берёт один бонус из списка картинки.
  */
 export type SandbagMark = {
   x: number;
   /** 0 дальний край, 1 у дорожки. Середина мешков. */
   y: number;
-  drop: DropKind;
 };
 
 /** Грузовик держит на полоске ещё и тех, кого высадит. */

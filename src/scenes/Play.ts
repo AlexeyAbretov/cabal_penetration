@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { afterPicture, marchFrom, marchPicture, type March } from '../campaign/march';
-import type { Picture } from '../campaign/picture';
+import { breakableCount, type Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat';
 import { bonus, grenade, grenadeBoom, grenadeFly, grenadeThrow, gunFire, hitFlash, hud as hudNumbers, palette, pickup, star, weapons, type DropKind } from '../constants';
 import { waveQuota, type FenceKind, type FenceMark } from '../data/wave';
@@ -16,7 +16,7 @@ import {
 } from '../fenceSheet';
 import { Aim } from './play/aim';
 import { Controls } from './play/input';
-import { Drops } from './play/drops';
+import { DropBag, Drops } from './play/drops';
 import { Enemies } from './play/enemies';
 import { Fences } from './play/fences';
 import { Grenades } from './play/grenades';
@@ -114,9 +114,10 @@ export class Play extends Phaser.Scene {
     this.grenades.setStock(this.march.grenades);
     this.hud.setGrenades(this.grenades.count());
     this.drops = new Drops(this, this.sparks, (kind) => this.takeDrop(kind));
-    const scatter = (drop: DropKind, score: number, rx: number, ry: number): void => {
+    const bag = new DropBag(this.picture.drops, breakableCount(this.picture), this.picture.id);
+    const scatter = (score: number, rx: number, ry: number): void => {
       this.hud.addScore(score);
-      this.drops.spawn(drop, rx, ry);
+      this.drops.spawn(bag.take(), rx, ry);
     };
     this.props = new Props(this, this.picture.props, this.sparks, scatter);
     if (this.picture.shorts.length > 0) registerShortFenceAnim(this);

@@ -19,6 +19,37 @@ type Body = {
   h: number;
 };
 
+/**
+ * Мешок бонусов картинки. Ломается объект — берётся один случайный, без возврата.
+ * Лишние записи остаются в мешке и на дорожку не падают.
+ */
+export class DropBag {
+  private readonly left: DropKind[];
+
+  constructor(kinds: readonly DropKind[], need: number, id: string) {
+    if (kinds.length < need) {
+      throw new Error(`картинка ${id}: бонусов ${kinds.length}, разрушаемых объектов ${need}`);
+    }
+    this.left = shuffle([...kinds]);
+  }
+
+  take(): DropKind {
+    const kind = this.left.pop();
+    if (kind === undefined) throw new Error('бонусы кончились раньше разрушаемых объектов');
+    return kind;
+  }
+}
+
+function shuffle<T>(items: T[]): T[] {
+  for (let i = items.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const swap = items[i];
+    items[i] = items[j];
+    items[j] = swap;
+  }
+  return items;
+}
+
 /** Дроп падает твином на дорожку и берётся телом. В воздухе его не подбирают. */
 export class Drops {
   private items: Item[] = [];

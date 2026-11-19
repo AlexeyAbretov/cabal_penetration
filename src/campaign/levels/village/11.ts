@@ -1,3 +1,4 @@
+import type { DropKind } from '../../../constants';
 import type { FenceMark, HouseMark, PropMark, SandbagMark, ShortMark, WaveGroup } from '../../../data/wave';
 import type { Picture } from '../../picture';
 
@@ -36,29 +37,25 @@ export const combatWave: readonly WaveGroup[] = [
 /**
  * Кусты на траве, ниже домов и не на дороге.
  * Большой левый выше штакетника: голые ветки на досках не читаются.
- * Он роняет пачку, правый большой — частый ствол.
- * Два маленьких по краям газона роняют табличку: 500, когда солдат наступает.
+ * Маленькие по краям газона сами очков не дают. Бонус берётся из списка картинки.
  */
 const props: readonly PropMark[] = [
-  { kind: 'bush', x: 0.2, y: 0.42, drop: 'grenades' },
-  { kind: 'bush', x: 0.74, y: 0.62, drop: 'rapid' },
-  { kind: 'bush', x: 0.05, y: 0.42, w: 40, h: 32, drop: 'bonus', score: 0 },
-  { kind: 'bush', x: 0.9, y: 0.44, w: 36, h: 30, drop: 'bonus', score: 0 },
+  { kind: 'bush', x: 0.2, y: 0.42 },
+  { kind: 'bush', x: 0.74, y: 0.62 },
+  { kind: 'bush', x: 0.05, y: 0.42, w: 40, h: 32, score: 0 },
+  { kind: 'bush', x: 0.9, y: 0.44, w: 36, h: 30, score: 0 },
 ];
 
 /**
  * Короткий кирпич справа на газоне.
  * Правый край на 20 пикселей правее прежней кладки: от 0.78 на 78 пикселей,
  * низ на 60 пикселей от низа поля. Две секции встык — минимум вдвое длиннее одного листа,
- * лишняя длина уходит влево, к кусту. Разрушение роняет широкий ствол.
+ * лишняя длина уходит влево, к кусту.
  */
-const shorts: readonly ShortMark[] = [{ x: 0.78, span: 78, sections: 2, drop: 'spread' }];
+const shorts: readonly ShortMark[] = [{ x: 0.78, span: 78, sections: 2 }];
 
-/**
- * Мешки посреди дороги, на месте прежней кучи.
- * Разрушение роняет звезду: 2000, когда солдат наступает.
- */
-const sandbags: readonly SandbagMark[] = [{ x: 0.5, y: 0.52, drop: 'star' }];
+/** Мешки посреди дороги, на месте прежней кучи. */
+const sandbags: readonly SandbagMark[] = [{ x: 0.5, y: 0.52 }];
 
 /**
  * Изба слева, сарай справа от дороги, розовый дом ближе справа.
@@ -69,6 +66,14 @@ const houses: readonly HouseMark[] = [
   { kind: 'shed', x: 0.65, y: 0.07, w: 92, h: 74 },
   { kind: 'manor', x: 0.78, y: 0.23, w: 164, h: 140 },
 ];
+
+/**
+ * Бонусы кустов, короткого кирпича и мешков. Забор перед солдатом не роняет.
+ * Записей не меньше, чем этих объектов: шесть. Каждый забирает одну случайную.
+ * Пачка, частый ствол, две таблички по 500, широкий ствол, звезда 2000.
+ * Бонусы врагов сюда не писать.
+ */
+const drops: readonly DropKind[] = ['grenades', 'rapid', 'bonus', 'bonus', 'spread', 'star'];
 
 /** false — дыра: пуля этой колонки доходит до тела. */
 const wall = [true, true, true, false, true, true, true, true] as const;
@@ -91,5 +96,6 @@ export const picture: Picture = {
   fences,
   shorts,
   sandbags,
+  drops,
   wave: [],
 };

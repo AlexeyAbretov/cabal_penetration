@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { centerBox, circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
-import { grenade, palette, scenery, type DropKind, type PropKind } from '../../constants';
+import { grenade, palette, scenery, type PropKind } from '../../constants';
 import type { PropMark } from '../../data/wave';
 import { fieldScale, fitScale, wallTopY, type FrameLayout } from '../../layout';
 import { blit, ensureCanvas } from './blit';
@@ -9,7 +9,6 @@ import type { Sparks } from './sparks';
 
 type Prop = {
   kind: PropKind;
-  drop: DropKind;
   rx: number;
   ry: number;
   hp: number;
@@ -32,7 +31,7 @@ type Prop = {
 
 /**
  * Куст и ящик. Хитбокс не сжимается со стадией: лист встанет в тот же прямоугольник.
- * Разрушение роняет один дроп. Граната сносит куст и тоже роняет. Ящик она только колет.
+ * Разрушение берёт один бонус из списка картинки. Граната сносит куст и тоже роняет. Ящик она только колет.
  */
 export class Props {
   private props: Prop[];
@@ -40,13 +39,13 @@ export class Props {
   private readonly scene: Phaser.Scene;
   private readonly gfx: Phaser.GameObjects.Graphics;
   private readonly sparks: Sparks;
-  private readonly onBreak: (drop: DropKind, score: number, rx: number, ry: number) => void;
+  private readonly onBreak: (score: number, rx: number, ry: number) => void;
 
   constructor(
     scene: Phaser.Scene,
     marks: readonly PropMark[],
     sparks: Sparks,
-    onBreak: (drop: DropKind, score: number, rx: number, ry: number) => void,
+    onBreak: (score: number, rx: number, ry: number) => void,
   ) {
     this.scene = scene;
     this.sparks = sparks;
@@ -60,7 +59,6 @@ export class Props {
           : null;
       return {
         kind: mark.kind,
-        drop: mark.drop,
         rx: mark.x,
         ry: mark.y,
         hp: spec.hp,
@@ -168,7 +166,7 @@ export class Props {
     const field = view?.field;
     const rx = field ? (prop.x - field.x) / Math.max(1, field.width) : prop.rx;
     const ry = field ? (prop.y - field.y) / Math.max(1, field.height) : prop.ry;
-    this.onBreak(prop.drop, prop.score, rx, ry);
+    this.onBreak(prop.score, rx, ry);
   }
 
   private bury(): void {
