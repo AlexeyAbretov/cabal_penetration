@@ -7,7 +7,7 @@ import { bonus, grenade, grenadeBoom, grenadeFly, grenadeThrow, gunFire, hitFlas
 import type { FenceKind, FenceMark } from '../types/fence';
 import { waveQuota } from '../wave';
 import { loadExplosion } from '../explosionSheet';
-import { frameLayout, type FrameLayout } from '../layout';
+import { aimBounds, frameLayout, type FrameLayout } from '../layout';
 import {
   loadFenceSheets,
   loadSandbag,
@@ -234,7 +234,7 @@ export class Play extends Phaser.Scene {
       this.gun.quiet();
       this.aim.step(Math.min(delta, 50));
       const pointer = this.controls.pointer;
-      if (pointer) this.aim.aimAt(pointer.x, pointer.y, this.view.field);
+      if (pointer) this.aim.aimAt(pointer.x, pointer.y, aimBounds(this.view));
       this.stepClear(Math.min(delta, 50));
       this.drawBattle();
       return;
@@ -244,7 +244,7 @@ export class Play extends Phaser.Scene {
     const pointer = this.controls.pointer;
     const step = Math.min(delta, 50);
     this.aim.step(step);
-    if (pointer) this.aim.aimAt(pointer.x, pointer.y, this.view.field);
+    if (pointer) this.aim.aimAt(pointer.x, pointer.y, aimBounds(this.view));
     if (input.grenadePressed) this.throwGrenade();
     if (this.soldier.tryRoll(input)) this.gun.interrupt(input.firing);
     if (this.soldier.rolling) this.soldier.advanceRoll(step);
@@ -310,7 +310,7 @@ export class Play extends Phaser.Scene {
     if (!this.view || this.paused || this.cleared || this.down) return;
     const pointer = this.controls.pointer;
     if (!pointer) return;
-    this.aim.aimAt(pointer.x, pointer.y, this.view.field);
+    this.aim.aimAt(pointer.x, pointer.y, aimBounds(this.view));
     this.throwGrenade();
   }
 
@@ -334,10 +334,10 @@ export class Play extends Phaser.Scene {
     this.placeSoldier();
     const pointer = this.controls.pointer;
     if (pointer) {
-      this.aim.aimAt(pointer.x, pointer.y, this.view.field);
+      this.aim.aimAt(pointer.x, pointer.y, aimBounds(this.view));
     } else {
       const field = this.view.field;
-      this.aim.aimAt(field.x + field.width / 2, field.y + field.height / 2, field);
+      this.aim.aimAt(field.x + field.width / 2, field.y + field.height / 2, aimBounds(this.view));
     }
     this.hud.draw(this.view, width, height);
     this.drawBattle();

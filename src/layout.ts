@@ -108,7 +108,20 @@ export function soldierBodyY(track: Rect): number {
   return soldierFeetY(track) - Math.round(soldierBox.height / 2);
 }
 
-/** Точка прицела остаётся внутри поля, включая кромку. */
+/**
+ * Небо и поле. Горы стоят в небе, их подошва — верх поля.
+ * Дорожка и рамка HUD снаружи: выстрел туда не уходит.
+ */
+export function aimBounds(layout: FrameLayout): Rect {
+  return {
+    x: layout.sky.x,
+    y: layout.sky.y,
+    width: layout.sky.width,
+    height: layout.sky.height + layout.field.height,
+  };
+}
+
+/** Точка остаётся внутри прямоугольника, включая кромку. */
 export function clampToRect(x: number, y: number, rect: Rect): { x: number; y: number } {
   const maxX = rect.x + Math.max(0, rect.width - 1);
   const maxY = rect.y + Math.max(0, rect.height - 1);
