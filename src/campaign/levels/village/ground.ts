@@ -4,7 +4,7 @@ import { belowHorizon, fitScale, type Rect } from '../../../layout';
 import type { HouseMark } from '../../../types/house';
 import type { RailLayout, RailPost } from '../../../types/rail';
 import { hash, Pix, stamp } from '../../../scenes/play/pix';
-import { branch, deadTree, dirtTone, fillSky, grassTone, paintMountains, roadEdges, sow } from './earth';
+import { deadTree, dirtTone, fillSky, grassTone, liveTree, paintMountains, roadEdges, sow } from './earth';
 
 /**
  * Земля деревни, картинка 1-1. Не рип.
@@ -29,8 +29,9 @@ function paintBackdrop(houses: readonly HouseMark[], w: number, skyH: number, fi
   const field: Rect = { x: 0, y: 0, width: w, height: fieldH };
   const fit = fitScale(field);
   const ground = (fraction: number) => skyH + Math.round(belowHorizon(fraction, field));
-  tree(pix, Math.round(w * 0.32), ground(0.29), Math.round(118 * fit));
+  // Дальнее раньше ближнего: общая крона не закрывает ближний ствол.
   deadTree(pix, Math.round(w * 0.44), ground(0.13), Math.round(96 * fit));
+  liveTree(pix, Math.round(w * 0.32), ground(0.29), Math.round(118 * fit));
   return pix;
 }
 
@@ -139,60 +140,6 @@ function railLayout(w: number, h: number): RailLayout {
     right.push({ x: Math.round(edges.right + 2), y, ph, w: postW });
   }
   return { left, right, fit };
-}
-
-function tree(pix: Pix, x: number, ground: number, height: number): void {
-  if (height < 24) return;
-  const trunkH = Math.round(height * 0.46);
-  const trunkW = Math.max(4, Math.round(height * 0.09));
-  const top = ground - trunkH;
-  pix.fill(x - Math.floor(trunkW / 2), top, trunkW, trunkH, palette.bark);
-  for (let i = 0; i < trunkH; i += 3) {
-    pix.px(x - Math.floor(trunkW / 2) + (i % 2), top + i, palette.barkDark);
-    pix.px(x + Math.floor(trunkW / 2) - 1, top + i + 1, palette.barkLite);
-  }
-  pix.fill(x - trunkW, ground - 3, Math.round(trunkW * 0.8), 3, palette.barkDark);
-  pix.fill(x + 1, ground - 2, Math.round(trunkW * 0.9), 2, palette.barkDark);
-  const crown = ground - Math.round(height * 0.78);
-  branch(pix, x, top + 4, x - Math.round(height * 0.22), crown + Math.round(height * 0.18));
-  branch(pix, x, top + 2, x + Math.round(height * 0.24), crown + Math.round(height * 0.12));
-  branch(pix, x, top + 8, x + Math.round(height * 0.04), crown);
-  const clusters: [number, number, number][] = [
-    [0, -0.9, 0.2],
-    [-0.22, -0.78, 0.24],
-    [0.24, -0.74, 0.22],
-    [-0.34, -0.58, 0.2],
-    [0.36, -0.54, 0.26],
-    [0, -0.6, 0.28],
-    [-0.12, -0.42, 0.18],
-    [0.16, -0.4, 0.16],
-  ];
-  for (const [fx, fy, r] of clusters) {
-    const cx = x + Math.round(fx * height);
-    const cy = ground + Math.round(fy * height);
-    const radius = Math.round(r * height);
-    canopy(pix, cx, cy, radius, radius * 0.85, fy < -0.7);
-  }
-}
-
-function canopy(pix: Pix, cx: number, cy: number, rx: number, ry: number, high: boolean): void {
-  if (rx < 2 || ry < 2) return;
-  const rx2 = rx * rx;
-  const ry2 = ry * ry;
-  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y += 1) {
-    for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x += 1) {
-      const dx = x + 0.5 - cx;
-      const dy = y + 0.5 - cy;
-      const e = (dx * dx) / rx2 + (dy * dy) / ry2;
-      if (e > 1) continue;
-      if (hash(x, y) % 6 === 0) continue;
-      let color: number = palette.leaf;
-      if (high && dx < 0 && dy < 0) color = palette.leafLite;
-      else if (e > 0.75 || dy > 0) color = hash(x, y) % 2 === 0 ? palette.leafDark : palette.leaf;
-      else if (hash(x, y) % 4 === 0) color = palette.leafLite;
-      pix.px(x, y, color);
-    }
-  }
 }
 
 function kiln(pix: Pix, cx: number, ground: number, r: number): void {

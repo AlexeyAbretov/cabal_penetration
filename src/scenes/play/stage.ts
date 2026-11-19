@@ -5,6 +5,7 @@ import type { FrameLayout, Rect } from '../../layout';
 import type { RailLayout } from '../../types/rail';
 import { blit, ensureCanvas } from './blit';
 import type { Pix } from './pix';
+import { captureTreeWood } from './treeWood';
 
 /**
  * Полосы кадра снизу вверх по глубине: небо, поле, дорожка, рамка.
@@ -55,6 +56,7 @@ export class Stage {
 
   private paintGround(view: FrameLayout, ground: Ground): void {
     this.flat.clear();
+    captureTreeWood(this.scene);
     const backdrop = ground.backdrop(view.sky.width, view.sky.height, view.field.height);
     put(this.scene, this.skyImage, 'band-sky', backdrop, {
       x: 0,

@@ -16,6 +16,7 @@ import {
   registerSandbagAnim,
   registerShortFenceAnim,
 } from '../fenceSheet';
+import { treeWoodAsset } from './play/treeWood';
 import { Aim } from './play/aim';
 import { Barrels } from './play/barrels';
 import { Controls } from './play/input';
@@ -81,6 +82,7 @@ export class Play extends Phaser.Scene {
   }
 
   preload(): void {
+    if (!this.textures.exists(treeWoodAsset.key)) this.load.image(treeWoodAsset.key, treeWoodAsset.url);
     if (!this.textures.exists(hudIcons.heart)) this.load.image(hudIcons.heart, hudIcons.heartUrl);
     if (!this.textures.exists(hudIcons.grenade)) this.load.image(hudIcons.grenade, hudIcons.grenadeUrl);
     if (!this.textures.exists(grenadeFly.key)) this.load.image(grenadeFly.key, grenadeFly.url);

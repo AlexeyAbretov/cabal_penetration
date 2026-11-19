@@ -1,6 +1,7 @@
 import { palette } from '../../../constants';
 import { sceneDepth } from '../../../layout';
 import { disc, hash, lerpColor, Pix } from '../../../scenes/play/pix';
+import { placeTreeWood, stampTreeWood, treeWoodGrid, type TreeWoodGrid } from '../../../scenes/play/treeWood';
 
 /**
  * Общая земля деревни. 1-1 и 1-2 берут одно небо и одну гряду:
@@ -86,25 +87,135 @@ export function sow(
   }
 }
 
-export function deadTree(pix: Pix, x: number, ground: number, height: number): void {
-  if (height < 20) return;
-  const trunkW = Math.max(3, Math.round(height * 0.07));
-  pix.fill(x, ground - height, trunkW, height, palette.barkDark);
-  pix.fill(x, ground - height, 1, height, palette.bark);
-  branch(pix, x + 1, ground - Math.round(height * 0.78), x - Math.round(height * 0.28), ground - height);
-  branch(pix, x + 1, ground - Math.round(height * 0.62), x + Math.round(height * 0.32), ground - Math.round(height * 0.9));
-  branch(pix, x + 1, ground - Math.round(height * 0.48), x + Math.round(height * 0.18), ground - Math.round(height * 0.7));
-  branch(pix, x - Math.round(height * 0.12), ground - Math.round(height * 0.92), x - Math.round(height * 0.22), ground - Math.round(height * 0.8));
+/**
+ * Каркас дерева: лист PixelLab, подошва на земле.
+ * Сухое дерево рисует только его. У живого листва лежит поверх кроны, часть веток видна.
+ */
+export function treeWood(pix: Pix, x: number, ground: number, height: number): void {
+  placeTreeWood(pix, x, ground, height);
 }
 
-export function branch(pix: Pix, x0: number, y0: number, x1: number, y1: number): void {
-  const steps = Math.max(1, Math.abs(x1 - x0) + Math.abs(y1 - y0));
-  for (let i = 0; i <= steps; i += 1) {
-    const t = i / steps;
-    const x = Math.round(x0 + (x1 - x0) * t);
-    const y = Math.round(y0 + (y1 - y0) * t);
-    pix.px(x, y, palette.bark);
-    pix.px(x + 1, y, palette.barkDark);
+/** Сухое дерево. Тот же каркас, без листвы. */
+export function deadTree(pix: Pix, x: number, ground: number, height: number): void {
+  if (height < 20) return;
+  treeWood(pix, x, ground, height);
+}
+
+/** Живое дерево. Каркас целиком, листва поверх кроны. Часть веток остаётся видна. */
+export function liveTree(pix: Pix, x: number, ground: number, height: number): void {
+  if (height < 20) return;
+  const grid = treeWoodGrid(height);
+  if (!grid) return;
+  stampTreeWood(pix, grid, x, ground);
+  crownLeaves(pix, x, ground, grid, trunkTop(grid.bark, grid.dw, grid.dh));
+}
+
+/**
+ * Крона — всё выше узкого ствола. Тонкая ветка получает ком листьев,
+ * кончик ещё шире, иначе листва читается обводкой.
+ * Ком закрывает кору почти сплошь, поэтому треть пикселей ветки кладётся обратно.
+ */
+function crownLeaves(pix: Pix, x: number, ground: number, grid: TreeWoodGrid, top: number): void {
+  const { dw, dh, bark, color } = grid;
+  const left = Math.round(x - dw / 2);
+  const y0 = Math.round(ground - dh);
+  const reach = Math.max(2, Math.round(dh * 0.048));
+  const tip = Math.max(reach + 1, Math.round(dh * 0.075));
+  for (let y = 0; y < top; y += 1) {
+    const row = y * dw;
+    for (let x0 = 0; x0 < dw; x0 += 1) {
+      if (!bark[row + x0]) continue;
+      const r = woodNeighbors(bark, dw, dh, x0, y) <= 2 ? tip : reach;
+      leafClump(pix, left + x0, y0 + y, r);
+    }
+  }
+  for (let y = 0; y < top; y += 1) {
+    const row = y * dw;
+    for (let x0 = 0; x0 < dw; x0 += 1) {
+      if (!bark[row + x0]) continue;
+      const px = left + x0;
+      const py = y0 + y;
+      if (hash(px >> 1, py) % 3 !== 0) continue;
+      pix.px(px, py, color[row + x0]!);
+    }
+  }
+}
+
+/** Первая строка, где несколько рядов подряд остаётся один узкий ствол. */
+function trunkTop(bark: Uint8Array, dw: number, dh: number): number {
+  let maxSpan = 1;
+  const span: number[] = [];
+  const runs: number[] = [];
+  for (let y = 0; y < dh; y += 1) {
+    let count = 0;
+    let width = 0;
+    let run = 0;
+    let on = false;
+    const row = y * dw;
+    for (let x = 0; x <= dw; x += 1) {
+      const bit = x < dw && bark[row + x] !== 0;
+      if (bit) {
+        if (!on) {
+          on = true;
+          count += 1;
+          run = 1;
+        } else {
+          run += 1;
+        }
+      } else if (on) {
+        if (run > width) width = run;
+        on = false;
+      }
+    }
+    if (width > maxSpan) maxSpan = width;
+    span.push(width);
+    runs.push(count);
+  }
+  const limit = maxSpan * 0.42;
+  let streak = 0;
+  let start = Math.floor(dh * 0.72);
+  for (let y = Math.floor(dh * 0.45); y < dh; y += 1) {
+    const narrow = runs[y] === 1 && span[y]! > 0 && span[y]! <= limit;
+    if (narrow) {
+      if (streak === 0) start = y;
+      streak += 1;
+      if (streak >= 4) return start;
+    } else {
+      streak = 0;
+    }
+  }
+  return Math.floor(dh * 0.72);
+}
+
+function woodNeighbors(bark: Uint8Array, dw: number, dh: number, x: number, y: number): number {
+  let n = 0;
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+      const xx = x + dx;
+      const yy = y + dy;
+      if (xx < 0 || yy < 0 || xx >= dw || yy >= dh) continue;
+      if (bark[yy * dw + xx]) n += 1;
+    }
+  }
+  return n;
+}
+
+/** Ком как у куста: свет сверху слева, тень снизу, редкие дырки. */
+function leafClump(pix: Pix, cx: number, cy: number, r: number): void {
+  const r2 = r * r;
+  for (let dy = -r; dy <= r; dy += 1) {
+    for (let dx = -r; dx <= r; dx += 1) {
+      if (dx * dx + dy * dy > r2) continue;
+      const x = cx + dx;
+      const y = cy + dy;
+      if (hash(x, y) % 11 === 0) continue;
+      const e = (dx * dx + dy * dy) / r2;
+      let color: number = palette.leaf;
+      if (dx < -r * 0.2 && dy < 0 && hash(x, y) % 3 !== 0) color = palette.leafLite;
+      else if (e > 0.7 || dy > r * 0.3) color = hash(x, y) % 2 === 0 ? palette.leafDark : palette.leaf;
+      pix.px(x, y, color);
+    }
   }
 }
 
