@@ -131,6 +131,10 @@ function paint(gfx: Phaser.GameObjects.Graphics, kind: DropKind, x: number, y: n
     paintPlaque(gfx, x, y, plaque500);
     return;
   }
+  if (kind === 'ton') {
+    paintPlaque(gfx, x, y, plaque100);
+    return;
+  }
   if (kind === 'medal') {
     paintPlaque(gfx, x, y, plaque1000);
     return;
@@ -167,6 +171,11 @@ function paint(gfx: Phaser.GameObjects.Graphics, kind: DropKind, x: number, y: n
 
 /** «500» и «1000». Клетка 3×5, точка 2 пикселя. */
 const plaque500 = ['###,#  ,###,  #,###', '###,# #,# #,# #,###', '###,# #,# #,# #,###'] as const;
+const plaque100 = [
+  '#  ,## , # , # ,###',
+  '###,# #,# #,# #,###',
+  '###,# #,# #,# #,###',
+] as const;
 const plaque1000 = [
   '#  ,## , # , # ,###',
   '###,# #,# #,# #,###',

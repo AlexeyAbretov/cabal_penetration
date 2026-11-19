@@ -3,7 +3,7 @@ import { afterPicture, marchFrom, marchPicture, type March } from '../campaign/m
 import { route } from '../campaign/route';
 import { bonusList, breakableCount, type Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat';
-import { bonus, grenade, grenadeBoom, grenadeFly, grenadeThrow, gunFire, hitFlash, hud as hudNumbers, medal, palette, pickup, star, weapons, type DropKind } from '../constants';
+import { bonus, grenade, grenadeBoom, grenadeFly, grenadeThrow, gunFire, hitFlash, hud as hudNumbers, medal, palette, pickup, star, ton, weapons, type DropKind } from '../constants';
 import type { FenceKind, FenceMark } from '../types/fence';
 import { waveQuota } from '../wave';
 import { loadExplosion } from '../explosionSheet';
@@ -520,6 +520,10 @@ export class Play extends Phaser.Scene {
     }
     if (kind === 'medal') {
       this.hud.addScore(medal.score);
+      return;
+    }
+    if (kind === 'ton') {
+      this.hud.addScore(ton.score);
       return;
     }
     this.gun.equip(kind);

@@ -325,7 +325,7 @@ export const pickup = {
   feet: 10,
 } as const;
 
-export type DropKind = 'grenades' | 'rapid' | 'spread' | 'star' | 'bonus' | 'medal';
+export type DropKind = 'grenades' | 'rapid' | 'spread' | 'star' | 'bonus' | 'medal' | 'ton';
 
 /** Звезда — отдельный номинал, не очки за сам объект. */
 export const star = {
@@ -340,6 +340,10 @@ export const bonus = {
 /** Табличка 1000. На 1-1 её роняет только блокпост, общий список картинки — нет. */
 export const medal = {
   score: 1000,
+} as const;
+
+export const ton = {
+  score: 100,
 } as const;
 
 /**

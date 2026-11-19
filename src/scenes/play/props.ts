@@ -32,6 +32,7 @@ type Prop = {
 /**
  * Куст и ящик. Хитбокс не сжимается со стадией: лист встанет в тот же прямоугольник.
  * Разрушение берёт один бонус из списка картинки. Граната сносит куст и тоже роняет. Ящик она только колет.
+ * С первой раны у куста на земле листья. После гибели куст пропадает, листья остаются.
  */
 export class Props {
   private props: Prop[];
@@ -122,7 +123,7 @@ export class Props {
   draw(): void {
     const gfx = this.gfx;
     gfx.clear();
-    const ordered = this.props.filter((prop) => prop.alive).sort((a, b) => a.y - b.y);
+    const ordered = this.props.filter((prop) => prop.alive || prop.kind === 'bush').sort((a, b) => a.y - b.y);
     for (const prop of ordered) {
       if (prop.kind === 'bush') this.drawBush(prop);
       else this.drawCrate(gfx, prop);
@@ -135,7 +136,7 @@ export class Props {
     const field = view.field;
     const ceiling = wallTopY(view.track);
     for (const prop of this.props) {
-      if (!prop.alive) continue;
+      if (!prop.alive && prop.kind !== 'bush') continue;
       let y = field.y + prop.ry * field.height;
       let scale = fieldScale(y, field) * fitScale(field);
       let h = prop.baseH * scale;
@@ -169,13 +170,14 @@ export class Props {
     this.onBreak(prop.score, rx, ry);
   }
 
+  /** Ящик убирается. Куст остаётся: на его месте уже лежат листья. */
   private bury(): void {
     for (const prop of this.props) {
-      if (prop.alive || !prop.sprite) continue;
+      if (prop.alive || prop.kind === 'bush' || !prop.sprite) continue;
       prop.sprite.destroy();
       prop.sprite = null;
     }
-    this.props = this.props.filter((prop) => prop.alive);
+    this.props = this.props.filter((prop) => prop.alive || prop.kind === 'bush');
   }
 
   private drawBush(prop: Prop): void {
@@ -183,7 +185,7 @@ export class Props {
     if (!sprite) return;
     const w = Math.max(8, Math.round(prop.w));
     const h = Math.max(8, Math.round(prop.h));
-    const stage = stageOf(prop.kind, prop.hp);
+    const stage = prop.alive ? stageOf(prop.kind, prop.hp) : 3;
     const flash = prop.flash > 0;
     if (w !== prop.paintedW || h !== prop.paintedH || stage !== prop.paintedStage || flash !== prop.paintedFlash) {
       blit(this.scene, prop.key, paintBush(w, h, stage, flash));

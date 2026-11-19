@@ -1,7 +1,8 @@
 When generating a Git commit message for this repository, read the whole staged diff. Do not stop after the largest theme. The size of a `package-lock.json` diff does not decide the theme.
 
 - First line: the main behavior, asset, or tooling change, imperative mood, no trailing period. That line does not mention a version bump, a version number, or `package.json`.
-- Name a version-field edit in `package.json` or `package-lock.json` once in the body, after the other changes, as one short sentence. Use the bump as the first line only when the staged diff contains nothing else.
+- Mention a version edit only when the staged diff changes the `version` field in `package.json` or `package-lock.json`. If that field is unchanged, omit any version sentence, version number, and the word bump.
+- When the `version` field did change, name that edit once in the body, after the other changes, as one short sentence. Use the bump as the first line only when the staged diff contains nothing else.
 - Blank line, then the body.
 - The body names every other distinct change: behavior, assets, config, scripts, and docs. One short sentence each.
 - Files that serve one change stay in one sentence. A file that does something else gets its own sentence.
