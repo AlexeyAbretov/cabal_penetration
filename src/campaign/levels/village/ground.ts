@@ -3,8 +3,9 @@ import type { Ground } from '../../ground';
 import { belowHorizon, fitScale, type Rect } from '../../../layout';
 import type { HouseMark } from '../../../types/house';
 import type { RailLayout, RailPost } from '../../../types/rail';
+import { doorPath } from '../../../scenes/play/buildings';
 import { hash, Pix, stamp } from '../../../scenes/play/pix';
-import { deadTree, dirtTone, fillSky, grassTone, liveTree, paintMountains, roadEdges, sow } from './earth';
+import { deadTree, dirtTone, fillSky, grassTone, liveTree, paintMountains, roadEdges, sow, yard } from './earth';
 
 /**
  * Земля деревни, картинка 1-1. Не рип.
@@ -75,8 +76,8 @@ function paintField(houses: readonly HouseMark[], w: number, h: number): Pix {
   const fit = fitScale(field);
   sow(pix, dirt, w, h, fit);
   for (const house of houses) {
-    const pad = house.kind === 'shed' ? 10 : 16;
-    yard(pix, house.x * w, belowHorizon(house.y, field) + 2, pad * fit, 7 * fit);
+    const path = doorPath(house.kind, house.x, house.w, house.h, house.y, field);
+    if (path) yard(pix, path.cx, path.cy, path.rx, path.ry);
   }
   kiln(pix, Math.round(w * 0.95), Math.round(h * 0.5), Math.round(30 * fit));
   crops(pix, Math.round(w * 0.03), Math.round(h * 0.58), fit);
@@ -104,21 +105,6 @@ function groundAt(x: number, y: number, field: Rect, track: Rect): { tone: numbe
   const edges = roadEdges(gy, field.width, field.height);
   const dirt = tx >= edges.left && tx <= edges.right;
   return { tone: dirt ? dirtTone(tx, gy, edges) : grassTone(tx, gy), dirt };
-}
-
-function yard(pix: Pix, cx: number, cy: number, rx: number, ry: number): void {
-  if (rx < 2) return;
-  const rx2 = rx * rx;
-  const ry2 = ry * ry;
-  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y += 1) {
-    for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x += 1) {
-      const dx = x + 0.5 - cx;
-      const dy = y + 0.5 - cy;
-      if ((dx * dx) / rx2 + (dy * dy) / ry2 > 1) continue;
-      const n = hash(x, y);
-      pix.px(x, y, n % 5 === 0 ? palette.dirtLite : n % 4 === 0 ? palette.dirtDark : palette.dirt);
-    }
-  }
 }
 
 /**

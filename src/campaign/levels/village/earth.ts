@@ -379,6 +379,60 @@ function paintNear(pix: Pix, x: number, skyH: number, h: number): void {
   }
 }
 
+/**
+ * Вытоптанное пятно у двери. Не овал: сектора разной длины,
+ * у края пиксельный разрыв, несколько выемок и торчащих клочьев.
+ * Контур зависит от места, поэтому соседние дворы не повторяются.
+ */
+export function yard(pix: Pix, cx: number, cy: number, rx: number, ry: number): void {
+  if (rx < 2 || ry < 1) return;
+  const sx = Math.round(cx);
+  const sy = Math.round(cy);
+  const sectors = 9;
+  const reach: number[] = [];
+  for (let i = 0; i < sectors; i += 1) {
+    const n = hash(sx + i * 5, sy - i * 3);
+    reach.push(0.48 + (n % 80) / 100);
+  }
+  const bites: { x: number; y: number; r2: number }[] = [];
+  const biteCount = 2 + (hash(sx, sy) % 3);
+  for (let i = 0; i < biteCount; i += 1) {
+    const n = hash(sx + 17 + i * 4, sy + 9 + i);
+    const ang = ((n % 360) * Math.PI) / 180;
+    const along = 0.62 + ((n >>> 9) % 30) / 100;
+    const rad = Math.max(1.6, Math.min(rx, ry) * (0.16 + ((n >>> 18) % 16) / 100));
+    bites.push({ x: Math.cos(ang) * rx * along, y: Math.sin(ang) * ry * along, r2: rad * rad });
+  }
+  const pad = Math.ceil(Math.max(rx, ry) * 0.5);
+  for (let y = Math.floor(cy - ry - pad); y <= Math.ceil(cy + ry + pad); y += 1) {
+    for (let x = Math.floor(cx - rx - pad); x <= Math.ceil(cx + rx + pad); x += 1) {
+      const dx = x + 0.5 - cx;
+      const dy = y + 0.5 - cy;
+      const dist = Math.hypot(dx / rx, dy / ry);
+      if (dist > 1.55) continue;
+      const ang = Math.atan2(dy / ry, dx / rx);
+      const sector = Math.floor((((ang + Math.PI) / (Math.PI * 2)) * sectors) % sectors);
+      const n = hash(x, y);
+      const tear = ((n % 11) - 5) * 0.08;
+      const edge = reach[sector] ?? 1;
+      const speck = dist > edge + tear && dist < edge + 0.42 && n % 5 === 0;
+      if (dist > edge + tear && !speck) continue;
+      let bitten = false;
+      for (const bite of bites) {
+        const bx = dx - bite.x;
+        const by = dy - bite.y;
+        if (bx * bx + by * by < bite.r2) {
+          bitten = true;
+          break;
+        }
+      }
+      if (bitten) continue;
+      if (dist > 0.4 && n % 19 === 0) continue;
+      pix.px(x, y, n % 5 === 0 ? palette.dirtLite : n % 4 === 0 ? palette.dirtDark : palette.dirt);
+    }
+  }
+}
+
 function greenSpeck(n: number): number {
   const k = n % 5;
   if (k === 0) return palette.grassDark;

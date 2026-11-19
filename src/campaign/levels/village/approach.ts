@@ -2,8 +2,9 @@ import { palette } from '../../../constants';
 import type { Ground } from '../../ground';
 import { belowHorizon, fitScale, sceneDepth, type Rect } from '../../../layout';
 import type { HouseMark } from '../../../types/house';
+import { doorPath } from '../../../scenes/play/buildings';
 import { disc, hash, Pix, stamp } from '../../../scenes/play/pix';
-import { deadTree, dirtTone, fillSky, grassTone, paintMountains, sow } from './earth';
+import { deadTree, dirtTone, fillSky, grassTone, paintMountains, sow, yard } from './earth';
 
 /**
  * Земля 1-2. Дорога уже, чем в деревне: по бокам кирпич.
@@ -68,8 +69,12 @@ function paintField(houses: readonly HouseMark[], w: number, h: number): Pix {
   const fit = fitScale(field);
   sow(pix, dirt, w, h, fit, (y, width, height) => approachEdges(y, width, height));
   for (const house of houses) {
-    const pad = house.kind === 'gate' ? 6 : 14;
-    yard(pix, house.x * w, belowHorizon(house.y, field) + 2, pad * fit, 6 * fit);
+    const path = doorPath(house.kind, house.x, house.w, house.h, house.y, field);
+    if (path) yard(pix, path.cx, path.cy, path.rx, path.ry);
+    else if (house.kind === 'gate' || house.kind === 'ruin') {
+      const pad = house.kind === 'gate' ? 6 : 14;
+      yard(pix, house.x * w, belowHorizon(house.y, field) + 2, pad * fit, 6 * fit);
+    }
   }
   stairs(pix, w, h, field, fit);
   cairn(pix, Math.round(w * 0.7), Math.round(belowHorizon(0.4, field)), Math.round(16 * fit));
@@ -237,17 +242,3 @@ function brickBank(pix: Pix, x0: number, x1: number, ground: number, height: num
   }
 }
 
-function yard(pix: Pix, cx: number, cy: number, rx: number, ry: number): void {
-  if (rx < 2) return;
-  const rx2 = rx * rx;
-  const ry2 = ry * ry;
-  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y += 1) {
-    for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x += 1) {
-      const dx = x + 0.5 - cx;
-      const dy = y + 0.5 - cy;
-      if ((dx * dx) / rx2 + (dy * dy) / ry2 > 1) continue;
-      const n = hash(x, y);
-      pix.px(x, y, n % 5 === 0 ? palette.dirtLite : n % 4 === 0 ? palette.dirtDark : palette.dirt);
-    }
-  }
-}

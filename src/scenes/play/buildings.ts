@@ -30,7 +30,7 @@ function cottage(pix: Pix): void {
   const h = pix.h;
   const roofTop = 2;
   const roofBot = Math.round(h * 0.4);
-  const found = Math.round(h * 0.78);
+  const found = foundation('cottage', h);
   gable(pix, roofTop, roofBot, true);
   const wallX = Math.round(w * 0.06);
   const wallW = w - wallX * 2;
@@ -41,9 +41,8 @@ function cottage(pix: Pix): void {
   const winH = Math.round(h * 0.2);
   windowFrame(pix, wallX + Math.round(wallW * 0.1), roofBot + Math.round(h * 0.06), winW, winH);
   flowerBox(pix, wallX + Math.round(wallW * 0.08), roofBot + Math.round(h * 0.06) + winH + 2, winW + 4);
-  const doorW = Math.max(8, Math.round(w * 0.16));
-  const doorH = Math.max(12, found - (roofBot + Math.round(h * 0.08)));
-  door(pix, wallX + Math.round(wallW * 0.62), found - doorH, doorW, doorH);
+  const laid = planDoor('cottage', w, h);
+  if (laid) entrance(pix, laid);
 }
 
 function manor(pix: Pix): void {
@@ -52,7 +51,7 @@ function manor(pix: Pix): void {
   const roofTop = 2;
   const roofBot = Math.round(h * 0.3);
   const floorY = Math.round(h * 0.56);
-  const found = Math.round(h * 0.84);
+  const found = foundation('manor', h);
   gable(pix, roofTop, roofBot, false);
   const wallX = Math.round(w * 0.05);
   const wallW = w - wallX * 2;
@@ -69,16 +68,15 @@ function manor(pix: Pix): void {
   const lowerH = Math.max(8, Math.round((found - floorY) * 0.5));
   const lowerY = floorY + Math.round((found - floorY) * 0.16);
   windowFrame(pix, wallX + Math.round(wallW * 0.12), lowerY, winW, lowerH);
-  const doorW = Math.max(8, Math.round(w * 0.15));
-  const doorH = Math.max(12, found - (floorY + 4));
-  door(pix, wallX + Math.round(wallW * 0.58), found - doorH, doorW, doorH);
+  const laid = planDoor('manor', w, h);
+  if (laid) entrance(pix, laid);
 }
 
 function shed(pix: Pix): void {
   const w = pix.w;
   const h = pix.h;
   const roofBot = Math.round(h * 0.38);
-  const found = Math.round(h * 0.8);
+  const found = foundation('shed', h);
   shedRoof(pix, 3, Math.round(h * 0.16), roofBot);
   const wallX = Math.round(w * 0.08);
   const wallW = w - wallX * 2;
@@ -87,9 +85,8 @@ function shed(pix: Pix): void {
   const winW = Math.max(6, Math.round(w * 0.22));
   const winH = Math.max(6, Math.round(h * 0.16));
   windowFrame(pix, wallX + Math.round(wallW * 0.12), roofBot + 3, winW, winH);
-  const doorW = Math.max(6, Math.round(w * 0.28));
-  const doorH = Math.max(8, found - (roofBot + winH + 4));
-  door(pix, wallX + Math.round(wallW * 0.52), found - doorH, doorW, doorH);
+  const laid = planDoor('shed', w, h);
+  if (laid) entrance(pix, laid);
 }
 
 function gable(pix: Pix, top: number, bot: number, worn: boolean): void {
@@ -210,20 +207,139 @@ function windowFrame(pix: Pix, x: number, y: number, w: number, h: number): void
   pix.fill(x - 1, y + h, w + 2, 1, palette.woodLite);
 }
 
-function door(pix: Pix, x: number, y: number, w: number, h: number): void {
+type DoorPlan = { x: number; y: number; w: number; h: number; foot: number };
+
+/** Верх кирпичного цоколя. Порог двери садится сюда, не над ним. */
+function foundation(kind: BuildingKind, h: number): number {
+  if (kind === 'manor') return Math.round(h * 0.84);
+  if (kind === 'hut') return Math.round(h * 0.82);
+  if (kind === 'shed') return Math.round(h * 0.8);
+  return Math.round(h * 0.78);
+}
+
+/**
+ * Дверь выше, чем шире, и стоит на крыльце.
+ * Низкий фасад мельчит ширину вместе с высотой: щель под окном не плющит её в полоску.
+ */
+function planDoor(kind: BuildingKind, w: number, h: number): DoorPlan | null {
+  const spec = doorSpec(kind, w, h);
+  if (!spec) return null;
+  const foot = h - 2;
+  const porchTop = Math.min(spec.found, foot - 4);
+  const avail = porchTop - spec.top;
+  if (avail < 4 || spec.wallW < 6) return null;
+  const ratio = 1.8;
+  let doorW = Math.max(4, Math.min(spec.wantW, spec.wallW - 2));
+  let doorH = Math.min(avail, Math.round(doorW * ratio));
+  if (doorH < doorW * 1.45) {
+    doorW = Math.max(4, Math.floor(avail / ratio));
+    doorH = Math.min(avail, Math.round(doorW * ratio));
+  }
+  if (doorH <= doorW) doorW = Math.max(3, Math.floor(doorH / 1.6));
+  const maxX = spec.wallX + spec.wallW - doorW;
+  const x = Math.max(spec.wallX, Math.min(maxX, spec.wallX + Math.round(spec.wallW * spec.along)));
+  return { x, y: porchTop - doorH, w: doorW, h: doorH, foot };
+}
+
+function doorSpec(
+  kind: BuildingKind,
+  w: number,
+  h: number,
+): { wallX: number; wallW: number; along: number; wantW: number; top: number; found: number } | null {
+  if (kind === 'cottage') {
+    const wallX = Math.round(w * 0.06);
+    return { wallX, wallW: w - wallX * 2, along: 0.62, wantW: Math.round(w * 0.16), top: Math.round(h * 0.4) + 2, found: foundation(kind, h) };
+  }
+  if (kind === 'manor') {
+    const wallX = Math.round(w * 0.05);
+    return { wallX, wallW: w - wallX * 2, along: 0.58, wantW: Math.round(w * 0.15), top: Math.round(h * 0.56) + 3, found: foundation(kind, h) };
+  }
+  if (kind === 'shed') {
+    const wallX = Math.round(w * 0.08);
+    return { wallX, wallW: w - wallX * 2, along: 0.52, wantW: Math.round(w * 0.22), top: Math.round(h * 0.38) + 2, found: foundation(kind, h) };
+  }
+  if (kind === 'hut') {
+    const wallX = Math.round(w * 0.08);
+    return { wallX, wallW: w - wallX * 2, along: 0.18, wantW: Math.round(w * 0.22), top: Math.round(h * 0.4) + 2, found: foundation(kind, h) };
+  }
+  return null;
+}
+
+/**
+ * Вытоптанная земля перед дверью, в пикселях поля.
+ * Середина пятна — середина двери, не середина фасада.
+ */
+export function doorPath(
+  kind: BuildingKind,
+  markX: number,
+  markW: number,
+  markH: number,
+  feet: number,
+  field: Rect,
+): { cx: number; cy: number; rx: number; ry: number } | null {
+  const box = buildingBox(markW, markH, feet, field);
+  const laid = planDoor(kind, box.w, box.h);
+  if (!laid) return null;
+  const cx = markX * field.width + (laid.x + laid.w / 2 - box.w / 2);
+  const foot = belowHorizon(feet, field);
+  const rx = Math.max(4, Math.round(laid.w * 0.9));
+  const ry = Math.max(4, Math.round(laid.w * 1.05));
+  return { cx, cy: foot + ry * 0.55, rx, ry };
+}
+
+/** Полотно, столбики крыльца и лестница сквозь цоколь до подошвы. */
+function entrance(pix: Pix, plan: DoorPlan): void {
+  const { x, y, w, h, foot } = plan;
   pix.fill(x, y, w, h, palette.door);
   pix.fill(x, y, 1, h, palette.doorLite);
-  const panelW = Math.max(2, w - 4);
-  const upper = Math.max(2, Math.round(h * 0.36));
-  pix.fill(x + 2, y + 2, panelW, upper, palette.doorLite);
-  pix.fill(x + 3, y + 3, Math.max(1, panelW - 2), Math.max(1, upper - 2), palette.door);
-  const lowerY = y + upper + 4;
-  const lowerH = Math.max(2, y + h - lowerY - 2);
-  pix.fill(x + 2, lowerY, panelW, lowerH, palette.doorLite);
-  pix.fill(x + 3, lowerY + 1, Math.max(1, panelW - 2), Math.max(1, lowerH - 2), palette.door);
-  pix.px(x + w - 3, y + Math.round(h * 0.55), palette.brass);
-  pix.fill(x - 2, y + h, w + 4, 2, palette.mortar);
-  pix.fill(x - 2, y + h, w + 4, 1, palette.creamLite);
+  if (w > 2) pix.fill(x + w - 1, y, 1, h, palette.woodDark);
+  if (w >= 8 && h >= 14) {
+    const panelW = w - 4;
+    const upper = Math.max(2, Math.round(h * 0.34));
+    pix.fill(x + 2, y + 2, panelW, upper, palette.doorLite);
+    pix.fill(x + 3, y + 3, Math.max(1, panelW - 2), Math.max(1, upper - 2), palette.door);
+    const lowerY = y + upper + 3;
+    const lowerH = y + h - lowerY - 2;
+    if (lowerH >= 3 && panelW >= 3) {
+      pix.fill(x + 2, lowerY, panelW, lowerH, palette.doorLite);
+      pix.fill(x + 3, lowerY + 1, Math.max(1, panelW - 2), lowerH - 2, palette.door);
+    }
+  }
+  if (w >= 5 && h >= 6) pix.px(x + w - 2, y + Math.round(h * 0.55), palette.brass);
+  if (w >= 8 && h >= 16) {
+    const postW = Math.max(1, Math.round(w * 0.12));
+    const postH = Math.max(4, Math.round(h * 0.22));
+    const py = y + h - postH;
+    const lx = Math.max(1, x - postW);
+    const rx = Math.min(pix.w - postW - 1, x + w);
+    pix.fill(lx, py, postW, postH, palette.woodDark);
+    pix.fill(lx, py, postW, 1, palette.woodLite);
+    pix.fill(rx, py, postW, postH, palette.woodDark);
+    pix.fill(rx, py, postW, 1, palette.woodLite);
+  }
+  stoop(pix, x, w, y + h, foot);
+}
+
+/** Крыльцо у порога и ступени до земли. Каждая нижняя шире верхней. */
+function stoop(pix: Pix, x: number, doorW: number, top: number, foot: number): void {
+  const span = foot - top;
+  if (span < 2 || doorW < 3) return;
+  const count = span >= 10 ? 3 : 2;
+  const unit = doorW >= 8 ? 2 : 1;
+  for (let i = 0; i < count; i += 1) {
+    const grow = (i + 1) * unit;
+    const sx = Math.max(1, x - grow);
+    const ex = Math.min(pix.w - 1, x + doorW + grow);
+    const sy = top + Math.floor((span * i) / count);
+    const ey = i === count - 1 ? foot : top + Math.floor((span * (i + 1)) / count);
+    const sh = ey - sy;
+    const sw = ex - sx;
+    if (sw < 2 || sh < 1) continue;
+    const wood = i === 0;
+    pix.fill(sx, sy, sw, sh, wood ? palette.wood : i === 1 ? palette.pebble : palette.wallLite);
+    pix.fill(sx, sy, sw, 1, wood ? palette.woodLite : palette.creamLite);
+    if (sh > 2) pix.fill(sx, sy + sh - 1, sw, 1, wood ? palette.woodDark : palette.brickDark);
+  }
 }
 
 /** Изба 1-2: низкая черепица, штукатурка, дверь на нас. */
@@ -232,15 +348,14 @@ function hut(pix: Pix): void {
   const h = pix.h;
   const roofTop = 2;
   const roofBot = Math.round(h * 0.4);
-  const found = Math.round(h * 0.82);
+  const found = foundation('hut', h);
   hip(pix, roofTop, roofBot);
   const wallX = Math.round(w * 0.08);
   const wallW = w - wallX * 2;
   plaster(pix, wallX, roofBot - 2, wallW, found - (roofBot - 2), palette.cream, palette.creamDark, palette.creamLite);
   brickCourses(pix, wallX - 1, found, wallW + 2, h - found - 2);
-  const doorW = Math.max(8, Math.round(w * 0.22));
-  const doorH = Math.max(12, found - (roofBot + Math.round(h * 0.08)));
-  door(pix, wallX + Math.round(wallW * 0.18), found - doorH, doorW, doorH);
+  const laid = planDoor('hut', w, h);
+  if (laid) entrance(pix, laid);
 }
 
 /** Руина 1-2: рваный верх, два зелёных проёма, крыши нет. */
