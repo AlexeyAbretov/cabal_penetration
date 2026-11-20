@@ -76,7 +76,6 @@ function paintField(houses: readonly HouseMark[], w: number, h: number): Pix {
   doorYards = houseYards(houses, field);
   for (const spec of doorYards) yard(pix, spec);
   stairs(pix, w, h, field, fit);
-  cairn(pix, Math.round(w * 0.7), Math.round(belowHorizon(0.4, field)), Math.round(16 * fit));
   farRocks(pix, w, h);
   const mouth = approachEdges(h - 1, w, h);
   const gap = Math.round(6 * fit);
@@ -212,15 +211,6 @@ function stairs(pix: Pix, w: number, h: number, field: Rect, fit: number): void 
     pix.fill(x, y - stepH, stepW, 1, palette.creamLite);
     pix.fill(x, y - 1, stepW, 1, palette.dirtDark);
   }
-}
-
-function cairn(pix: Pix, x: number, y: number, r: number): void {
-  if (r < 4) return;
-  disc(pix, x - Math.round(r * 0.35), y + 1, Math.round(r * 0.7), Math.round(r * 0.45), palette.pebble);
-  disc(pix, x + Math.round(r * 0.4), y, Math.round(r * 0.55), Math.round(r * 0.4), palette.cream);
-  disc(pix, x, y - Math.round(r * 0.35), Math.round(r * 0.5), Math.round(r * 0.4), palette.wallLite);
-  pix.px(x - 2, y - r, palette.creamLite);
-  pix.px(x + 1, y - Math.round(r * 0.6), palette.dirtLite);
 }
 
 function farRocks(pix: Pix, w: number, h: number): void {

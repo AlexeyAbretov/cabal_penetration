@@ -5,6 +5,7 @@ import type { BarrelMark } from '../types/barrel';
 import type { FenceMark } from '../types/fence';
 import type { HouseMark } from '../types/house';
 import type { KilnMark } from '../types/kiln';
+import type { RockMark } from '../types/rock';
 import { picketTotal, type PicketMark } from '../types/picket';
 import type { PropMark } from '../types/prop';
 import type { RailMark } from '../types/rail';
@@ -38,6 +39,11 @@ export type Picture = {
   /** Печи на поле. Пустой список — печи нет. */
   kilns: readonly KilnMark[];
   /**
+   * Камни на газоне. Пустой список — камня нет.
+   * Очередь колет, граната разбивает сразу. Остаётся куча.
+   */
+  rocks: readonly RockMark[];
+  /**
    * Деревья. Пустой список — деревьев нет.
    * Сухое ломается на две части ствола. Живое — на одну, ствол падает под углом.
    */
@@ -45,7 +51,7 @@ export type Picture = {
   /** Штакетник. Пустой список — его на картинке нет. Секции считает кадр. */
   pickets: readonly PicketMark[];
   /**
-   * Бонусы из домов, кустов, ящиков, короткого кирпича, мешков, заборов у дороги, бочек, печей, деревьев и секций штакетника.
+   * Бонусы из домов, кустов, ящиков, короткого кирпича, мешков, заборов у дороги, бочек, печей, камней, деревьев и секций штакетника.
    * Забор перед солдатом не роняет. Уцелевший дом по пустой полоске тоже не роняет: он просто падает.
    * Записей не меньше, чем таких объектов без штакетника: каждый забирает одну случайную,
    * лишние в этой картинке не выпадают.
@@ -56,9 +62,9 @@ export type Picture = {
   wave: readonly WaveGroup[];
 };
 
-/** Дома, кусты, ящики, короткий кирпич, мешки, заборы у дороги, бочки, печи, деревья и секции штакетника. Забор перед солдатом не считается. */
+/** Дома, кусты, ящики, короткий кирпич, мешки, заборы у дороги, бочки, печи, камни, деревья и секции штакетника. Забор перед солдатом не считается. */
 export function breakableCount(
-  picture: Pick<Picture, 'houses' | 'props' | 'shorts' | 'sandbags' | 'rails' | 'barrels' | 'kilns' | 'trees' | 'pickets'>,
+  picture: Pick<Picture, 'houses' | 'props' | 'shorts' | 'sandbags' | 'rails' | 'barrels' | 'kilns' | 'rocks' | 'trees' | 'pickets'>,
   field: Rect,
 ): number {
   return (
@@ -69,6 +75,7 @@ export function breakableCount(
     picture.rails.length +
     picture.barrels.length +
     picture.kilns.length +
+    picture.rocks.length +
     picture.trees.length +
     picketTotal(picture.pickets, field)
   );

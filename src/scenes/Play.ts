@@ -32,6 +32,7 @@ import { Hud, hudIcons } from './play/hud';
 import { Props } from './play/props';
 import { plainAt } from './play/seat';
 import { Pickets } from './play/pickets';
+import { Rocks } from './play/rocks';
 import { Rails } from './play/rails';
 import { Sandbags } from './play/sandbag';
 import { ShortFences } from './play/shortFence';
@@ -44,10 +45,11 @@ import { FrontWall } from './play/wall';
 
 /**
  * Картинка из маршрута. Гранаты, счёт и жизни приходят с захода, ствол — нет.
- * Куст, ящик, короткий кирпич, мешки, заборы у дороги, бочки, печь, деревья и секции штакетника роняют на дорожку пачку, ствол или звезду. Подбор телом.
+ * Куст, ящик, короткий кирпич, мешки, заборы у дороги, бочки, печь, камень, деревья и секции штакетника роняют на дорожку пачку, ствол или звезду. Подбор телом.
  * Дерево колет очередь, граната валит сразу. Щепки с места удара, у живого ещё листья и куча по ширине кроны. Ствол не пропадает: сухое на две части, живое падает под углом в треугольник.
  * Дом колет очередь и четыре гранаты. Попадание сыплет ошметками с места удара. На четвёртой он трясётся и уходит в землю, пыль стоит у цоколя лома, лом остаётся. Бонус дом не роняет.
  * Печь колет очередь и четыре гранаты, как дом: кирпич с места удара, тряска, уход в землю, пыль у подошвы, лом остаётся. Прямой низ закрывает газон.
+ * Камень колет очередь, граната разбивает сразу. Крошка с места удара. Куча руин остаётся. Прямой низ закрывает газон.
  * Удар — прямоугольник креста: частый уже, широкий шире и ниже, и больнее. Оба держат десять секунд и сгорают на конце сцены.
  * Танк-прямоугольник ест полоску. Очки за него и за крупные объекты выше, чем за зелёного.
  * Глубина сзади вперёд: небо и дома, крона живого дерева, замах, дорожка, кусты и ящики, зелёные и танк,
@@ -68,6 +70,7 @@ export class Play extends Phaser.Scene {
   private drops!: Drops;
   private houses!: Houses;
   private kilns!: Kilns;
+  private rocks!: Rocks;
   private fences!: Fences;
   private shorts!: ShortFences;
   private bags!: Sandbags;
@@ -165,6 +168,7 @@ export class Play extends Phaser.Scene {
     );
     this.houses = new Houses(this, this.picture.houses, this.stage.field, earth, this.debris, scatter);
     this.kilns = new Kilns(this, this.picture.kilns, earth, this.debris, scatter);
+    this.rocks = new Rocks(this, this.picture.rocks, earth, this.debris, scatter);
     registerFenceAnims(this, fenceKinds(this.picture.fences));
     this.fences = new Fences(this, this.picture.fences, this.picture.wall, this.debris, earth);
     this.grenades.onLand((x, y) => {
@@ -179,6 +183,7 @@ export class Play extends Phaser.Scene {
       this.pickets.blast(x, y);
       this.houses.blast(x, y);
       this.kilns.blast(x, y);
+      this.rocks.blast(x, y);
       this.blastFrontWall(x, y);
     });
     this.controls = new Controls(this, () => this.onRightClick());
@@ -309,6 +314,7 @@ export class Play extends Phaser.Scene {
     this.pickets.step(step);
     this.houses.step(step);
     this.kilns.step(step);
+    this.rocks.step(step);
     this.drops.step(this.view, this.soldier.body());
     this.drawBattle();
   }
@@ -346,6 +352,7 @@ export class Play extends Phaser.Scene {
     this.grenades.bind(this.view);
     this.houses.place(this.view);
     this.kilns.place(this.view);
+    this.rocks.place(this.view);
     this.enemies.bind(this.view);
     this.props.bind(this.view);
     this.shorts.bind(this.view);
@@ -419,6 +426,7 @@ export class Play extends Phaser.Scene {
     this.pickets.hit(box, shot.damage);
     this.houses.hit(box, shot.damage);
     this.kilns.hit(box, shot.damage);
+    this.rocks.hit(box, shot.damage);
     this.chipCover(box, shot.damage, at);
   }
 
@@ -523,6 +531,7 @@ export class Play extends Phaser.Scene {
     this.pickets.step(delta);
     this.houses.step(delta);
     this.kilns.step(delta);
+    this.rocks.step(delta);
     if (this.settled) return;
     if (!this.soldier.leave(delta)) return;
     this.march.lives = this.hud.livesLeft;
