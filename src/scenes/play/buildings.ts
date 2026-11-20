@@ -1,7 +1,19 @@
-import { palette } from '../../constants';
+import { house, palette } from '../../constants';
 import type { BuildingKind } from '../../types/house';
 import { belowHorizon, fieldScale, fitScale, type Rect } from '../../layout';
 import { hash, inkOutline, Pix } from './pix';
+
+/**
+ * Доли высоты фасада сверху вниз. Крыша — до `roof`, цоколь — от `found`.
+ * Между ними стена. У руины и синей двери полос нет: весь фасад один материал.
+ */
+export function facadeBands(kind: BuildingKind): { roof: number; found: number } | null {
+  if (kind === 'ruin' || kind === 'gate') return null;
+  if (kind === 'manor') return { roof: 0.3, found: 0.84 };
+  if (kind === 'hut') return { roof: 0.4, found: 0.82 };
+  if (kind === 'shed') return { roof: 0.38, found: 0.8 };
+  return { roof: 0.4, found: 0.78 };
+}
 
 /** Размер фасада на этом поле: глубина мельчит дальний дом, узкое окно сжимает все. */
 export function buildingBox(baseW: number, baseH: number, feet: number, field: Rect): { w: number; h: number } {
@@ -13,7 +25,8 @@ export function buildingBox(baseW: number, baseH: number, feet: number, field: R
   };
 }
 
-export function drawBuilding(kind: BuildingKind, w: number, h: number): Pix {
+/** 0 — целый. 1–3 — трещины и проломы до обрушения, по гранате на ступень. */
+export function drawBuilding(kind: BuildingKind, w: number, h: number, stage = 0): Pix {
   const pix = new Pix(w, h);
   if (kind === 'cottage') cottage(pix);
   else if (kind === 'manor') manor(pix);
@@ -21,8 +34,98 @@ export function drawBuilding(kind: BuildingKind, w: number, h: number): Pix {
   else if (kind === 'ruin') ruin(pix);
   else if (kind === 'gate') gate(pix);
   else shed(pix);
+  if (stage > 0) scar(pix, stage);
   inkOutline(pix, palette.line);
   return pix;
+}
+
+/** Лом на месте дома. Низ — сплошной цоколь, выше рваная куча. */
+export function drawScrap(w: number, h: number): Pix {
+  const pix = new Pix(w, h);
+  const plinthTop = Math.round(h * (1 - house.plinth));
+  const course = Math.max(3, Math.round(Math.max(3, h - plinthTop) / 3));
+  const brickW = Math.max(5, Math.round(w / 8));
+  for (let x = 1; x < w - 1; x += 1) {
+    const edge = Math.min(x, w - 1 - x);
+    const fade = w * 0.14;
+    const mound = edge < fade ? Math.round((1 - edge / Math.max(1, fade)) * Math.max(0, plinthTop - 2)) : 0;
+    const jag = (hash(x, 4) % 6) * Math.max(1, Math.round(h * 0.035));
+    let top = plinthTop - jag + mound;
+    if (hash(x, 2) % 7 === 0) top -= Math.round(h * 0.14);
+    top = Math.max(1, Math.min(h - 2, top));
+    for (let y = top; y < h - 1; y += 1) {
+      const row = Math.floor((y - top) / course);
+      const shift = row % 2 === 0 ? 0 : Math.floor(brickW / 2);
+      const seam = (x + shift) % brickW === 0 || (y - top) % course === 0;
+      if (y >= plinthTop && seam) {
+        pix.px(x, y, palette.mortar);
+        continue;
+      }
+      const n = hash(x, y);
+      if (y < plinthTop && n % 5 === 0) {
+        pix.px(x, y, n % 2 === 0 ? palette.cream : palette.creamDark);
+        continue;
+      }
+      if (n % 11 === 0) {
+        pix.px(x, y, palette.woodDark);
+        continue;
+      }
+      pix.px(x, y, n % 6 === 0 ? palette.brickDark : n % 5 === 0 ? palette.brickLite : palette.brick);
+    }
+  }
+  inkOutline(pix, palette.line);
+  return pix;
+}
+
+export function scrapHeight(facade: number): number {
+  return Math.max(12, Math.round(facade * house.scrap));
+}
+
+/** Трещина, затем пролом в стене, затем дыра и вырванный кусок крыши. */
+function scar(pix: Pix, stage: number): void {
+  const w = pix.w;
+  const h = pix.h;
+  crack(pix, Math.round(w * 0.18), Math.round(h * 0.4), Math.round(w * 0.52), Math.round(h * 0.74));
+  if (stage < 2) return;
+  crack(pix, Math.round(w * 0.72), Math.round(h * 0.34), Math.round(w * 0.4), Math.round(h * 0.68));
+  gouge(pix, w * 0.36, h * 0.58, Math.max(3, w * 0.1), Math.max(3, h * 0.08));
+  if (stage < 3) return;
+  gouge(pix, w * 0.68, h * 0.5, Math.max(4, w * 0.15), Math.max(4, h * 0.12));
+  gouge(pix, w * 0.5, h * 0.22, Math.max(3, w * 0.12), Math.max(3, h * 0.07));
+}
+
+function crack(pix: Pix, x0: number, y0: number, x1: number, y1: number): void {
+  const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+  if (steps < 1) return;
+  for (let i = 0; i <= steps; i += 1) {
+    const t = i / steps;
+    const x = Math.round(x0 + (x1 - x0) * t + ((hash(i, x0) % 3) - 1));
+    const y = Math.round(y0 + (y1 - y0) * t + ((hash(y0, i) % 3) - 1));
+    if (!opaque(pix, x, y)) continue;
+    pix.px(x, y, palette.line);
+    if (opaque(pix, x + 1, y) && hash(x, y) % 2 === 0) pix.px(x + 1, y, palette.brickDark);
+  }
+}
+
+function gouge(pix: Pix, cx: number, cy: number, rx: number, ry: number): void {
+  if (!opaque(pix, Math.round(cx), Math.round(cy))) return;
+  const rx2 = rx * rx;
+  const ry2 = ry * ry;
+  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y += 1) {
+    for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x += 1) {
+      const dx = x + 0.5 - cx;
+      const dy = y + 0.5 - cy;
+      const e = (dx * dx) / rx2 + (dy * dy) / ry2;
+      if (e > 1) continue;
+      if (e > 0.72 && hash(x, y) % 3 === 0) continue;
+      pix.erase(x, y);
+    }
+  }
+}
+
+function opaque(pix: Pix, x: number, y: number): boolean {
+  if (x < 0 || y < 0 || x >= pix.w || y >= pix.h) return false;
+  return pix.data[(y * pix.w + x) * 4 + 3]! > 16;
 }
 
 function cottage(pix: Pix): void {

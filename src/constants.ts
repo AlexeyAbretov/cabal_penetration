@@ -425,6 +425,20 @@ export const barrel = {
   height: 28,
 } as const;
 
+/**
+ * Дом на поле. Очередь колет, разрыв снимает `grenade.propHits`.
+ * Попадание сыплет ошметками с места удара. Четыре гранаты роняют: дом трясётся и уходит в землю, пыль стоит у цоколя лома.
+ * Лом остаётся. Очки — в момент обрушения. Бонус дом не роняет.
+ * scrap — доля высоты фасада у лома. plinth — нижняя доля лома, там клубы.
+ */
+export const house = {
+  blasts: 4,
+  score: 2000,
+  scrap: 0.34,
+  plinth: 0.42,
+  collapseMs: 2000,
+} as const;
+
 export type PropKind = keyof typeof scenery;
 
 /**

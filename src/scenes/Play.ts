@@ -43,6 +43,7 @@ import { FrontWall } from './play/wall';
 /**
  * Картинка из маршрута. Гранаты, счёт и жизни приходят с захода, ствол — нет.
  * Куст, ящик, короткий кирпич, мешки, заборы у дороги, бочки и секции штакетника роняют на дорожку пачку, ствол или звезду. Подбор телом.
+ * Дом колет очередь и четыре гранаты. Попадание сыплет ошметками с места удара. На четвёртой он трясётся и уходит в землю, пыль стоит у цоколя лома, лом остаётся. Бонус дом не роняет.
  * Удар — прямоугольник креста: частый уже, широкий шире и ниже, и больнее. Оба держат десять секунд и сгорают на конце сцены.
  * Танк-прямоугольник ест полоску. Очки за него и за крупные объекты выше, чем за зелёного.
  * Глубина сзади вперёд: небо и дома, крона живого дерева, замах, дорожка, кусты и ящики, зелёные и танк,
@@ -154,7 +155,7 @@ export class Play extends Phaser.Scene {
     this.enemies = new Enemies(this, this.picture.wave, this.sparks, (points) => this.onKill(points), (count) =>
       this.onGone(count),
     );
-    this.houses = new Houses(this, this.picture.houses, this.stage.field, earth);
+    this.houses = new Houses(this, this.picture.houses, this.stage.field, earth, this.debris, scatter);
     registerFenceAnims(this, fenceKinds(this.picture.fences));
     this.fences = new Fences(this, this.picture.fences, this.picture.wall, this.debris, earth);
     this.grenades.onLand((x, y) => {
@@ -166,6 +167,7 @@ export class Play extends Phaser.Scene {
       this.rails.blast(x, y);
       this.barrels.blast(x, y);
       this.pickets.blast(x, y);
+      this.houses.blast(x, y);
       this.blastFrontWall(x, y);
     });
     this.controls = new Controls(this, () => this.onRightClick());
@@ -293,6 +295,7 @@ export class Play extends Phaser.Scene {
     this.rails.step(step);
     this.barrels.step(step);
     this.pickets.step(step);
+    this.houses.step(step);
     this.drops.step(this.view, this.soldier.body());
     this.drawBattle();
   }
@@ -398,6 +401,7 @@ export class Play extends Phaser.Scene {
     this.rails.hit(box, shot.damage);
     this.barrels.hit(box, shot.damage);
     this.pickets.hit(box, shot.damage);
+    this.houses.hit(box, shot.damage);
     this.chipCover(box, shot.damage, at);
   }
 
@@ -499,6 +503,7 @@ export class Play extends Phaser.Scene {
     this.rails.step(delta);
     this.barrels.step(delta);
     this.pickets.step(delta);
+    this.houses.step(delta);
     if (this.settled) return;
     if (!this.soldier.leave(delta)) return;
     this.march.lives = this.hud.livesLeft;
@@ -586,6 +591,7 @@ export class Play extends Phaser.Scene {
     this.rails.draw();
     this.barrels.draw();
     this.pickets.draw();
+    this.houses.draw();
   }
 
   private setPaused(paused: boolean): void {

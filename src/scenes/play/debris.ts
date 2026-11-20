@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { palette } from '../../constants';
 
-export type DebrisKind = 'sand' | 'stone' | 'brick' | 'spark';
+export type DebrisKind = 'sand' | 'stone' | 'brick' | 'spark' | 'plaster' | 'stucco' | 'tile';
 
 type DebrisLayer = 'field' | 'wall';
 
@@ -24,11 +24,16 @@ type Chip = {
 const sands = [palette.barkDark, palette.woodDark, palette.line, palette.joint] as const;
 const stones = [palette.wall, palette.wallLite, palette.wallBand, palette.pebble, palette.mortar] as const;
 const bricks = [palette.brick, palette.brickDark, palette.brickLite, palette.mortar] as const;
+const plasters = [palette.cream, palette.creamDark, palette.creamLite, palette.mortar] as const;
+const stuccos = [palette.manor, palette.manorDark, palette.manorLite, palette.mortar] as const;
+const tiles = [palette.roof, palette.roofDark, palette.roofLite, palette.roofWood] as const;
 const sparks = [palette.muzzle, palette.explosion, palette.aim, palette.enemyLane] as const;
+
+type ChunkKind = 'stone' | 'brick' | 'plaster' | 'stucco' | 'tile';
 
 /**
  * Ошметки удара. Летят так же, как щепа жердей и бочек: дуга и падение.
- * Песок — пыль, камень и кирпич — крошка, ржавое железо — искры.
+ * Песок — пыль, камень и кирпич — крошка, штукатурка и черепица — дом, ржавое железо — искры.
  * Поле рисуется перед мешками и кирпичом, стена — перед листом у ног.
  */
 export class Debris {
@@ -145,11 +150,9 @@ export class Debris {
     power: number,
     heavy: boolean,
     layer: DebrisLayer,
-    kind: 'stone' | 'brick',
+    kind: ChunkKind,
   ): void {
-    const colors = kind === 'brick' ? bricks : stones;
-    const body = kind === 'brick' ? palette.brick : palette.wall;
-    const rim = kind === 'brick' ? palette.brickLite : palette.wallLite;
+    const { colors, body, rim } = chunkLook(kind);
     const count = heavy ? 8 : 4;
     const slabs = heavy ? 2 : 0;
     for (let i = 0; i < count; i += 1) {
@@ -202,6 +205,14 @@ export function onFace(
     x: Math.min(face.right, Math.max(face.left, x)),
     y: Math.min(face.bottom, Math.max(face.top, y)),
   };
+}
+
+function chunkLook(kind: ChunkKind): { colors: readonly number[]; body: number; rim: number } {
+  if (kind === 'brick') return { colors: bricks, body: palette.brick, rim: palette.brickLite };
+  if (kind === 'plaster') return { colors: plasters, body: palette.cream, rim: palette.creamLite };
+  if (kind === 'stucco') return { colors: stuccos, body: palette.manor, rim: palette.manorLite };
+  if (kind === 'tile') return { colors: tiles, body: palette.roof, rim: palette.roofLite };
+  return { colors: stones, body: palette.wall, rim: palette.wallLite };
 }
 
 function pick(colors: readonly number[]): number {
