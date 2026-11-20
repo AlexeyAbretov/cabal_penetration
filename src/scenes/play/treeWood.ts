@@ -121,16 +121,6 @@ export function stampTreeWood(dst: Pix, grid: TreeWoodGrid, x: number, ground: n
   }
 }
 
-/**
- * Ставит каркас подошвой на землю, серединой кроны на x.
- * height — высота непрозрачной части, ближайший пиксель без сглаживания.
- */
-export function placeTreeWood(dst: Pix, x: number, ground: number, height: number): void {
-  const grid = treeWoodGrid(height);
-  if (!grid) return;
-  stampTreeWood(dst, grid, x, ground);
-}
-
 function readSheet(scene: Phaser.Scene, key: string): Wood | null {
   if (!scene.textures.exists(key)) return null;
   const source = scene.textures.get(key).getSourceImage();
