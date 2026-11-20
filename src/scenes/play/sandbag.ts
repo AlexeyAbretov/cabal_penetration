@@ -3,7 +3,7 @@ import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import { grenade, palette, sandbag } from '../../constants';
 import type { GroundAt } from '../../campaign/ground';
 import type { SandbagMark } from '../../types/sandbag';
-import { sandbagBreakKey, sandbagIdleKey } from '../../fenceSheet';
+import { ruinVariants, sandbagBreakKey, sandbagIdleKey, sandbagRuinKey } from '../../fenceSheet';
 import { fieldScale, fitScale, type FrameLayout } from '../../layout';
 import { paintSeat } from './seat';
 import type { Sparks } from './sparks';
@@ -23,6 +23,7 @@ type Pile = {
   breaking: boolean;
   gone: boolean;
   hit: InkRect | null;
+  variant: number;
   sprite: Phaser.GameObjects.Sprite;
   seat: Phaser.GameObjects.Graphics;
   seatSig: string;
@@ -31,6 +32,7 @@ type Pile = {
 /**
  * Мешки на дороге. Стену у ног не закрывают.
  * Секции одного блокпоста стоят рядом и ломаются по одной.
+ * После ролика на ширине секции остаётся куча песка. Она пулю не держит.
  * Разрушение берёт один бонус из списка картинки.
  */
 export class Sandbags {
@@ -50,7 +52,7 @@ export class Sandbags {
     this.scene = scene;
     this.onBreak = onBreak;
     this.at = at;
-    this.piles = marks.map((mark) => ({
+    this.piles = marks.map((mark, index) => ({
       mark,
       hp: sandbag.hp,
       flash: 0,
@@ -58,6 +60,7 @@ export class Sandbags {
       breaking: false,
       gone: false,
       hit: null,
+      variant: index % ruinVariants,
       sprite: scene.add.sprite(0, 0, sandbagIdleKey()).setOrigin(0.5, 1).setDepth(2.5).setVisible(false),
       seat: scene.add.graphics().setDepth(2.51),
       seatSig: '',
@@ -99,12 +102,6 @@ export class Sandbags {
     const fit = fitScale(field);
     for (const pile of this.piles) {
       const sprite = pile.sprite;
-      if (pile.gone) {
-        pile.hit = null;
-        sprite.setVisible(false);
-        this.seatPile(pile, 0, 0);
-        continue;
-      }
       const anchor = field.y + pile.mark.y * field.height;
       const scale = fieldScale(anchor, field) * fit;
       const displayW = Math.max(1, Math.round(sandbag.width * scale));
@@ -117,6 +114,9 @@ export class Sandbags {
       sprite.setDisplaySize(displayW, displayH);
       sprite.setDepth(2.5 + ground / 10000);
       sprite.setVisible(true);
+      if (pile.gone && sprite.texture.key !== sandbagRuinKey(pile.variant)) {
+        sprite.setTexture(sandbagRuinKey(pile.variant));
+      }
       if (pile.flash > 0 && pile.alive) sprite.setTint(palette.ink);
       else sprite.clearTint();
       pile.hit = pile.alive ? inkRect(x, ground, displayW, displayH) : null;
@@ -124,12 +124,13 @@ export class Sandbags {
     }
   }
 
-  /** Ровный низ мешков закрывает дорога. На сломе посадка пропадает. */
+  /** Ровный низ закрывает дорога. На ролике посадка пропадает, на куче возвращается. */
   private seatPile(pile: Pile, displayW: number, displayH: number): void {
     const view = this.view;
     if (!view) return;
     const sprite = pile.sprite;
-    const sig = pile.gone || pile.breaking ? '' : `${sprite.x},${sprite.y},${displayW},${displayH}`;
+    const bursting = pile.breaking && !pile.gone;
+    const sig = bursting ? '' : `${sprite.x},${sprite.y},${displayW},${displayH}`;
     if (sig === pile.seatSig) return;
     pile.seat.clear();
     if (!sig) {
@@ -168,7 +169,9 @@ export class Sandbags {
     pile.sprite.play(sandbagBreakKey());
     pile.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       pile.gone = true;
-      pile.sprite.setVisible(false);
+      pile.sprite.anims.stop();
+      pile.sprite.setTexture(sandbagRuinKey(pile.variant));
+      pile.sprite.setVisible(true);
     });
   }
 }

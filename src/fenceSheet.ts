@@ -5,18 +5,24 @@ import type { FenceKind } from './types/fence';
 /**
  * Секция заграждения. Целый блок и ролик разрушения лежат отдельно:
  * у камня кадры в animate, у ржавчины в animation.
- * Кадр 96×48, прозрачный фон. Ролик играется один раз и кончается вместе с секцией.
+ * Кадр 96×48, прозрачный фон. Ролик играется один раз.
+ * После него на той же ширине остаётся куча: два рисунка, соседние секции чередуют их.
  */
 const sheets = {
   stone: {
     idle: 'assets/fence/stone/fence-stone.png',
     frame: (index: number) => `assets/fence/stone/animate/frame_${pad(index)}.png`,
+    ruin: (index: number) => `assets/fence/stone/ruin_${pad(index)}.png`,
   },
   rust: {
     idle: 'assets/fence/rust/fence-rust.png',
     frame: (index: number) => `assets/fence/rust/animation/frame_${pad(index)}.png`,
+    ruin: (index: number) => `assets/fence/rust/ruin_${pad(index)}.png`,
   },
 } as const;
+
+/** Две раскладки кучи, чтобы длинный забор не повторял один штамп. */
+export const ruinVariants = 2;
 
 function pad(index: number): string {
   return index.toString().padStart(3, '0');
@@ -47,6 +53,10 @@ export function fenceBreakKey(kind: FenceKind): string {
   return `fence-${kind}-break`;
 }
 
+export function fenceRuinKey(kind: FenceKind, variant: number): string {
+  return `fence-${kind}-ruin-${variant}`;
+}
+
 /** Грузит виды, которые стоят на этой картинке. Повторный заход файлы не качает. */
 export function loadFenceSheets(scene: Phaser.Scene, kinds: readonly FenceKind[]): void {
   for (const kind of kinds) {
@@ -56,6 +66,10 @@ export function loadFenceSheets(scene: Phaser.Scene, kinds: readonly FenceKind[]
     for (let index = 0; index < fence.frames; index += 1) {
       const key = fenceFrameKey(kind, index);
       if (!scene.textures.exists(key)) scene.load.image(key, sheet.frame(index));
+    }
+    for (let index = 0; index < ruinVariants; index += 1) {
+      const key = fenceRuinKey(kind, index);
+      if (!scene.textures.exists(key)) scene.load.image(key, sheet.ruin(index));
     }
   }
 }
@@ -77,6 +91,7 @@ export function registerFenceAnims(scene: Phaser.Scene, kinds: readonly FenceKin
 const shortSheet = {
   idle: 'assets/fence/short/fence-short.png',
   frame: (index: number) => `assets/fence/short/animation/frame_${pad(index)}.png`,
+  ruin: (index: number) => `assets/fence/short/ruin_${pad(index)}.png`,
 } as const;
 
 export function shortFenceIdleKey(): string {
@@ -91,12 +106,20 @@ export function shortFenceBreakKey(): string {
   return 'fence-short-break';
 }
 
+export function shortFenceRuinKey(variant: number): string {
+  return `fence-short-ruin-${variant}`;
+}
+
 export function loadShortFence(scene: Phaser.Scene): void {
   const idle = shortFenceIdleKey();
   if (!scene.textures.exists(idle)) scene.load.image(idle, shortSheet.idle);
   for (let index = 0; index < shortFence.frames; index += 1) {
     const key = shortFenceFrameKey(index);
     if (!scene.textures.exists(key)) scene.load.image(key, shortSheet.frame(index));
+  }
+  for (let index = 0; index < ruinVariants; index += 1) {
+    const key = shortFenceRuinKey(index);
+    if (!scene.textures.exists(key)) scene.load.image(key, shortSheet.ruin(index));
   }
 }
 
@@ -115,6 +138,7 @@ export function registerShortFenceAnim(scene: Phaser.Scene): void {
 const sandbagSheet = {
   idle: 'assets/fence/sandbag/fence-sandbag.png',
   frame: (index: number) => `assets/fence/sandbag/animation/frame_${pad(index)}.png`,
+  ruin: (index: number) => `assets/fence/sandbag/ruin_${pad(index)}.png`,
 } as const;
 
 export function sandbagIdleKey(): string {
@@ -129,12 +153,20 @@ export function sandbagBreakKey(): string {
   return 'fence-sandbag-break';
 }
 
+export function sandbagRuinKey(variant: number): string {
+  return `fence-sandbag-ruin-${variant}`;
+}
+
 export function loadSandbag(scene: Phaser.Scene): void {
   const idle = sandbagIdleKey();
   if (!scene.textures.exists(idle)) scene.load.image(idle, sandbagSheet.idle);
   for (let index = 0; index < sandbag.frames; index += 1) {
     const key = sandbagFrameKey(index);
     if (!scene.textures.exists(key)) scene.load.image(key, sandbagSheet.frame(index));
+  }
+  for (let index = 0; index < ruinVariants; index += 1) {
+    const key = sandbagRuinKey(index);
+    if (!scene.textures.exists(key)) scene.load.image(key, sandbagSheet.ruin(index));
   }
 }
 

@@ -3,7 +3,7 @@ import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import { fence, wall } from '../../constants';
 import type { GroundAt } from '../../campaign/ground';
 import type { FenceMark } from '../../types/fence';
-import { fenceBreakKey, fenceIdleKey, fenceInk } from '../../fenceSheet';
+import { fenceBreakKey, fenceIdleKey, fenceInk, fenceRuinKey, ruinVariants } from '../../fenceSheet';
 import type { FrameLayout } from '../../layout';
 import { paintSeat } from './seat';
 import { type FrontWall, type WallGeom } from './wall';
@@ -27,8 +27,8 @@ type Piece = {
 
 /**
  * Лист на передней стене, позади солдата. Колонка пулю не пускает, пока цела.
- * Когда жизни колонки кончаются, секция играет ролик и пропадает.
- * У картинки свой список: какие колонки каким листом закрыты.
+ * Когда жизни колонки кончаются, секция играет ролик и оставляет кучу на ширине кладки.
+ * Куча пулю не держит. У картинки свой список: какие колонки каким листом закрыты.
  */
 export class Fences {
   private readonly pieces: Piece[];
@@ -110,12 +110,16 @@ export class Fences {
     const centers = joinedCenters(this.runs(), geom, width / fence.width, this.owned, this.columnCount);
     for (const piece of this.pieces) {
       const sprite = piece.sprite;
+      const x = centers.get(piece.column) ?? Math.round(front.columnCenter(view, piece.column));
       if (piece.gone) {
         piece.hit = null;
-        sprite.setVisible(false);
+        const ruin = fenceRuinKey(piece.kind, piece.column % ruinVariants);
+        if (sprite.texture.key !== ruin) sprite.setTexture(ruin);
+        sprite.setPosition(x, bottom);
+        sprite.setDisplaySize(width, height);
+        sprite.setVisible(true);
         continue;
       }
-      const x = centers.get(piece.column) ?? Math.round(front.columnCenter(view, piece.column));
       sprite.setPosition(x, bottom);
       sprite.setDisplaySize(width, height);
       piece.hit = inkRect(piece.kind, x, bottom, width, height);
@@ -126,18 +130,20 @@ export class Fences {
       sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
         piece.gone = true;
         piece.hit = null;
-        sprite.setVisible(false);
+        sprite.anims.stop();
+        sprite.setTexture(fenceRuinKey(piece.kind, piece.column % ruinVariants));
+        sprite.setVisible(true);
       });
     }
     this.paintSeats(view);
   }
 
-  /** Прямую подошву листа закрывает земля картинки. На сломе посадка уходит вместе с секцией. */
+  /** Прямую подошву закрывает земля картинки. На ролике посадка пропадает, на куче возвращается. */
   private paintSeats(view: FrameLayout): void {
     const sig = this.pieces
       .map((piece) => {
         const sprite = piece.sprite;
-        if (piece.gone || piece.breaking) return '0';
+        if (piece.breaking && !piece.gone) return '0';
         return `${sprite.x},${sprite.y},${sprite.displayWidth},${sprite.displayHeight}`;
       })
       .join('|');
@@ -145,7 +151,7 @@ export class Fences {
     this.seatGfx.clear();
     let ready = true;
     for (const run of this.runs()) {
-      const live = run.filter((piece) => !piece.gone && !piece.breaking);
+      const live = run.filter((piece) => piece.gone || !piece.breaking);
       live.forEach((piece, index) => {
         ready =
           paintSeat(this.seatGfx, this.scene, piece.sprite, view.field, view.track, 3, {

@@ -3,7 +3,7 @@ import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import { grenade, palette, shortFence } from '../../constants';
 import type { GroundAt } from '../../campaign/ground';
 import type { ShortMark } from '../../types/shortFence';
-import { shortFenceBreakKey, shortFenceIdleKey } from '../../fenceSheet';
+import { ruinVariants, shortFenceBreakKey, shortFenceIdleKey, shortFenceRuinKey } from '../../fenceSheet';
 import { fieldScale, fitScale, type FrameLayout } from '../../layout';
 import { paintSeat } from './seat';
 import type { Sparks } from './sparks';
@@ -29,6 +29,7 @@ type Run = {
 /**
  * Короткий кирпич на траве. Стену у ног не закрывает.
  * Секции одного забора стоят встык и ломаются вместе: один бонус из списка картинки на весь прогон.
+ * После ролика на ширине кладки остаются кучи кирпича. Они пулю не держат.
  * Подошва на линии прежней кладки, выше низа сцены, чем одиночный лист у стены.
  */
 export class ShortFences {
@@ -99,11 +100,6 @@ export class ShortFences {
     const field = view.field;
     const fit = fitScale(field);
     for (const run of this.runs) {
-      if (run.gone) {
-        run.hit = null;
-        for (const sprite of run.sprites) sprite.setVisible(false);
-        continue;
-      }
       const sole = Math.round(field.y + field.height - 60 - 2 * fit);
       const scale = fieldScale(sole, field) * fit;
       const displayW = Math.max(1, Math.round(shortFence.width * scale));
@@ -127,6 +123,10 @@ export class ShortFences {
         sprite.setDisplaySize(displayW, displayH);
         sprite.setDepth(2.5 + ground / 10000);
         sprite.setVisible(true);
+        if (run.gone) {
+          const ruin = shortFenceRuinKey(i % ruinVariants);
+          if (sprite.texture.key !== ruin) sprite.setTexture(ruin);
+        }
         if (run.flash > 0 && run.alive) sprite.setTint(palette.ink);
         else sprite.clearTint();
         const box = inkRect(x, ground, displayW, displayH);
@@ -140,13 +140,13 @@ export class ShortFences {
     this.paintSeats();
   }
 
-  /** Прямой низ кирпича закрывает газон. На сломе посадка пропадает. */
+  /** Прямой низ закрывает газон. На ролике посадка пропадает, на куче возвращается. */
   private paintSeats(): void {
     const view = this.view;
     if (!view) return;
     const sig = this.runs
       .map((run) => {
-        if (run.gone || run.breaking) return '0';
+        if (run.breaking && !run.gone) return '0';
         return run.sprites
           .map((sprite) => `${sprite.x},${sprite.y},${sprite.displayWidth},${sprite.displayHeight}`)
           .join(',');
@@ -157,7 +157,7 @@ export class ShortFences {
     let depth = 2.5;
     let ready = true;
     for (const run of this.runs) {
-      if (run.gone || run.breaking) continue;
+      if (run.breaking && !run.gone) continue;
       depth = Math.max(depth, run.sprites[0]?.depth ?? depth);
       run.sprites.forEach((sprite, index) => {
         ready =
@@ -196,7 +196,11 @@ export class ShortFences {
     for (const sprite of run.sprites) sprite.play(key);
     run.sprites[0]?.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       run.gone = true;
-      for (const sprite of run.sprites) sprite.setVisible(false);
+      run.sprites.forEach((sprite, index) => {
+        sprite.anims.stop();
+        sprite.setTexture(shortFenceRuinKey(index % ruinVariants));
+        sprite.setVisible(true);
+      });
     });
   }
 }
