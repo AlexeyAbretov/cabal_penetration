@@ -35,6 +35,7 @@ export const picture: Picture = {
   sandbags: [],
   rails: [],
   barrels: [],
+  kilns: [],
   pickets: [],
   drops,
   wave: [],

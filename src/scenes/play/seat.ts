@@ -93,6 +93,8 @@ type Column = { x: number; cut: number; lip: number };
 /**
  * `buryCap` — на сколько пикселей земля заходит на лист.
  * Крайние секции прогона получают наплыв снаружи, стык между своими — нет.
+ * `lift` — столбцы, чей низ выше подошвы больше чем на столько пикселей листа, не сажаются.
+ * У купола бока уходят вверх: трава только там, где кладка доходит до земли.
  * false — лист ещё не прочитан, кадр стоит повторить.
  */
 export function paintSeat(
@@ -104,6 +106,7 @@ export function paintSeat(
   buryCap: number,
   ends: { left: boolean; right: boolean; tuft: boolean },
   at: GroundAt,
+  lift?: number,
 ): boolean {
   const sole = readSole(scene, sprite.texture.key);
   if (!sole || sprite.displayWidth < 1 || sprite.displayHeight < 1) return false;
@@ -113,6 +116,7 @@ export function paintSeat(
   const top = sprite.y - sprite.displayHeight;
   const x0 = Math.floor(left);
   const x1 = Math.ceil(left + sprite.displayWidth);
+  const maxLift = lift ?? Number.POSITIVE_INFINITY;
   const cols: Column[] = [];
   for (let x = x0; x < x1; x += 1) {
     const sx0 = Math.floor((x - left) / scaleX);
@@ -126,7 +130,7 @@ export function paintSeat(
         lip = sole.lip[sx];
       }
     }
-    if (best < 0) continue;
+    if (best < 0 || sole.h - 1 - best > maxLift) continue;
     const edge = top + (best + 1) * scaleY;
     cols.push({ x, cut: Math.floor(edge - 1e-4), lip });
   }

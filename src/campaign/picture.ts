@@ -4,6 +4,7 @@ import type { Ground } from './ground';
 import type { BarrelMark } from '../types/barrel';
 import type { FenceMark } from '../types/fence';
 import type { HouseMark } from '../types/house';
+import type { KilnMark } from '../types/kiln';
 import { picketTotal, type PicketMark } from '../types/picket';
 import type { PropMark } from '../types/prop';
 import type { RailMark } from '../types/rail';
@@ -33,10 +34,12 @@ export type Picture = {
   rails: readonly RailMark[];
   /** Бочки на поле. Пустой список — бочек нет. */
   barrels: readonly BarrelMark[];
+  /** Печи на поле. Пустой список — печи нет. */
+  kilns: readonly KilnMark[];
   /** Штакетник. Пустой список — его на картинке нет. Секции считает кадр. */
   pickets: readonly PicketMark[];
   /**
-   * Бонусы из домов, кустов, ящиков, короткого кирпича, мешков, заборов у дороги, бочек и секций штакетника.
+   * Бонусы из домов, кустов, ящиков, короткого кирпича, мешков, заборов у дороги, бочек, печей и секций штакетника.
    * Забор перед солдатом не роняет. Уцелевший дом по пустой полоске тоже не роняет: он просто падает.
    * Записей не меньше, чем таких объектов без штакетника: каждый забирает одну случайную,
    * лишние в этой картинке не выпадают.
@@ -47,9 +50,9 @@ export type Picture = {
   wave: readonly WaveGroup[];
 };
 
-/** Дома, кусты, ящики, короткий кирпич, мешки, заборы у дороги, бочки и секции штакетника. Забор перед солдатом не считается. */
+/** Дома, кусты, ящики, короткий кирпич, мешки, заборы у дороги, бочки, печи и секции штакетника. Забор перед солдатом не считается. */
 export function breakableCount(
-  picture: Pick<Picture, 'houses' | 'props' | 'shorts' | 'sandbags' | 'rails' | 'barrels' | 'pickets'>,
+  picture: Pick<Picture, 'houses' | 'props' | 'shorts' | 'sandbags' | 'rails' | 'barrels' | 'kilns' | 'pickets'>,
   field: Rect,
 ): number {
   return (
@@ -59,6 +62,7 @@ export function breakableCount(
     picture.sandbags.length +
     picture.rails.length +
     picture.barrels.length +
+    picture.kilns.length +
     picketTotal(picture.pickets, field)
   );
 }

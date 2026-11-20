@@ -22,7 +22,7 @@ import {
 /**
  * Земля деревни, картинка 1-1. Не рип.
  * Дорога сходится в точку на горизонте. Крыши и кроны заходят на небо,
- * растения заполняют двор. Штакетник, жерди и бочки ставит бой.
+ * растения заполняют двор. Штакетник, жерди, бочки и печь ставит бой.
  * Врагов на этом слое нет.
  */
 export function villageGround(houses: readonly HouseMark[]): Ground {
@@ -102,7 +102,6 @@ function paintField(houses: readonly HouseMark[], w: number, h: number): Pix {
   sow(pix, dirt, w, h, fit);
   doorYards = houseYards(houses, field);
   for (const spec of doorYards) yard(pix, spec);
-  kiln(pix, Math.round(w * 0.95), Math.round(h * 0.5), Math.round(30 * fit));
   crops(pix, Math.round(w * 0.03), Math.round(h * 0.58), fit);
   return pix;
 }
@@ -164,30 +163,6 @@ function railLayout(w: number, h: number): RailLayout {
     right.push({ x: Math.round(edges.right + 2), y, ph, w: postW });
   }
   return { left, right, fit };
-}
-
-function kiln(pix: Pix, cx: number, ground: number, r: number): void {
-  if (r < 8) return;
-  for (let y = -r; y <= 2; y += 1) {
-    const span = y < 0 ? Math.sqrt(Math.max(0, r * r - y * y)) : r * 0.92;
-    const row = Math.floor((y + r) / 4);
-    for (let x = Math.round(-span); x <= Math.round(span); x += 1) {
-      const edge = Math.abs(x) >= span - 1.2;
-      const gap = (x + row * 3) % 6 === 0;
-      let color: number = row % 2 === 0 ? palette.brick : palette.brickLite;
-      if (edge || gap || y >= 0) color = palette.brickDark;
-      if (y === -r + row * 4) color = palette.mortar;
-      pix.px(cx + x, ground + y, color);
-    }
-  }
-  const mouthW = Math.round(r * 0.34);
-  const mouthH = Math.round(r * 0.42);
-  for (let y = -mouthH; y <= 0; y += 1) {
-    const span = mouthW * Math.sqrt(Math.max(0, 1 - (y / mouthH) ** 2));
-    for (let x = Math.round(-span); x <= Math.round(span); x += 1) {
-      pix.px(cx + x, ground - Math.round(r * 0.08) + y, y < -mouthH + 2 ? palette.brickDark : palette.line);
-    }
-  }
 }
 
 function crops(pix: Pix, x: number, ground: number, fit: number): void {
