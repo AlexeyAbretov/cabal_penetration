@@ -16,13 +16,14 @@ import { deadTree, dirtTone, fillSky, grassTone, liveTree, paintMountains, roadE
 export function villageGround(houses: readonly HouseMark[]): Ground {
   return {
     backdrop: (width, skyH, fieldH) => paintBackdrop(houses, width, skyH, fieldH),
+    front: paintFront,
     track: paintTrack,
     at: groundAt,
     rails: railLayout,
   };
 }
 
-/** Небо и поле одним листом: крона выше горизонта остаётся на небе, а не обрезается. */
+/** Небо и поле одним листом: сухая крона выше горизонта остаётся на небе, а не обрезается. */
 function paintBackdrop(houses: readonly HouseMark[], w: number, skyH: number, fieldH: number): Pix {
   const pix = new Pix(w, Math.max(1, skyH + fieldH));
   if (skyH > 0) stamp(pix, paintSky(w, skyH), 0, 0);
@@ -30,9 +31,21 @@ function paintBackdrop(houses: readonly HouseMark[], w: number, skyH: number, fi
   const field: Rect = { x: 0, y: 0, width: w, height: fieldH };
   const fit = fitScale(field);
   const ground = (fraction: number) => skyH + Math.round(belowHorizon(fraction, field));
-  // Дальнее раньше ближнего: общая крона не закрывает ближний ствол.
+  // Сухое дальше избы. Оно остаётся в листе земли, дом его закрывает.
   deadTree(pix, Math.round(w * 0.44), ground(0.13), Math.round(96 * fit));
-  liveTree(pix, Math.round(w * 0.32), ground(0.29), Math.round(118 * fit));
+  return pix;
+}
+
+/**
+ * Живое дерево ближе избы. Отдельный лист, не земля:
+ * дома — спрайты поверх листа, и на узком окне крона иначе уходит за левый фасад.
+ */
+function paintFront(w: number, skyH: number, fieldH: number): Pix {
+  const pix = new Pix(w, Math.max(1, skyH + fieldH));
+  const field: Rect = { x: 0, y: 0, width: w, height: fieldH };
+  const fit = fitScale(field);
+  const ground = skyH + Math.round(belowHorizon(0.29, field));
+  liveTree(pix, Math.round(w * 0.32), ground, Math.round(118 * fit));
   return pix;
 }
 

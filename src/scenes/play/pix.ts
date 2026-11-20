@@ -129,6 +129,34 @@ export function inkOutline(pix: Pix, color: number): void {
   }
 }
 
+/** Непрозрачный прямоугольник. Пустой буфер — null. Координаты — угол исходного листа. */
+export function cropOpaque(src: Pix): { pix: Pix; x: number; y: number } | null {
+  const { w, h, data } = src;
+  let minX = w;
+  let minY = h;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < h; y += 1) {
+    const row = y * w;
+    for (let x = 0; x < w; x += 1) {
+      if (data[(row + x) * 4 + 3]! === 0) continue;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < minX || maxY < minY) return null;
+  const pw = maxX - minX + 1;
+  const ph = maxY - minY + 1;
+  const pix = new Pix(pw, ph);
+  for (let y = 0; y < ph; y += 1) {
+    const from = ((y + minY) * w + minX) * 4;
+    pix.data.set(data.subarray(from, from + pw * 4), y * pw * 4);
+  }
+  return { pix, x: minX, y: minY };
+}
+
 export function stamp(dst: Pix, src: Pix, dx: number, dy: number): void {
   for (let y = 0; y < src.h; y += 1) {
     for (let x = 0; x < src.w; x += 1) {

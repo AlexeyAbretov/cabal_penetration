@@ -4,7 +4,7 @@ import { palette } from '../../constants';
 import type { FrameLayout, Rect } from '../../layout';
 import type { RailLayout } from '../../types/rail';
 import { blit, ensureCanvas } from './blit';
-import type { Pix } from './pix';
+import { cropOpaque, type Pix } from './pix';
 import { captureTreeWood } from './treeWood';
 
 /**
@@ -22,6 +22,7 @@ export class Stage {
   private readonly trackImage: Phaser.GameObjects.Image;
   private readonly hudFill: Phaser.GameObjects.Graphics;
   private readonly flat: Phaser.GameObjects.Graphics;
+  private readonly frontImage: Phaser.GameObjects.Image;
   private ground: Ground | null = null;
 
   constructor(scene: Phaser.Scene) {
@@ -39,6 +40,13 @@ export class Stage {
     this.flat = scene.add.graphics();
     this.hudFill = scene.add.graphics();
     this.hud.add(this.hudFill);
+    // Не в контейнере поля: дети контейнера идут списком, глубина их не сортирует,
+    // а дома добавляются позже и закрыли бы крону. 1.2 — после поля (1), до замаха (1.5).
+    this.frontImage = scene.add
+      .image(0, 0, ensureCanvas(scene, 'band-front'))
+      .setOrigin(0, 0)
+      .setDepth(1.2)
+      .setVisible(false);
   }
 
   paint(view: FrameLayout, ground: Ground | null): void {
@@ -64,6 +72,7 @@ export class Stage {
       width: view.sky.width,
       height: view.sky.height + view.field.height,
     });
+    this.placeFront(ground.front?.(view.sky.width, view.sky.height, view.field.height) ?? null);
     this.fieldImage.setVisible(false);
     put(
       this.scene,
@@ -79,10 +88,26 @@ export class Stage {
     this.skyImage.setVisible(false);
     this.fieldImage.setVisible(false);
     this.trackImage.setVisible(false);
+    this.frontImage.setVisible(false);
     this.flat.clear();
     fill(this.flat, view.sky, palette.sky);
     fill(this.flat, view.field, palette.field);
     fill(this.flat, view.track, palette.field);
+  }
+
+  /** Крона живого дерева. Пустой лист скрывает слой, чтобы 1-2 не оставляла дерево 1-1. */
+  private placeFront(pix: Pix | null): void {
+    const box = pix ? cropOpaque(pix) : null;
+    if (!box) {
+      this.frontImage.setVisible(false);
+      return;
+    }
+    put(this.scene, this.frontImage, 'band-front', box.pix, {
+      x: box.x,
+      y: box.y,
+      width: box.pix.w,
+      height: box.pix.h,
+    });
   }
 }
 

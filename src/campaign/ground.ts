@@ -13,6 +13,12 @@ export type GroundTone = {
  */
 export type Ground = {
   backdrop(width: number, skyH: number, fieldH: number): Pix;
+  /**
+   * Прозрачный лист поверх домов. Живое дерево ближе фасада:
+   * на узком окне крона заходит на избу и должна её закрывать.
+   * Нет метода — этот слой скрыт.
+   */
+  front?(width: number, skyH: number, fieldH: number): Pix;
   track(width: number, height: number, fieldH: number): Pix;
   at(x: number, y: number, field: Rect, track: Rect): GroundTone;
   rails(width: number, height: number): RailLayout;
