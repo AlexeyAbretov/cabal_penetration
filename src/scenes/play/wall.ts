@@ -62,18 +62,25 @@ export class FrontWall {
     return { x: this.columnCenter(view, column), y };
   }
 
-  chip(column: number, x: number, y: number, sparks: Sparks, amount = 1): void {
+  /**
+   * Очередь колет на удар ствола.
+   * flash — крест вспышки. Лист забора рисует свои осколки и крест не берёт.
+   * miss — секция уже лежала, chip — ещё стоит, down — этот удар её снял.
+   */
+  chip(column: number, x: number, y: number, sparks: Sparks, amount = 1, flash = true): 'miss' | 'chip' | 'down' {
     const hp = this.hp[column] ?? 0;
-    if (hp <= 0 || amount <= 0) return;
+    if (hp <= 0 || amount <= 0) return 'miss';
     this.hp[column] = Math.max(0, hp - amount);
-    sparks.add(x, y, 90, 'chip');
+    if (flash) sparks.add(x, y, 90, 'chip');
+    return this.hp[column] <= 0 ? 'down' : 'chip';
   }
 
-  /** Граната снимает секцию целиком. Очередь колет на удар ствола. */
-  ruin(column: number, x: number, y: number, sparks: Sparks): void {
-    if ((this.hp[column] ?? 0) <= 0) return;
+  /** Граната снимает секцию целиком. false — секция уже лежала. */
+  ruin(column: number, x: number, y: number, sparks: Sparks, flash = true): boolean {
+    if ((this.hp[column] ?? 0) <= 0) return false;
     this.hp[column] = 0;
-    sparks.add(x, y, 160, 'land');
+    if (flash) sparks.add(x, y, 160, 'land');
+    return true;
   }
 
   /** Лицо секции без листа. Кладку листа считает забор. */

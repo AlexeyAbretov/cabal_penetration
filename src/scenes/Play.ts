@@ -20,6 +20,7 @@ import { treeWoodAsset } from './play/treeWood';
 import { Aim } from './play/aim';
 import { Barrels } from './play/barrels';
 import { Controls } from './play/input';
+import { Debris } from './play/debris';
 import { DropBag, Drops } from './play/drops';
 import { Enemies } from './play/enemies';
 import { Fences } from './play/fences';
@@ -68,6 +69,7 @@ export class Play extends Phaser.Scene {
   private pickets!: Pickets;
   private barrels!: Barrels;
   private sparks!: Sparks;
+  private debris!: Debris;
   private battleGfx!: Phaser.GameObjects.Graphics;
   private paused = false;
   private cleared = false;
@@ -115,6 +117,7 @@ export class Play extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(palette.black);
     this.wall = new FrontWall(this.picture.wall);
     this.sparks = new Sparks();
+    this.debris = new Debris(this);
     this.stage = new Stage(this);
     this.battleGfx = this.add.graphics().setDepth(4);
     this.gun = new Gun(this);
@@ -140,9 +143,9 @@ export class Play extends Phaser.Scene {
     this.props = new Props(this, this.picture.props, this.sparks, scatter);
     const earth = this.picture.ground?.at ?? plainAt;
     if (this.picture.shorts.length > 0) registerShortFenceAnim(this);
-    this.shorts = new ShortFences(this, this.picture.shorts, this.sparks, scatter, earth);
+    this.shorts = new ShortFences(this, this.picture.shorts, this.debris, scatter, earth);
     if (this.picture.sandbags.length > 0) registerSandbagAnim(this);
-    this.bags = new Sandbags(this, this.picture.sandbags, this.sparks, scatter, earth);
+    this.bags = new Sandbags(this, this.picture.sandbags, this.debris, scatter, earth);
     this.rails = new Rails(this, this.picture.rails, this.stage.field, scatter, (width, height) =>
       this.stage.railLayout(width, height),
     );
@@ -153,7 +156,7 @@ export class Play extends Phaser.Scene {
     );
     this.houses = new Houses(this, this.picture.houses, this.stage.field, earth);
     registerFenceAnims(this, fenceKinds(this.picture.fences));
-    this.fences = new Fences(this, this.picture.fences, this.picture.wall, earth);
+    this.fences = new Fences(this, this.picture.fences, this.picture.wall, this.debris, earth);
     this.grenades.onLand((x, y) => {
       if (this.cleared) return;
       this.enemies.blast(x, y);
@@ -283,6 +286,7 @@ export class Play extends Phaser.Scene {
     }
     this.soldier.setAlpha(this.hud.stepHurt(step));
     this.sparks.step(step);
+    this.debris.step(step);
     this.props.step(step);
     this.shorts.step(step);
     this.bags.step(step);
@@ -362,7 +366,7 @@ export class Play extends Phaser.Scene {
     const geom = this.wall.geom(this.view);
     const mid = geom.top + geom.height / 2;
     for (const column of doomed) {
-      this.wall.ruin(column, this.wall.columnCenter(this.view, column), mid, this.sparks);
+      this.breakCover(column, this.wall.columnCenter(this.view, column), mid);
     }
   }
 
@@ -406,8 +410,23 @@ export class Play extends Phaser.Scene {
       if (!sheet.has(column)) hit.add(column);
     }
     for (const column of hit) {
-      this.wall.chip(column, this.wall.columnCenter(this.view, column), at.y, this.sparks, amount);
+      this.strikeCover(column, at.x, at.y, amount);
     }
+  }
+
+  /** Лист сыплет свою крошку. Голая стена оставляет крест. */
+  private strikeCover(column: number, x: number, y: number, amount: number): void {
+    const sheet = this.fences.columns().has(column);
+    const flashX = this.wall.columnCenter(this.view, column);
+    const verdict = this.wall.chip(column, flashX, y, this.sparks, amount, !sheet);
+    if (sheet && verdict !== 'miss') this.fences.spray(column, x, y, verdict === 'down');
+  }
+
+  /** Граната снимает секцию. У листа вместо вспышки — осколки по лицу. */
+  private breakCover(column: number, x: number, y: number): void {
+    const sheet = this.fences.columns().has(column);
+    const fell = this.wall.ruin(column, x, y, this.sparks, !sheet);
+    if (sheet && fell) this.fences.spray(column, x, y, true);
   }
 
   private resolveIncoming(column: number): void {
@@ -423,7 +442,7 @@ export class Play extends Phaser.Scene {
     });
     const point = cover ? { x, y: this.wall.geom(this.view).top } : this.wall.impact(this.view, column);
     if (verdict === 'wall') {
-      this.wall.chip(section ?? column, point.x, point.y, this.sparks);
+      this.strikeCover(section ?? column, point.x, point.y, 1);
       return;
     }
     this.sparks.add(point.x, point.y, 120, 'puff');
@@ -476,6 +495,7 @@ export class Play extends Phaser.Scene {
   /** Дома уже падают. Солдат убегает, затем следующая картинка или лишняя жизнь. */
   private stepClear(delta: number): void {
     this.sparks.step(delta);
+    this.debris.step(delta);
     this.rails.step(delta);
     this.barrels.step(delta);
     this.pickets.step(delta);
@@ -562,6 +582,7 @@ export class Play extends Phaser.Scene {
     this.enemies.drawBullets(gfx, this.view, this.wall);
     this.grenades.draw(gfx);
     this.sparks.draw(gfx);
+    this.debris.draw();
     this.rails.draw();
     this.barrels.draw();
     this.pickets.draw();

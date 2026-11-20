@@ -5,8 +5,8 @@ import type { GroundAt } from '../../campaign/ground';
 import type { ShortMark } from '../../types/shortFence';
 import { ruinVariants, shortFenceBreakKey, shortFenceIdleKey, shortFenceRuinKey } from '../../fenceSheet';
 import { fieldScale, fitScale, type FrameLayout } from '../../layout';
+import { Debris, onFace } from './debris';
 import { paintSeat } from './seat';
-import type { Sparks } from './sparks';
 
 type InkRect = {
   left: number;
@@ -30,7 +30,7 @@ type Run = {
  * Короткий кирпич на траве. Стену у ног не закрывает.
  * Секции одного забора стоят встык и ломаются вместе: один бонус из списка картинки на весь прогон.
  * После ролика на ширине кладки остаются кучи кирпича. Они пулю не держат.
- * Подошва на линии прежней кладки, выше низа сцены, чем одиночный лист у стены.
+ * Удар сыплет кирпичную крошку. Подошва на линии прежней кладки, выше низа сцены, чем одиночный лист у стены.
  */
 export class ShortFences {
   private readonly runs: Run[];
@@ -44,7 +44,7 @@ export class ShortFences {
   constructor(
     scene: Phaser.Scene,
     marks: readonly ShortMark[],
-    private readonly sparks: Sparks,
+    private readonly debris: Debris,
     onBreak: (score: number, rx: number, ry: number) => void,
     at: GroundAt,
   ) {
@@ -78,10 +78,11 @@ export class ShortFences {
 
   /** Квадрат креста бьёт забор, чья кладка в него попала. */
   hit(box: HitBox, amount: number): void {
+    const at = { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 };
     for (const run of this.runs) {
       const hit = run.hit;
       if (!run.alive || !hit || !rectsOverlap(box, hit)) continue;
-      this.wound(run, amount);
+      this.wound(run, amount, at);
     }
   }
 
@@ -90,7 +91,7 @@ export class ShortFences {
     for (const run of this.runs) {
       const hit = run.hit;
       if (!run.alive || !hit || !circleHitsRect(x, y, grenade.blastRadius, hit)) continue;
-      this.wound(run, run.hp);
+      this.wound(run, run.hp, { x, y });
     }
   }
 
@@ -172,25 +173,29 @@ export class ShortFences {
     if (ready) this.seatSig = sig;
   }
 
-  private wound(run: Run, amount: number): void {
+  private wound(run: Run, amount: number, at: { x: number; y: number }): void {
     if (!run.alive || amount <= 0) return;
     run.hp -= amount;
     run.flash = 70;
-    const hit = run.hit;
-    const sx = hit ? (hit.left + hit.right) / 2 : 0;
-    const sy = hit ? (hit.top + hit.bottom) / 2 : 0;
+    const spot = onFace(run.hit, at.x, at.y);
     if (run.hp > 0) {
-      this.sparks.add(sx, sy, 80, 'chip');
+      this.debris.burst(spot.x, spot.y, 'brick', false, 'field');
       return;
     }
     run.alive = false;
     run.hit = null;
     run.breaking = true;
-    this.sparks.add(sx, sy, 160, 'land');
+    this.debris.burst(spot.x, spot.y, 'brick', true, 'field');
+    for (const sprite of run.sprites) {
+      const px = sprite.x;
+      const py = sprite.y - sprite.displayHeight * 0.35;
+      if (Math.hypot(px - spot.x, py - spot.y) < 10) continue;
+      this.debris.burst(px, py, 'brick', false, 'field');
+    }
     const view = this.view;
     const field = view?.field;
-    const rx = field ? (sx - field.x) / Math.max(1, field.width) : run.mark.x;
-    const ry = field ? (sy - field.y) / Math.max(1, field.height) : 0.7;
+    const rx = field ? (spot.x - field.x) / Math.max(1, field.width) : run.mark.x;
+    const ry = field ? (spot.y - field.y) / Math.max(1, field.height) : 0.7;
     this.onBreak(shortFence.score, rx, ry);
     const key = shortFenceBreakKey();
     for (const sprite of run.sprites) sprite.play(key);

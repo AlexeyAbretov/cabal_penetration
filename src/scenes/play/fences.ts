@@ -5,6 +5,7 @@ import type { GroundAt } from '../../campaign/ground';
 import type { FenceMark } from '../../types/fence';
 import { fenceBreakKey, fenceIdleKey, fenceInk, fenceRuinKey, ruinVariants } from '../../fenceSheet';
 import type { FrameLayout } from '../../layout';
+import { Debris, onFace } from './debris';
 import { paintSeat } from './seat';
 import { type FrontWall, type WallGeom } from './wall';
 
@@ -29,6 +30,7 @@ type Piece = {
  * Лист на передней стене, позади солдата. Колонка пулю не пускает, пока цела.
  * Когда жизни колонки кончаются, секция играет ролик и оставляет кучу на ширине кладки.
  * Куча пулю не держит. У картинки свой список: какие колонки каким листом закрыты.
+ * Удар по камню сыплет осколки, по ржавому железу — искры.
  */
 export class Fences {
   private readonly pieces: Piece[];
@@ -39,7 +41,13 @@ export class Fences {
   private readonly at: GroundAt;
   private seatSig = '';
 
-  constructor(scene: Phaser.Scene, marks: readonly FenceMark[], mask: readonly boolean[], at: GroundAt) {
+  constructor(
+    scene: Phaser.Scene,
+    marks: readonly FenceMark[],
+    mask: readonly boolean[],
+    private readonly debris: Debris,
+    at: GroundAt,
+  ) {
     this.scene = scene;
     this.at = at;
     this.seatGfx = scene.add.graphics().setDepth(3.52);
@@ -88,6 +96,25 @@ export class Fences {
       found = piece.column;
     }
     return found;
+  }
+
+  /**
+   * Крошка с кладки этой колонки. heavy — секция только что упала:
+   * осколки идут и от удара, и выше-ниже по лицу.
+   */
+  spray(column: number, x: number, y: number, heavy: boolean): void {
+    const piece = this.pieces.find((item) => item.column === column);
+    if (!piece || piece.gone) return;
+    const kind = piece.kind === 'rust' ? 'spark' : 'stone';
+    const spot = onFace(piece.hit, x, y);
+    this.debris.burst(spot.x, spot.y, kind, heavy, 'wall');
+    const hit = piece.hit;
+    if (!heavy || !hit) return;
+    const mid = (hit.left + hit.right) / 2;
+    const upper = hit.top + (hit.bottom - hit.top) * 0.28;
+    const lower = hit.top + (hit.bottom - hit.top) * 0.72;
+    if (Math.abs(upper - spot.y) > 6) this.debris.burst(mid, upper, kind, false, 'wall');
+    if (Math.abs(lower - spot.y) > 6) this.debris.burst(mid, lower, kind, false, 'wall');
   }
 
   /** Живые секции, чья кладка входит в круг разрыва. */

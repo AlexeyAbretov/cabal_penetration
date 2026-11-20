@@ -5,8 +5,8 @@ import type { GroundAt } from '../../campaign/ground';
 import type { SandbagMark } from '../../types/sandbag';
 import { ruinVariants, sandbagBreakKey, sandbagIdleKey, sandbagRuinKey } from '../../fenceSheet';
 import { fieldScale, fitScale, type FrameLayout } from '../../layout';
+import { Debris, onFace } from './debris';
 import { paintSeat } from './seat';
-import type { Sparks } from './sparks';
 
 type InkRect = {
   left: number;
@@ -33,7 +33,7 @@ type Pile = {
  * Мешки на дороге. Стену у ног не закрывают.
  * Секции одного блокпоста стоят рядом и ломаются по одной.
  * После ролика на ширине секции остаётся куча песка. Она пулю не держит.
- * Разрушение берёт один бонус из списка картинки.
+ * Удар поднимает песчаную пыль. Разрушение берёт один бонус из списка картинки.
  */
 export class Sandbags {
   private readonly piles: Pile[];
@@ -45,7 +45,7 @@ export class Sandbags {
   constructor(
     scene: Phaser.Scene,
     marks: readonly SandbagMark[],
-    private readonly sparks: Sparks,
+    private readonly debris: Debris,
     onBreak: (score: number, rx: number, ry: number) => void,
     at: GroundAt,
   ) {
@@ -79,10 +79,11 @@ export class Sandbags {
 
   /** Квадрат креста бьёт мешки, чья кладка в него попала. */
   hit(box: HitBox, amount: number): void {
+    const at = { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 };
     for (const pile of this.piles) {
       const hit = pile.hit;
       if (!pile.alive || !hit || !rectsOverlap(box, hit)) continue;
-      this.wound(pile, amount);
+      this.wound(pile, amount, at);
     }
   }
 
@@ -91,7 +92,7 @@ export class Sandbags {
     for (const pile of this.piles) {
       const hit = pile.hit;
       if (!pile.alive || !hit || !circleHitsRect(x, y, grenade.blastRadius, hit)) continue;
-      this.wound(pile, pile.hp);
+      this.wound(pile, pile.hp, { x, y });
     }
   }
 
@@ -146,25 +147,23 @@ export class Sandbags {
     if (ready) pile.seatSig = sig;
   }
 
-  private wound(pile: Pile, amount: number): void {
+  private wound(pile: Pile, amount: number, at: { x: number; y: number }): void {
     if (!pile.alive || amount <= 0) return;
     pile.hp -= amount;
     pile.flash = 70;
-    const hit = pile.hit;
-    const sx = hit ? (hit.left + hit.right) / 2 : 0;
-    const sy = hit ? (hit.top + hit.bottom) / 2 : 0;
+    const spot = onFace(pile.hit, at.x, at.y);
     if (pile.hp > 0) {
-      this.sparks.add(sx, sy, 80, 'chip');
+      this.debris.burst(spot.x, spot.y, 'sand', false, 'field');
       return;
     }
     pile.alive = false;
     pile.hit = null;
     pile.breaking = true;
-    this.sparks.add(sx, sy, 160, 'land');
+    this.debris.burst(spot.x, spot.y, 'sand', true, 'field');
     const view = this.view;
     const field = view?.field;
-    const rx = field ? (sx - field.x) / Math.max(1, field.width) : pile.mark.x;
-    const ry = field ? (sy - field.y) / Math.max(1, field.height) : pile.mark.y;
+    const rx = field ? (spot.x - field.x) / Math.max(1, field.width) : pile.mark.x;
+    const ry = field ? (spot.y - field.y) / Math.max(1, field.height) : pile.mark.y;
     this.onBreak(sandbag.score, rx, ry);
     pile.sprite.play(sandbagBreakKey());
     pile.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
