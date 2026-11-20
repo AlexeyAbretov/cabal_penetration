@@ -27,8 +27,6 @@ const soles = new Map<string, Sole>();
 const OUTLINE = 0x1a140e;
 
 function readSole(scene: Phaser.Scene, key: string): Sole | null {
-  const cached = soles.get(key);
-  if (cached) return cached;
   if (!scene.textures.exists(key)) return null;
   const image = scene.textures.get(key).getSourceImage() as CanvasImageSource & {
     width?: number;
@@ -37,6 +35,10 @@ function readSole(scene: Phaser.Scene, key: string): Sole | null {
   const w = image.width ?? 0;
   const h = image.height ?? 0;
   if (w < 1 || h < 1) return null;
+  // Дом перерисовывает ту же канву при новом размере окна. Ключ без размера отдал бы старую подошву.
+  const cacheKey = `${key}:${w}x${h}`;
+  const cached = soles.get(cacheKey);
+  if (cached) return cached;
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
@@ -73,9 +75,18 @@ function readSole(scene: Phaser.Scene, key: string): Sole | null {
   }
   if (!opaque) return null;
   const sole: Sole = { w, h, y, lip };
-  soles.set(key, sole);
+  soles.set(cacheKey, sole);
   return sole;
 }
+
+/** Лист или нарисованный дом. x, y — низ по центру, в тех же координатах, что и графика. */
+type SeatImage = {
+  x: number;
+  y: number;
+  displayWidth: number;
+  displayHeight: number;
+  texture: { key: string };
+};
 
 type Column = { x: number; cut: number; lip: number };
 
@@ -87,7 +98,7 @@ type Column = { x: number; cut: number; lip: number };
 export function paintSeat(
   gfx: Phaser.GameObjects.Graphics,
   scene: Phaser.Scene,
-  sprite: Phaser.GameObjects.Sprite,
+  sprite: SeatImage,
   field: Rect,
   track: Rect,
   buryCap: number,

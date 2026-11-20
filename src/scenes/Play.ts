@@ -151,7 +151,7 @@ export class Play extends Phaser.Scene {
     this.enemies = new Enemies(this, this.picture.wave, this.sparks, (points) => this.onKill(points), (count) =>
       this.onGone(count),
     );
-    this.houses = new Houses(this, this.picture.houses, this.stage.field);
+    this.houses = new Houses(this, this.picture.houses, this.stage.field, earth);
     registerFenceAnims(this, fenceKinds(this.picture.fences));
     this.fences = new Fences(this, this.picture.fences, this.picture.wall, earth);
     this.grenades.onLand((x, y) => {

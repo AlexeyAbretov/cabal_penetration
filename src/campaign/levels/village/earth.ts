@@ -1,7 +1,9 @@
 import { palette } from '../../../constants';
-import { sceneDepth } from '../../../layout';
+import { belowHorizon, fitScale, sceneDepth, type Rect } from '../../../layout';
+import { doorPath } from '../../../scenes/play/buildings';
 import { disc, hash, lerpColor, Pix } from '../../../scenes/play/pix';
 import { placeTreeWood, stampTreeWood, treeWoodGrid, type TreeWoodGrid } from '../../../scenes/play/treeWood';
+import type { HouseMark } from '../../../types/house';
 
 /**
  * Общая земля деревни. 1-1 и 1-2 берут одно небо и одну гряду:
@@ -381,54 +383,105 @@ function paintNear(pix: Pix, x: number, skyH: number, h: number): void {
 
 /**
  * Вытоптанное пятно у двери. Не овал: сектора разной длины,
- * у края пиксельный разрыв, несколько выемок и торчащих клочьев.
- * Контур зависит от места, поэтому соседние дворы не повторяются.
+ * у края разрыв, несколько выемок и торчащих клочьев.
+ * Семя — метка дома. Контур в долях пятна, не в пикселях экрана:
+ * смена окна его масштабирует, а не перекраивает.
  */
-export function yard(pix: Pix, cx: number, cy: number, rx: number, ry: number): void {
-  if (rx < 2 || ry < 1) return;
-  const sx = Math.round(cx);
-  const sy = Math.round(cy);
-  const sectors = 9;
-  const reach: number[] = [];
-  for (let i = 0; i < sectors; i += 1) {
-    const n = hash(sx + i * 5, sy - i * 3);
-    reach.push(0.48 + (n % 80) / 100);
+export type YardSpec = {
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+  seed: number;
+};
+
+export function houseYards(houses: readonly HouseMark[], field: Rect): YardSpec[] {
+  const fit = fitScale(field);
+  const specs: YardSpec[] = [];
+  for (const house of houses) {
+    const seed = yardSeed(house.kind, house.x, house.y);
+    const path = doorPath(house.kind, house.x, house.w, house.h, house.y, field);
+    if (path) {
+      specs.push({ cx: path.cx, cy: path.cy, rx: path.rx, ry: path.ry, seed });
+      continue;
+    }
+    if (house.kind !== 'gate' && house.kind !== 'ruin') continue;
+    const pad = house.kind === 'gate' ? 6 : 14;
+    specs.push({
+      cx: house.x * field.width,
+      cy: belowHorizon(house.y, field) + 2,
+      rx: pad * fit,
+      ry: Math.max(2, 6 * fit),
+      seed,
+    });
   }
-  const bites: { x: number; y: number; r2: number }[] = [];
-  const biteCount = 2 + (hash(sx, sy) % 3);
+  return specs;
+}
+
+function yardSeed(kind: string, x: number, y: number): number {
+  return hash(hash(Math.round(x * 10000), Math.round(y * 10000)), kind.charCodeAt(0) + kind.length * 17);
+}
+
+type Bite = { x: number; y: number; r2: number };
+
+const biteCache = new Map<string, Bite[]>();
+
+function yardBites(seed: number, rx: number, ry: number): Bite[] {
+  const key = `${seed}:${rx}:${ry}`;
+  const cached = biteCache.get(key);
+  if (cached) return cached;
+  const biteCount = 2 + (hash(seed, 9) % 3);
+  const bites: Bite[] = [];
+  const span = Math.min(rx, ry);
   for (let i = 0; i < biteCount; i += 1) {
-    const n = hash(sx + 17 + i * 4, sy + 9 + i);
+    const n = hash(seed, 40 + i);
     const ang = ((n % 360) * Math.PI) / 180;
     const along = 0.62 + ((n >>> 9) % 30) / 100;
-    const rad = Math.max(1.6, Math.min(rx, ry) * (0.16 + ((n >>> 18) % 16) / 100));
+    const rad = span * (0.16 + ((n >>> 18) % 16) / 100);
     bites.push({ x: Math.cos(ang) * rx * along, y: Math.sin(ang) * ry * along, r2: rad * rad });
   }
-  const pad = Math.ceil(Math.max(rx, ry) * 0.5);
-  for (let y = Math.floor(cy - ry - pad); y <= Math.ceil(cy + ry + pad); y += 1) {
-    for (let x = Math.floor(cx - rx - pad); x <= Math.ceil(cx + rx + pad); x += 1) {
-      const dx = x + 0.5 - cx;
-      const dy = y + 0.5 - cy;
-      const dist = Math.hypot(dx / rx, dy / ry);
-      if (dist > 1.55) continue;
-      const ang = Math.atan2(dy / ry, dx / rx);
-      const sector = Math.floor((((ang + Math.PI) / (Math.PI * 2)) * sectors) % sectors);
-      const n = hash(x, y);
-      const tear = ((n % 11) - 5) * 0.08;
-      const edge = reach[sector] ?? 1;
-      const speck = dist > edge + tear && dist < edge + 0.42 && n % 5 === 0;
-      if (dist > edge + tear && !speck) continue;
-      let bitten = false;
-      for (const bite of bites) {
-        const bx = dx - bite.x;
-        const by = dy - bite.y;
-        if (bx * bx + by * by < bite.r2) {
-          bitten = true;
-          break;
-        }
-      }
-      if (bitten) continue;
-      if (dist > 0.4 && n % 19 === 0) continue;
-      pix.px(x, y, n % 5 === 0 ? palette.dirtLite : n % 4 === 0 ? palette.dirtDark : palette.dirt);
+  biteCache.set(key, bites);
+  return bites;
+}
+
+/** Цвет пятна в пикселе поля. null — здесь остаётся газон или дорога. */
+export function yardTone(x: number, y: number, spec: YardSpec): number | null {
+  const { cx, cy, rx, ry, seed } = spec;
+  if (rx < 2 || ry < 1) return null;
+  const dx = x + 0.5 - cx;
+  const dy = y + 0.5 - cy;
+  const dist = Math.hypot(dx / rx, dy / ry);
+  if (dist > 1.6) return null;
+  const ang = Math.atan2(dy / ry, dx / rx);
+  const sectors = 9;
+  let sector = Math.floor((((ang + Math.PI) / (Math.PI * 2)) * sectors) % sectors);
+  if (sector < 0) sector += sectors;
+  const edge = 0.48 + (hash(seed, sector + 1) % 80) / 100;
+  const step = Math.round(ang * 16);
+  const tear = ((hash(seed, 200 + step) % 11) - 5) * 0.08;
+  const speck = dist > edge + tear && dist < edge + 0.42 && hash(seed, 300 + step) % 5 === 0;
+  if (dist > edge + tear && !speck) return null;
+  for (const bite of yardBites(seed, rx, ry)) {
+    const bx = dx - bite.x;
+    const by = dy - bite.y;
+    if (bx * bx + by * by < bite.r2) return null;
+  }
+  const qx = Math.round((dx / rx) * 8);
+  const qy = Math.round((dy / ry) * 8);
+  if (dist > 0.4 && hash(seed + qx * 5, qy + 11) % 19 === 0) return null;
+  const n = hash(seed + qx, qy + 4);
+  if (n % 5 === 0) return palette.dirtLite;
+  if (n % 4 === 0) return palette.dirtDark;
+  return palette.dirt;
+}
+
+export function yard(pix: Pix, spec: YardSpec): void {
+  if (spec.rx < 2 || spec.ry < 1) return;
+  const pad = Math.ceil(Math.max(spec.rx, spec.ry) * 0.7);
+  for (let y = Math.floor(spec.cy - spec.ry - pad); y <= Math.ceil(spec.cy + spec.ry + pad); y += 1) {
+    for (let x = Math.floor(spec.cx - spec.rx - pad); x <= Math.ceil(spec.cx + spec.rx + pad); x += 1) {
+      const tone = yardTone(x, y, spec);
+      if (tone !== null) pix.px(x, y, tone);
     }
   }
 }

@@ -3,9 +3,21 @@ import type { Ground } from '../../ground';
 import { belowHorizon, fitScale, type Rect } from '../../../layout';
 import type { HouseMark } from '../../../types/house';
 import type { RailLayout, RailPost } from '../../../types/rail';
-import { doorPath } from '../../../scenes/play/buildings';
 import { hash, Pix, stamp } from '../../../scenes/play/pix';
-import { deadTree, dirtTone, fillSky, grassTone, liveTree, paintMountains, roadEdges, sow, yard } from './earth';
+import {
+  deadTree,
+  dirtTone,
+  fillSky,
+  grassTone,
+  houseYards,
+  liveTree,
+  paintMountains,
+  roadEdges,
+  sow,
+  yard,
+  yardTone,
+  type YardSpec,
+} from './earth';
 
 /**
  * Земля деревни, картинка 1-1. Не рип.
@@ -88,13 +100,22 @@ function paintField(houses: readonly HouseMark[], w: number, h: number): Pix {
   const field: Rect = { x: 0, y: 0, width: w, height: h };
   const fit = fitScale(field);
   sow(pix, dirt, w, h, fit);
-  for (const house of houses) {
-    const path = doorPath(house.kind, house.x, house.w, house.h, house.y, field);
-    if (path) yard(pix, path.cx, path.cy, path.rx, path.ry);
-  }
+  doorYards = houseYards(houses, field);
+  for (const spec of doorYards) yard(pix, spec);
   kiln(pix, Math.round(w * 0.95), Math.round(h * 0.5), Math.round(30 * fit));
   crops(pix, Math.round(w * 0.03), Math.round(h * 0.58), fit);
   return pix;
+}
+
+/** Пятна у дверей. Посадка дома берёт их цвет, а не газон поверх жёлтого. */
+let doorYards: YardSpec[] = [];
+
+function wornTone(x: number, y: number): number | null {
+  for (const spec of doorYards) {
+    const tone = yardTone(x, y, spec);
+    if (tone !== null) return tone;
+  }
+  return null;
 }
 
 /**
@@ -105,6 +126,10 @@ function paintField(houses: readonly HouseMark[], w: number, h: number): Pix {
 function groundAt(x: number, y: number, field: Rect, track: Rect): { tone: number; dirt: boolean } {
   const xi = Math.floor(x);
   const yi = Math.floor(y);
+  if (yi < track.y) {
+    const worn = wornTone(xi - field.x, yi - field.y);
+    if (worn !== null) return { tone: worn, dirt: true };
+  }
   if (yi >= track.y) {
     const gy = field.height + (yi - track.y);
     const tx = xi - track.x;

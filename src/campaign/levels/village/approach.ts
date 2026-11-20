@@ -2,9 +2,19 @@ import { palette } from '../../../constants';
 import type { Ground } from '../../ground';
 import { belowHorizon, fitScale, sceneDepth, type Rect } from '../../../layout';
 import type { HouseMark } from '../../../types/house';
-import { doorPath } from '../../../scenes/play/buildings';
 import { disc, hash, Pix, stamp } from '../../../scenes/play/pix';
-import { deadTree, dirtTone, fillSky, grassTone, paintMountains, sow, yard } from './earth';
+import {
+  deadTree,
+  dirtTone,
+  fillSky,
+  grassTone,
+  houseYards,
+  paintMountains,
+  sow,
+  yard,
+  yardTone,
+  type YardSpec,
+} from './earth';
 
 /**
  * Земля 1-2. Дорога уже, чем в деревне: по бокам кирпич.
@@ -68,14 +78,8 @@ function paintField(houses: readonly HouseMark[], w: number, h: number): Pix {
   const field: Rect = { x: 0, y: 0, width: w, height: h };
   const fit = fitScale(field);
   sow(pix, dirt, w, h, fit, (y, width, height) => approachEdges(y, width, height));
-  for (const house of houses) {
-    const path = doorPath(house.kind, house.x, house.w, house.h, house.y, field);
-    if (path) yard(pix, path.cx, path.cy, path.rx, path.ry);
-    else if (house.kind === 'gate' || house.kind === 'ruin') {
-      const pad = house.kind === 'gate' ? 6 : 14;
-      yard(pix, house.x * w, belowHorizon(house.y, field) + 2, pad * fit, 6 * fit);
-    }
-  }
+  doorYards = houseYards(houses, field);
+  for (const spec of doorYards) yard(pix, spec);
   stairs(pix, w, h, field, fit);
   cairn(pix, Math.round(w * 0.7), Math.round(belowHorizon(0.4, field)), Math.round(16 * fit));
   farRocks(pix, w, h);
@@ -86,9 +90,24 @@ function paintField(houses: readonly HouseMark[], w: number, h: number): Pix {
   return pix;
 }
 
+/** Пятна у дверей. Посадка дома берёт их цвет, а не газон поверх жёлтого. */
+let doorYards: YardSpec[] = [];
+
+function wornTone(x: number, y: number): number | null {
+  for (const spec of doorYards) {
+    const tone = yardTone(x, y, spec);
+    if (tone !== null) return tone;
+  }
+  return null;
+}
+
 function groundAt(x: number, y: number, field: Rect, track: Rect): { tone: number; dirt: boolean } {
   const xi = Math.floor(x);
   const yi = Math.floor(y);
+  if (yi < track.y) {
+    const worn = wornTone(xi - field.x, yi - field.y);
+    if (worn !== null) return { tone: worn, dirt: true };
+  }
   if (yi >= track.y) {
     const gy = field.height + (yi - track.y);
     const tx = xi - track.x;
