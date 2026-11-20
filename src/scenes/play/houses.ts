@@ -9,6 +9,7 @@ import { buildingBox, drawBuilding, drawScrap, facadeBands, scrapHeight } from '
 import { Debris, onFace, type DebrisKind } from './debris';
 import { paintSeat } from './seat';
 import { Pix } from './pix';
+import { RuinFire } from './ruinFire';
 
 type Phase = 'up' | 'collapse' | 'scrap' | 'down';
 
@@ -18,6 +19,7 @@ type House = {
   scrap: Phaser.GameObjects.Image;
   key: string;
   scrapKey: string;
+  id: number;
   mark: HouseMark;
   w: number;
   h: number;
@@ -53,7 +55,7 @@ const dustTones = [palette.cream, palette.wallLite, palette.mortar, palette.pebb
  * Обрушение от игрока берёт один бонус из списка картинки. Пустая полоска роняет дом без бонуса.
  * Попадание сыплет ошметками с места удара. Обрушение сыплет гуще.
  * Падение: тряска и уход фасада под землю. Клубы пыли — только у цоколя лома.
- * Лом остаётся. Пустая полоска роняет тех, кто ещё стоит.
+ * Лом остаётся, с кучи идут дым и огонь. Пустая полоска роняет тех, кто ещё стоит.
  * Прямой низ фасада закрывает земля картинки, как у забора.
  */
 export class Houses {
@@ -63,6 +65,7 @@ export class Houses {
   private readonly scene: Phaser.Scene;
   private readonly seatGfx: Phaser.GameObjects.Graphics;
   private readonly dustGfx: Phaser.GameObjects.Graphics;
+  private readonly fire: RuinFire;
   private readonly debris: Debris;
   private readonly at: GroundAt;
   private readonly onBreak: (score: number, rx: number, ry: number) => void;
@@ -82,6 +85,7 @@ export class Houses {
     // Выше контейнера поля (дома), ниже кроны живого дерева. Пыль чуть над посадкой.
     this.seatGfx = scene.add.graphics().setDepth(1.1);
     this.dustGfx = scene.add.graphics().setDepth(1.16);
+    this.fire = new RuinFire(scene, 1.18);
     const maxHp = houseStats.blasts * grenade.propHits;
     this.houses = marks.map((mark, index) => {
       const key = ensureCanvas(scene, `house-${index}`);
@@ -98,6 +102,7 @@ export class Houses {
         scrap,
         key,
         scrapKey,
+        id: index,
         mark,
         w: 0,
         h: 0,
@@ -133,6 +138,7 @@ export class Houses {
       if (house.phase === 'scrap') {
         house.image.setVisible(false);
         house.scrap.setVisible(true);
+        this.ignite(house);
       }
       if (house.phase === 'up') {
         house.image.x = 0;
@@ -152,6 +158,7 @@ export class Houses {
       if (house.phase === 'collapse') this.advance(house, delta);
     }
     this.tickDust(delta);
+    this.fire.step(delta);
   }
 
   /** Квадрат креста колет фасад, в который попал, и сыплет крошкой с точки удара. */
@@ -180,6 +187,7 @@ export class Houses {
       if (alpha <= 0) continue;
       drawCloud(gfx, puff.x, puff.y, puff.r * (0.72 + age * 0.38), puff.tone, alpha);
     }
+    this.fire.draw();
   }
 
   /**
@@ -299,7 +307,14 @@ export class Houses {
     house.image.x = 0;
     house.image.y = 0;
     house.scrap.setVisible(true);
+    this.ignite(house);
     this.refreshSeats();
+  }
+
+  /** Гребень кучи. Пламя стоит здесь, дым уходит вверх. */
+  private ignite(house: House): void {
+    const pile = scrapHeight(house.h);
+    this.fire.light(house.id, house.root.x, house.root.y - pile * 0.56, Math.max(16, house.w * 0.46));
   }
 
   private sink(house: House): void {

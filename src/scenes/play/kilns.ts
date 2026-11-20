@@ -7,6 +7,7 @@ import type { KilnMark } from '../../types/kiln';
 import { blit, ensureCanvas } from './blit';
 import { Debris, onFace } from './debris';
 import { hash, Pix } from './pix';
+import { RuinFire } from './ruinFire';
 import { paintSeat } from './seat';
 
 type Phase = 'up' | 'collapse' | 'scrap' | 'down';
@@ -17,6 +18,7 @@ type Oven = {
   scrap: Phaser.GameObjects.Image;
   key: string;
   scrapKey: string;
+  id: number;
   mark: KilnMark;
   /** Экватор купола на экране. Подошва на три пикселя ниже. */
   ground: number;
@@ -55,7 +57,7 @@ const dustTones = [palette.cream, palette.wallLite, palette.mortar, palette.pebb
  * Обрушение от игрока берёт один бонус из списка картинки. Пустая полоска роняет печь без бонуса.
  * Попадание сыплет кирпичом с места удара. Обрушение сыплет гуще.
  * Падение: тряска и уход купола под землю. Клубы пыли — только у подошвы лома.
- * Лом остаётся. Прямой низ закрывает земля картинки. Бока купола трава не красит.
+ * Лом остаётся, с кучи идут дым и огонь. Прямой низ закрывает земля картинки. Бока купола трава не красит.
  */
 export class Kilns {
   private readonly ovens: Oven[];
@@ -64,6 +66,7 @@ export class Kilns {
   private readonly scene: Phaser.Scene;
   private readonly seatGfx: Phaser.GameObjects.Graphics;
   private readonly dustGfx: Phaser.GameObjects.Graphics;
+  private readonly fire: RuinFire;
   private readonly debris: Debris;
   private readonly at: GroundAt;
   private readonly onBreak: (score: number, rx: number, ry: number) => void;
@@ -82,6 +85,7 @@ export class Kilns {
     // Выше земли, ниже поля: жерди и дома остаются впереди. Пыль чуть над посадкой.
     this.seatGfx = scene.add.graphics().setDepth(0.5);
     this.dustGfx = scene.add.graphics().setDepth(0.6);
+    this.fire = new RuinFire(scene, 0.66);
     const maxHp = kilnStats.blasts * grenade.propHits;
     this.ovens = marks.map((mark, index) => {
       const key = ensureCanvas(scene, `kiln-${index}`);
@@ -97,6 +101,7 @@ export class Kilns {
         scrap,
         key,
         scrapKey,
+        id: index,
         mark,
         ground: 0,
         r: 0,
@@ -140,6 +145,7 @@ export class Kilns {
       if (oven.phase === 'scrap') {
         oven.image.setVisible(false);
         oven.scrap.setVisible(true);
+        this.ignite(oven);
       }
       if (oven.phase === 'up') {
         oven.image.x = 0;
@@ -159,6 +165,7 @@ export class Kilns {
       if (oven.phase === 'collapse') this.advance(oven, delta);
     }
     this.tickDust(delta);
+    this.fire.step(delta);
   }
 
   /** Квадрат креста колет купол, в который попал, и сыплет кирпичом с точки удара. */
@@ -187,6 +194,7 @@ export class Kilns {
       if (alpha <= 0) continue;
       drawCloud(gfx, puff.x, puff.y, puff.r * (0.72 + age * 0.38), puff.tone, alpha);
     }
+    this.fire.draw();
   }
 
   /**
@@ -307,7 +315,14 @@ export class Kilns {
     oven.image.x = 0;
     oven.image.y = 0;
     oven.scrap.setVisible(true);
+    this.ignite(oven);
     this.refreshSeats();
+  }
+
+  /** Гребень кирпичной кучи. Пламя стоит здесь, дым уходит вверх. */
+  private ignite(oven: Oven): void {
+    const pile = Math.max(8, Math.round(oven.h * kilnStats.scrap));
+    this.fire.light(oven.id, oven.root.x, oven.root.y - pile * 0.62, Math.max(14, oven.w * 0.42));
   }
 
   private sink(oven: Oven): void {
