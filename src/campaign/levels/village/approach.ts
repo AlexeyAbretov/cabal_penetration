@@ -4,7 +4,6 @@ import { belowHorizon, fitScale, sceneDepth, type Rect } from '../../../layout';
 import type { HouseMark } from '../../../types/house';
 import { disc, hash, Pix, stamp } from '../../../scenes/play/pix';
 import {
-  deadTree,
   dirtTone,
   fillSky,
   grassTone,
@@ -40,10 +39,6 @@ function paintBackdrop(houses: readonly HouseMark[], w: number, skyH: number, fi
   }
   if (fieldH > 0) stamp(pix, paintField(houses, w, fieldH), 0, skyH);
   if (skyH > 0) paintAirport(pix, skyH);
-  const field: Rect = { x: 0, y: 0, width: w, height: fieldH };
-  const fit = fitScale(field);
-  const ground = skyH + Math.round(belowHorizon(0.26, field));
-  deadTree(pix, Math.round(w * 0.28), ground, Math.round(124 * fit));
   return pix;
 }
 

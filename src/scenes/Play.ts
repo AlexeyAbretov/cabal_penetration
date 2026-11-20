@@ -16,7 +16,7 @@ import {
   registerSandbagAnim,
   registerShortFenceAnim,
 } from '../fenceSheet';
-import { treeWoodAsset } from './play/treeWood';
+import { treeBrokenAsset, treeWoodAsset } from './play/treeWood';
 import { Aim } from './play/aim';
 import { Barrels } from './play/barrels';
 import { Controls } from './play/input';
@@ -35,6 +35,7 @@ import { Pickets } from './play/pickets';
 import { Rails } from './play/rails';
 import { Sandbags } from './play/sandbag';
 import { ShortFences } from './play/shortFence';
+import { Trees } from './play/trees';
 import { registerSoldierAnims, soldierSheet, soldierSheetReady } from '../soldierSheet';
 import { Soldier } from './play/soldier';
 import { Sparks } from './play/sparks';
@@ -43,7 +44,8 @@ import { FrontWall } from './play/wall';
 
 /**
  * Картинка из маршрута. Гранаты, счёт и жизни приходят с захода, ствол — нет.
- * Куст, ящик, короткий кирпич, мешки, заборы у дороги, бочки, печь и секции штакетника роняют на дорожку пачку, ствол или звезду. Подбор телом.
+ * Куст, ящик, короткий кирпич, мешки, заборы у дороги, бочки, печь, деревья и секции штакетника роняют на дорожку пачку, ствол или звезду. Подбор телом.
+ * Дерево колет очередь, граната валит сразу. Щепки с места удара, у живого ещё листья и куча по ширине кроны. Ствол не пропадает: сухое на две части, живое падает под углом в треугольник.
  * Дом колет очередь и четыре гранаты. Попадание сыплет ошметками с места удара. На четвёртой он трясётся и уходит в землю, пыль стоит у цоколя лома, лом остаётся. Бонус дом не роняет.
  * Печь колет очередь и четыре гранаты, как дом: кирпич с места удара, тряска, уход в землю, пыль у подошвы, лом остаётся. Прямой низ закрывает газон.
  * Удар — прямоугольник креста: частый уже, широкий шире и ниже, и больнее. Оба держат десять секунд и сгорают на конце сцены.
@@ -72,6 +74,7 @@ export class Play extends Phaser.Scene {
   private rails!: Rails;
   private pickets!: Pickets;
   private barrels!: Barrels;
+  private trees!: Trees;
   private sparks!: Sparks;
   private debris!: Debris;
   private battleGfx!: Phaser.GameObjects.Graphics;
@@ -89,6 +92,7 @@ export class Play extends Phaser.Scene {
 
   preload(): void {
     if (!this.textures.exists(treeWoodAsset.key)) this.load.image(treeWoodAsset.key, treeWoodAsset.url);
+    if (!this.textures.exists(treeBrokenAsset.key)) this.load.image(treeBrokenAsset.key, treeBrokenAsset.url);
     if (!this.textures.exists(hudIcons.heart)) this.load.image(hudIcons.heart, hudIcons.heartUrl);
     if (!this.textures.exists(hudIcons.grenade)) this.load.image(hudIcons.grenade, hudIcons.grenadeUrl);
     if (!this.textures.exists(grenadeFly.key)) this.load.image(grenadeFly.key, grenadeFly.url);
@@ -154,6 +158,7 @@ export class Play extends Phaser.Scene {
       this.stage.railLayout(width, height),
     );
     this.barrels = new Barrels(this, this.picture.barrels, this.stage.field, scatter);
+    this.trees = new Trees(this, this.picture.trees, scatter);
     this.pickets = new Pickets(this, this.picture.pickets, this.stage.field, scatter);
     this.enemies = new Enemies(this, this.picture.wave, this.sparks, (points) => this.onKill(points), (count) =>
       this.onGone(count),
@@ -170,6 +175,7 @@ export class Play extends Phaser.Scene {
       this.bags.blast(x, y);
       this.rails.blast(x, y);
       this.barrels.blast(x, y);
+      this.trees.blast(x, y);
       this.pickets.blast(x, y);
       this.houses.blast(x, y);
       this.kilns.blast(x, y);
@@ -299,6 +305,7 @@ export class Play extends Phaser.Scene {
     this.bags.step(step);
     this.rails.step(step);
     this.barrels.step(step);
+    this.trees.step(step);
     this.pickets.step(step);
     this.houses.step(step);
     this.kilns.step(step);
@@ -345,6 +352,7 @@ export class Play extends Phaser.Scene {
     this.bags.bind(this.view);
     this.rails.bind(this.view);
     this.barrels.bind(this.view);
+    this.trees.bind(this.view);
     this.pickets.bind(this.view);
     this.fences.sync(this.view, this.wall);
     this.placeSoldier();
@@ -407,6 +415,7 @@ export class Play extends Phaser.Scene {
     this.bags.hit(box, shot.damage);
     this.rails.hit(box, shot.damage);
     this.barrels.hit(box, shot.damage);
+    this.trees.hit(box, shot.damage);
     this.pickets.hit(box, shot.damage);
     this.houses.hit(box, shot.damage);
     this.kilns.hit(box, shot.damage);
@@ -510,6 +519,7 @@ export class Play extends Phaser.Scene {
     this.debris.step(delta);
     this.rails.step(delta);
     this.barrels.step(delta);
+    this.trees.step(delta);
     this.pickets.step(delta);
     this.houses.step(delta);
     this.kilns.step(delta);
@@ -600,6 +610,7 @@ export class Play extends Phaser.Scene {
     this.debris.draw();
     this.rails.draw();
     this.barrels.draw();
+    this.trees.draw();
     this.pickets.draw();
     this.houses.draw();
     this.kilns.draw();

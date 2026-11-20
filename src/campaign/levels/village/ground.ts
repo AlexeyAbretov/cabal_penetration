@@ -5,12 +5,10 @@ import type { HouseMark } from '../../../types/house';
 import type { RailLayout, RailPost } from '../../../types/rail';
 import { hash, Pix, stamp } from '../../../scenes/play/pix';
 import {
-  deadTree,
   dirtTone,
   fillSky,
   grassTone,
   houseYards,
-  liveTree,
   paintMountains,
   roadEdges,
   sow,
@@ -22,42 +20,23 @@ import {
 /**
  * Земля деревни, картинка 1-1. Не рип.
  * Дорога сходится в точку на горизонте. Крыши и кроны заходят на небо,
- * растения заполняют двор. Штакетник, жерди, бочки и печь ставит бой.
+ * растения заполняют двор. Штакетник, жерди, бочки, печь и деревья ставит бой.
  * Врагов на этом слое нет.
  */
 export function villageGround(houses: readonly HouseMark[]): Ground {
   return {
     backdrop: (width, skyH, fieldH) => paintBackdrop(houses, width, skyH, fieldH),
-    front: paintFront,
     track: paintTrack,
     at: groundAt,
     rails: railLayout,
   };
 }
 
-/** Небо и поле одним листом: сухая крона выше горизонта остаётся на небе, а не обрезается. */
+/** Небо и поле одним листом. Кроны деревьев рисует бой, не этот лист. */
 function paintBackdrop(houses: readonly HouseMark[], w: number, skyH: number, fieldH: number): Pix {
   const pix = new Pix(w, Math.max(1, skyH + fieldH));
   if (skyH > 0) stamp(pix, paintSky(w, skyH), 0, 0);
   if (fieldH > 0) stamp(pix, paintField(houses, w, fieldH), 0, skyH);
-  const field: Rect = { x: 0, y: 0, width: w, height: fieldH };
-  const fit = fitScale(field);
-  const ground = (fraction: number) => skyH + Math.round(belowHorizon(fraction, field));
-  // Сухое дальше избы. Оно остаётся в листе земли, дом его закрывает.
-  deadTree(pix, Math.round(w * 0.44), ground(0.13), Math.round(96 * fit));
-  return pix;
-}
-
-/**
- * Живое дерево ближе избы. Отдельный лист, не земля:
- * дома — спрайты поверх листа, и на узком окне крона иначе уходит за левый фасад.
- */
-function paintFront(w: number, skyH: number, fieldH: number): Pix {
-  const pix = new Pix(w, Math.max(1, skyH + fieldH));
-  const field: Rect = { x: 0, y: 0, width: w, height: fieldH };
-  const fit = fitScale(field);
-  const ground = skyH + Math.round(belowHorizon(0.29, field));
-  liveTree(pix, Math.round(w * 0.32), ground, Math.round(118 * fit));
   return pix;
 }
 

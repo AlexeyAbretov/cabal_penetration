@@ -1,6 +1,7 @@
 import type { DropKind } from '../../../constants';
 import type { Picture } from '../../picture';
 import type { HouseMark } from '../../../types/house';
+import type { TreeMark } from '../../../types/tree';
 import { approachGround } from './approach';
 
 /**
@@ -8,7 +9,7 @@ import { approachGround } from './approach';
  * Изба, синяя дверь и руина — отдельные дома. Четыре гранаты роняют их так же, как на 1-1,
  * и каждая берёт один бонус из списка картинки.
  * Пустая полоска роняет тех, кто ещё стоит.
- * Дерево, лестница, камень и кирпич по бокам врисованы в землю.
+ * Сухое дерево ломается как на 1-1 и роняет бонус. Лестница, камень и кирпич по бокам врисованы в землю.
  * Оранжевый крест на референсе — прицел аркады, сюда не переносится.
  * Заглушка передней стены выключена: иначе она закроет кирпич.
  */
@@ -20,8 +21,14 @@ const houses: readonly HouseMark[] = [
 
 const wall = [false, false, false, false, false, false, false, false] as const;
 
-/** Три дома, три записи. Каждый забирает одну случайную. */
-const drops: readonly DropKind[] = ['grenades', 'bonus', 'medal'];
+/**
+ * Сухое дерево слева от дороги. То же место, где оно было врисовано в землю.
+ * Ствол ломается на две части и не пропадает. Один бонус из списка картинки.
+ */
+const trees: readonly TreeMark[] = [{ x: 0.28, y: 0.26, h: 124, live: false }];
+
+/** Три дома и сухое дерево, четыре записи. Каждый забирает одну случайную. */
+const drops: readonly DropKind[] = ['grenades', 'bonus', 'medal', 'grenades'];
 
 export const picture: Picture = {
   id: '1-2',
@@ -36,6 +43,7 @@ export const picture: Picture = {
   rails: [],
   barrels: [],
   kilns: [],
+  trees,
   pickets: [],
   drops,
   wave: [],
