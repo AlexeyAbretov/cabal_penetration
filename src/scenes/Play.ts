@@ -87,6 +87,7 @@ export class Play extends Phaser.Scene {
   private battleGfx!: Phaser.GameObjects.Graphics;
   private paused = false;
   private cleared = false;
+  private clearWait = 0;
   private clearHold = 0;
   private victoryText!: Phaser.GameObjects.Text;
   private down: 'continue' | 'over' | null = null;
@@ -126,6 +127,7 @@ export class Play extends Phaser.Scene {
     this.picture = marchPicture(this.march);
     this.paused = false;
     this.cleared = false;
+    this.clearWait = 0;
     this.clearHold = 0;
     this.down = null;
     this.handoff = null;
@@ -281,7 +283,7 @@ export class Play extends Phaser.Scene {
       this.drawBattle();
       return;
     }
-    if (this.controls.escPressed() && !this.down) this.setPaused(!this.paused);
+    if (this.controls.escPressed() && !this.down && this.clearWait <= 0) this.setPaused(!this.paused);
     if (this.paused || this.down) {
       this.gun.quiet();
       this.controls.sample();
@@ -352,12 +354,13 @@ export class Play extends Phaser.Scene {
     this.kilns.step(step);
     this.rocks.step(step);
     this.drops.step(this.view, this.soldier.body());
+    this.stepVictoryWait(step);
     this.drawBattle();
   }
 
   /** Смена картинки из рамки. Счёт, жизни и гранаты остаются, ствол сгорает вместе со сценой. */
   private jumpPicture(index: number): void {
-    if (index === this.march.picture || this.handoff || this.cleared || this.down) return;
+    if (index === this.march.picture || this.handoff || this.cleared || this.clearWait > 0 || this.down) return;
     const level = route[this.march.level];
     if (!level || index < 0 || index >= level.pictures.length) return;
     this.handoff = {
@@ -545,7 +548,7 @@ export class Play extends Phaser.Scene {
    * Нулевая жизнь ждёт Enter и поднимает уровень с первой картинки.
    */
   private onLifeLost(): void {
-    if (this.down || this.handoff) return;
+    if (this.down || this.handoff || this.clearWait > 0) return;
     const spent = this.hud.hurtSoldier();
     this.march.lives = this.hud.livesLeft;
     this.march.score = this.hud.points;
@@ -594,13 +597,27 @@ export class Play extends Phaser.Scene {
   private onKill(points: number): void {
     this.hud.addScore(points);
     if (this.cleared) return;
-    if (this.hud.eat()) this.finish();
+    if (this.hud.eat()) this.armVictory();
   }
 
   /** Грузовик уехал или кузов не высадился. Очков нет. */
   private onGone(count: number): void {
     if (this.cleared) return;
-    if (this.hud.release(count)) this.finish();
+    if (this.hud.release(count)) this.armVictory();
+  }
+
+  /** Полоска пуста. Секунда на вспышку и щепу, потом кадр замирает. */
+  private armVictory(): void {
+    if (this.cleared || this.clearWait > 0) return;
+    this.clearWait = hud.victoryStunMs;
+  }
+
+  private stepVictoryWait(delta: number): void {
+    if (this.clearWait <= 0) return;
+    this.clearWait -= delta;
+    if (this.clearWait > 0) return;
+    this.clearWait = 0;
+    this.finish();
   }
 
   private takeDrop(kind: DropKind): void {
