@@ -39,19 +39,24 @@ type Shot = {
   fromY: number;
 };
 
+type SideLane = {
+  groups: readonly InfantryGroup[];
+  index: number;
+  sent: number;
+  nextAt: number;
+};
+
 /**
  * Пехота картинки. Группы описаны в волне: сколько, с какого края, на какой глубине.
- * На сцене не больше шести. Между бойцами и между группами пауза случайная.
+ * Левый и правый край выпускают бойцов одновременно. На сцене не больше шести.
+ * Между бойцами и между группами одного края пауза случайная.
  * Боец пробегает часть ширины, стреляет одной пулей и снова выбирает сторону.
  * Выстрел и разрыв не берут того, кто закрыт ближним объектом.
  */
 export class Infantry {
-  private readonly groups: readonly InfantryGroup[];
+  private readonly lanes: SideLane[];
   private units: Soldier[] = [];
   private incoming: Shot[] = [];
-  private index = 0;
-  private sent = 0;
-  private nextAt = 0;
   private clock = 0;
   private frozen = false;
   private pixels: ImageData | null = null;
@@ -62,11 +67,10 @@ export class Infantry {
 
   constructor(scene: Phaser.Scene, groups: readonly InfantryGroup[], sparks: Sparks, onKill: (points: number) => void) {
     this.scene = scene;
-    this.groups = groups;
+    this.lanes = sideLanes(groups);
     this.sparks = sparks;
     this.onKill = onKill;
     this.bodies = scene.add.graphics().setDepth(3);
-    if (groups.length > 0) this.nextAt = waitMs(groups[0].gap);
   }
 
   freeze(): void {
@@ -149,22 +153,29 @@ export class Infantry {
   }
 
   private spawn(): void {
-    if (this.index >= this.groups.length) return;
-    if (this.units.length >= infantry.cap) return;
-    if (this.clock < this.nextAt) return;
-    const group = this.groups[this.index];
+    const due = this.lanes
+      .filter((lane) => lane.index < lane.groups.length && this.clock >= lane.nextAt)
+      .sort((a, b) => a.nextAt - b.nextAt);
+    for (const lane of due) {
+      if (this.units.length >= infantry.cap) return;
+      this.release(lane);
+    }
+  }
+
+  private release(lane: SideLane): void {
+    const group = lane.groups[lane.index];
     if (!group) return;
     this.units.push(this.birth(group));
-    this.sent += 1;
-    if (this.sent < group.count) {
-      this.nextAt = this.clock + waitMs(group.step);
+    lane.sent += 1;
+    if (lane.sent < group.count) {
+      lane.nextAt = this.clock + waitMs(group.step);
       return;
     }
-    this.index += 1;
-    this.sent = 0;
-    const next = this.groups[this.index];
+    lane.index += 1;
+    lane.sent = 0;
+    const next = lane.groups[lane.index];
     if (!next) return;
-    this.nextAt = this.clock + waitMs(next.gap);
+    lane.nextAt = this.clock + waitMs(next.gap);
   }
 
   private birth(group: InfantryGroup): Soldier {
@@ -399,6 +410,15 @@ export class Infantry {
     gfx.fillStyle(soldier.flash > 0 ? palette.ink : palette.enemy, 1);
     gfx.fillRect(body.left, body.top, soldier.w, soldier.h);
   }
+}
+
+function sideLanes(groups: readonly InfantryGroup[]): SideLane[] {
+  return (['left', 'right'] as const).flatMap((from) => {
+    const side = groups.filter((group) => group.from === from);
+    const first = side[0];
+    if (!first) return [];
+    return [{ groups: side, index: 0, sent: 0, nextAt: waitMs(first.gap) }];
+  });
 }
 
 function waitMs(span: Wait): number {
