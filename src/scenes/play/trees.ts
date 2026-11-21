@@ -54,6 +54,7 @@ const leaves = [palette.leaf, palette.leafLite, palette.leafDark] as const;
  * С первой раны у живого на земле куча по ширине кроны.
  * Слом не убирает ствол. Оба типа ставят один лист: пень стоит, крона лежит рядом.
  * Сторона падения зеркалится. У живого куча остаётся.
+ * Лежащее дерево закрывает пехоту за подошвой теми же плотными пикселями.
  * Один бонус из списка картинки.
  */
 export class Trees {
@@ -134,11 +135,11 @@ export class Trees {
     }
   }
 
-  /** Целое дерево закрывает дальнюю пехоту плотными пикселями кроны и ствола. */
+  /** Стоящее и сломанное дерево закрывает дальнюю пехоту плотными пикселями. */
   shields(): Cover[] {
     const out: Cover[] = [];
     for (const tree of this.trees) {
-      if (!tree.whole || tree.pixH < 2 || !tree.mask) continue;
+      if (tree.pixH < 2 || !tree.mask) continue;
       const box = spriteBox(tree);
       out.push({ box, sole: box.bottom, opaque: (x, y) => treeOpaque(tree, x, y) });
     }

@@ -653,7 +653,7 @@ export class Play extends Phaser.Scene {
     this.hud.setWeapon('rifle');
   }
 
-  /** Целые объекты сцены. Пехота за ними не получает урон и не рисуется поверх. */
+  /** Что закрывает дальнюю пехоту. За этим она не получает урон и не рисуется поверх. Сломанное дерево тоже. */
   private covers(): Cover[] {
     return [
       ...this.houses.shields(),
