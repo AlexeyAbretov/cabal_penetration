@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { GroundAt } from '../../campaign/ground';
 import { circleHitsRect, type HitBox } from '../../combat';
+import type { Cover } from '../../cover';
 import { grenade, palette, rock as rockStats } from '../../constants';
 import { belowHorizon, fieldScale, fitScale, type FrameLayout } from '../../layout';
 import type { RockMark } from '../../types/rock';
@@ -122,6 +123,17 @@ export class Rocks {
       if (stone.phase !== 'up' || !hitsBody(stone, box)) continue;
       this.wound(stone, amount, at.x, at.y, false);
     }
+  }
+
+  /** Целый камень закрывает пехоту за собой. */
+  shields(): Cover[] {
+    const out: Cover[] = [];
+    for (const stone of this.stones) {
+      if (stone.phase !== 'up') continue;
+      const box = bounds(stone);
+      out.push({ box, sole: box.bottom });
+    }
+    return out;
   }
 
   /** Разрыв разбивает камень, чьё тело входит в круг. */

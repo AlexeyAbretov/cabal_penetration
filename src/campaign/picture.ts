@@ -12,7 +12,7 @@ import type { RailMark } from '../types/rail';
 import type { SandbagMark } from '../types/sandbag';
 import type { ShortMark } from '../types/shortFence';
 import type { TreeMark } from '../types/tree';
-import type { WaveGroup } from '../wave';
+import type { WaveOrder } from '../wave';
 
 /**
  * Одна картинка маршрута. Фон рисует сцена из земли картинки.
@@ -59,7 +59,7 @@ export type Picture = {
    * Бонусы врагов сюда не входят — у них свой список и свои правила.
    */
   drops: readonly DropKind[];
-  wave: readonly WaveGroup[];
+  wave: readonly WaveOrder[];
 };
 
 /** Дома, кусты, ящики, короткий кирпич, мешки, заборы у дороги, бочки, печи, камни, деревья и секции штакетника. Забор перед солдатом не считается. */

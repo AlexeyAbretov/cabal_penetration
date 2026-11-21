@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
+import type { Cover } from '../../cover';
 import { grenade, palette, tree as treeStats } from '../../constants';
 import { belowHorizon, fitScale, type FrameLayout } from '../../layout';
 import type { TreeMark } from '../../types/tree';
@@ -128,6 +129,17 @@ export class Trees {
         Math.min(face.bottom, Math.max(face.top, at.y)),
       );
     }
+  }
+
+  /** Целое дерево закрывает пехоту за кроной и стволом. */
+  shields(): Cover[] {
+    const out: Cover[] = [];
+    for (const tree of this.trees) {
+      if (!tree.whole || tree.pixH < 2) continue;
+      const box = body(tree);
+      out.push({ box, sole: box.bottom });
+    }
+    return out;
   }
 
   /** Разрыв валит дерево, чьё тело входит в круг. */

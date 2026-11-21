@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { GroundAt } from '../../campaign/ground';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
+import type { Cover } from '../../cover';
 import { grenade, kiln as kilnStats, palette } from '../../constants';
 import { fitScale, type FrameLayout } from '../../layout';
 import type { KilnMark } from '../../types/kiln';
@@ -175,6 +176,17 @@ export class Kilns {
       if (oven.phase !== 'up' || oven.r < 1 || !hitsDome(oven, box)) continue;
       this.wound(oven, amount, at.x, at.y, false);
     }
+  }
+
+  /** Целая печь закрывает пехоту за куполом. */
+  shields(): Cover[] {
+    const out: Cover[] = [];
+    for (const oven of this.ovens) {
+      if (oven.phase !== 'up' || oven.r < 1) continue;
+      const box = bounds(oven);
+      out.push({ box, sole: box.bottom });
+    }
+    return out;
   }
 
   /** Разрыв снимает долю жизни, если купол входит в круг. Четыре таких доли роняют печь. */

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
+import type { Cover } from '../../cover';
 import { grenade, palette, shortFence } from '../../constants';
 import type { GroundAt } from '../../campaign/ground';
 import type { ShortMark } from '../../types/shortFence';
@@ -84,6 +85,16 @@ export class ShortFences {
       if (!run.alive || !hit || !rectsOverlap(box, hit)) continue;
       this.wound(run, amount, at);
     }
+  }
+
+  /** Целая кладка закрывает пехоту за собой. */
+  shields(): Cover[] {
+    const out: Cover[] = [];
+    for (const run of this.runs) {
+      if (!run.alive || !run.hit) continue;
+      out.push({ box: run.hit, sole: run.hit.bottom });
+    }
+    return out;
   }
 
   /** Разрыв снимает забор, чья кладка входит в круг. */

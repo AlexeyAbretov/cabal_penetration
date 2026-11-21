@@ -10,13 +10,13 @@ import type { SandbagMark } from '../../../types/sandbag';
 import type { ShortMark } from '../../../types/shortFence';
 import type { RockMark } from '../../../types/rock';
 import type { TreeMark } from '../../../types/tree';
-import type { WaveGroup } from '../../../wave';
+import type { InfantryGroup, WaveGroup } from '../../../wave';
 import type { Picture } from '../../picture';
 import { villageGround } from './ground';
 
 /**
- * Бой 1-1. Сейчас картинка без врагов: сначала окружение.
- * Слева выход, потом грузовик, правая пачка, оба танка.
+ * Техника 1-1 на потом: грузовик и оба танка. В бой этой картинки не входит.
+ * Сейчас волна — пехота ниже.
  */
 export const combatWave: readonly WaveGroup[] = [
   {
@@ -192,7 +192,57 @@ const fences: readonly FenceMark[] = [
   { kind: 'rust', from: 4, to: 7 },
 ];
 
-/** Картинка 1-1. Волна пустая: на поле окружение, врагов нет. */
+/**
+ * Пехота 1-1. Тридцать бойцов, пять групп по шесть.
+ * На сцене не больше шести. Пауза step — между бойцами группы, gap — перед группой.
+ * from — край, с которого входят. band — полоса дальней половины поля:
+ * 0 у горизонта, 1 у дорожки, вторая половина от камеры к горизонту это 0…0.5.
+ * Каждый пробегает часть ширины, стреляет одной пулей и снова выбирает сторону.
+ */
+const infantryWave: readonly InfantryGroup[] = [
+  {
+    kind: 'infantry',
+    count: 6,
+    from: 'left',
+    band: { far: 0.08, near: 0.2 },
+    step: { min: 380, max: 980 },
+    gap: { min: 700, max: 1200 },
+  },
+  {
+    kind: 'infantry',
+    count: 6,
+    from: 'right',
+    band: { far: 0.16, near: 0.32 },
+    step: { min: 420, max: 1100 },
+    gap: { min: 1600, max: 2800 },
+  },
+  {
+    kind: 'infantry',
+    count: 6,
+    from: 'left',
+    band: { far: 0.26, near: 0.42 },
+    step: { min: 360, max: 920 },
+    gap: { min: 1500, max: 2600 },
+  },
+  {
+    kind: 'infantry',
+    count: 6,
+    from: 'right',
+    band: { far: 0.1, near: 0.28 },
+    step: { min: 400, max: 1000 },
+    gap: { min: 1700, max: 2900 },
+  },
+  {
+    kind: 'infantry',
+    count: 6,
+    from: 'left',
+    band: { far: 0.2, near: 0.46 },
+    step: { min: 340, max: 880 },
+    gap: { min: 1400, max: 2400 },
+  },
+];
+
+/** Картинка 1-1. Волна — тридцать пехотинцев. Победа, когда убиты все. */
 export const picture: Picture = {
   id: '1-1',
   boss: false,
@@ -210,5 +260,5 @@ export const picture: Picture = {
   trees,
   pickets,
   drops,
-  wave: [],
+  wave: infantryWave,
 };

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
+import type { Cover } from '../../cover';
 import { grenade, palette, sandbag } from '../../constants';
 import type { GroundAt } from '../../campaign/ground';
 import type { SandbagMark } from '../../types/sandbag';
@@ -85,6 +86,16 @@ export class Sandbags {
       if (!pile.alive || !hit || !rectsOverlap(box, hit)) continue;
       this.wound(pile, amount, at);
     }
+  }
+
+  /** Целые мешки закрывают пехоту за собой. */
+  shields(): Cover[] {
+    const out: Cover[] = [];
+    for (const pile of this.piles) {
+      if (!pile.alive || !pile.hit) continue;
+      out.push({ box: pile.hit, sole: pile.hit.bottom });
+    }
+    return out;
   }
 
   /** Разрыв снимает кучу, чья кладка входит в круг. */

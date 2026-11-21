@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
+import type { Cover } from '../../cover';
 import { barrel, grenade, palette } from '../../constants';
 import type { BarrelMark } from '../../types/barrel';
 import { belowHorizon, fieldScale, fitScale, type FrameLayout } from '../../layout';
@@ -111,6 +112,17 @@ export class Barrels {
       if (!keg.whole || !rectsOverlap(box, body(keg))) continue;
       this.wound(keg, amount, at.x, at.y);
     }
+  }
+
+  /** Целая бочка закрывает пехоту за собой. */
+  shields(): Cover[] {
+    const out: Cover[] = [];
+    for (const keg of this.kegs) {
+      if (!keg.whole) continue;
+      const box = body(keg);
+      out.push({ box, sole: box.bottom });
+    }
+    return out;
   }
 
   /** Разрыв снимает бочку, чьё тело входит в круг. */

@@ -199,7 +199,7 @@ export class Hud {
     this.pauseLabel.setVisible(visible);
     if (hold === 'pause') this.pauseLabel.setText('ПАУЗА');
     if (hold === 'continue') this.pauseLabel.setText(`ENTER  ${continuesLeft}`);
-    if (hold === 'over') this.pauseLabel.setText('КОНЕЦ');
+    if (hold === 'over') this.pauseLabel.setText('ENTER');
   }
 
   draw(view: FrameLayout, width: number, height: number): void {
@@ -294,8 +294,12 @@ export class Hud {
     this.enemyLabel.setPosition(x, mid);
     const barX = x + labelW + 8;
     const barY = mid - enemyBar.height / 2;
-    const segGap = enemyBar.gap;
-    const segW = (enemyBar.width - segGap * (this.quota - 1)) / this.quota;
+    let segGap: number = enemyBar.gap;
+    let segW = (enemyBar.width - segGap * (this.quota - 1)) / this.quota;
+    if (this.quota > 1 && segW < 3) {
+      segGap = 1;
+      segW = (enemyBar.width - segGap * (this.quota - 1)) / this.quota;
+    }
     const remaining = this.quota - this.slain;
     this.barGfx.clear();
     for (let i = 0; i < this.quota; i += 1) {

@@ -42,6 +42,18 @@ export function marchPicture(march: March): Picture {
   return pictureAt(march.level, march.picture);
 }
 
+/** Проигрыш. Тот же уровень с первой картинки: счёт и гранаты со старта, жизни стартовые. */
+export function restartLevel(march: March): March {
+  return {
+    level: march.level,
+    picture: 0,
+    score: 0,
+    lives: hud.lives,
+    grenades: grenade.stock,
+    continues: Math.max(0, march.continues - 1),
+  };
+}
+
 /**
  * Следующая картинка того же уровня.
  * После последней — лишняя жизнь. Если уровень в маршруте не последний, заход идёт дальше.

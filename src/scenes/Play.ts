@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
-import { afterPicture, marchFrom, marchPicture, type March } from '../campaign/march';
+import { afterPicture, marchFrom, marchPicture, restartLevel, type March } from '../campaign/march';
 import { route } from '../campaign/route';
 import { bonusList, breakableCount, type Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat';
-import { bonus, grenade, grenadeBoom, grenadeFly, grenadeThrow, gunFire, hitFlash, hud as hudNumbers, medal, palette, pickup, star, ton, weapons, type DropKind } from '../constants';
+import { bonus, cssColor, grenade, grenadeBoom, grenadeFly, grenadeThrow, gunFire, hitFlash, hud, medal, palette, pickup, star, ton, weapons, type DropKind } from '../constants';
 import type { FenceKind, FenceMark } from '../types/fence';
-import { waveQuota } from '../wave';
+import { isInfantry, isPack, waveQuota } from '../wave';
+import { infantrySheet } from '../infantrySheet';
+import type { Cover } from '../cover';
 import { loadExplosion } from '../explosionSheet';
 import { aimBounds, frameLayout, type FrameLayout } from '../layout';
 import {
@@ -23,6 +25,7 @@ import { Controls } from './play/input';
 import { Debris } from './play/debris';
 import { DropBag, Drops } from './play/drops';
 import { Enemies } from './play/enemies';
+import { Infantry } from './play/infantry';
 import { Fences } from './play/fences';
 import { Grenades } from './play/grenades';
 import { Gun, type ShotMark } from './play/gun';
@@ -47,7 +50,7 @@ import { FrontWall } from './play/wall';
  * Картинка из маршрута. Гранаты, счёт и жизни приходят с захода, ствол — нет.
  * Куст, ящик, короткий кирпич, мешки, заборы у дороги, бочки, печь, камень, деревья и секции штакетника роняют на дорожку пачку, ствол или звезду. Подбор телом.
  * Дерево колет очередь, граната валит сразу. Щепки с места удара, у живого ещё листья и куча по ширине кроны. Ствол не пропадает: пень на месте ствола, крона лежит рядом, сторона падения зеркалится.
- * Дом колет очередь и четыре гранаты. Попадание сыплет ошметками с места удара. На четвёртой он трясётся и уходит в землю, пыль стоит у цоколя лома, лом остаётся. Обрушение от игрока берёт бонус из списка картинки. Пустая полоска роняет дом без бонуса.
+ * Дом колет очередь и четыре гранаты. Попадание сыплет ошметками с места удара. На четвёртой он трясётся и уходит в землю, пыль стоит у цоколя лома, лом остаётся. Обрушение от игрока берёт бонус из списка картинки. Пустая полоска дом не трогает и бонус не даёт.
  * Печь колет очередь и четыре гранаты, как дом: кирпич с места удара, тряска, уход в землю, пыль у подошвы, лом остаётся. Прямой низ закрывает газон.
  * Камень колет очередь, граната разбивает сразу. Крошка с места удара. Куча руин остаётся. Прямой низ закрывает газон.
  * Удар — прямоугольник креста: частый уже, широкий шире и ниже, и больнее. Оба держат десять секунд и сгорают на конце сцены.
@@ -66,6 +69,7 @@ export class Play extends Phaser.Scene {
   private wall!: FrontWall;
   private grenades!: Grenades;
   private enemies!: Enemies;
+  private infantry!: Infantry;
   private props!: Props;
   private drops!: Drops;
   private houses!: Houses;
@@ -83,6 +87,8 @@ export class Play extends Phaser.Scene {
   private battleGfx!: Phaser.GameObjects.Graphics;
   private paused = false;
   private cleared = false;
+  private clearHold = 0;
+  private victoryText!: Phaser.GameObjects.Text;
   private down: 'continue' | 'over' | null = null;
   private handoff: March | null = null;
   private settled = false;
@@ -94,6 +100,7 @@ export class Play extends Phaser.Scene {
   }
 
   preload(): void {
+    if (!this.textures.exists(infantrySheet.key)) this.load.image(infantrySheet.key, infantrySheet.url);
     if (!this.textures.exists(treeWoodAsset.key)) this.load.image(treeWoodAsset.key, treeWoodAsset.url);
     if (!this.textures.exists(treeBrokenAsset.key)) this.load.image(treeBrokenAsset.key, treeBrokenAsset.url);
     if (!this.textures.exists(hudIcons.heart)) this.load.image(hudIcons.heart, hudIcons.heartUrl);
@@ -119,6 +126,7 @@ export class Play extends Phaser.Scene {
     this.picture = marchPicture(this.march);
     this.paused = false;
     this.cleared = false;
+    this.clearHold = 0;
     this.down = null;
     this.handoff = null;
     this.settled = false;
@@ -131,6 +139,17 @@ export class Play extends Phaser.Scene {
     this.debris = new Debris(this);
     this.stage = new Stage(this);
     this.battleGfx = this.add.graphics().setDepth(4);
+    this.victoryText = this.add
+      .text(0, 0, 'ПОБЕДА', {
+        fontFamily: 'Consolas, "Courier New", monospace',
+        fontSize: '64px',
+        color: cssColor(palette.ink),
+        stroke: cssColor(palette.black),
+        strokeThickness: 8,
+      })
+      .setOrigin(0.5)
+      .setDepth(7)
+      .setVisible(false);
     this.gun = new Gun(this);
     this.aim = new Aim(this);
     this.soldier = new Soldier(this);
@@ -163,8 +182,18 @@ export class Play extends Phaser.Scene {
     this.barrels = new Barrels(this, this.picture.barrels, this.stage.field, scatter);
     this.trees = new Trees(this, this.picture.trees, scatter);
     this.pickets = new Pickets(this, this.picture.pickets, this.stage.field, scatter);
-    this.enemies = new Enemies(this, this.picture.wave, this.sparks, (points) => this.onKill(points), (count) =>
-      this.onGone(count),
+    this.enemies = new Enemies(
+      this,
+      this.picture.wave.filter(isPack),
+      this.sparks,
+      (points) => this.onKill(points),
+      (count) => this.onGone(count),
+    );
+    this.infantry = new Infantry(
+      this,
+      this.picture.wave.filter(isInfantry),
+      this.sparks,
+      (points) => this.onKill(points),
     );
     this.houses = new Houses(this, this.picture.houses, this.stage.field, earth, this.debris, scatter);
     this.kilns = new Kilns(this, this.picture.kilns, earth, this.debris, scatter);
@@ -174,6 +203,7 @@ export class Play extends Phaser.Scene {
     this.grenades.onLand((x, y) => {
       if (this.cleared) return;
       this.enemies.blast(x, y);
+      this.infantry.blast(x, y, this.covers());
       this.props.blast(x, y);
       this.shorts.blast(x, y);
       this.bags.blast(x, y);
@@ -245,23 +275,20 @@ export class Play extends Phaser.Scene {
       this.scene.restart(next);
       return;
     }
-    if (this.controls.escPressed() && !this.down) this.setPaused(!this.paused);
-    if (this.paused || this.down) {
-      this.gun.quiet();
-      this.controls.sample();
-      if (this.down === 'continue' && this.controls.enterPressed()) this.acceptContinue();
-      return;
-    }
-    this.grenades.step(Math.min(delta, 50));
     if (this.cleared) {
       this.gun.quiet();
-      this.aim.step(Math.min(delta, 50));
-      const pointer = this.controls.pointer;
-      if (pointer) this.aim.aimAt(pointer.x, pointer.y, aimBounds(this.view));
       this.stepClear(Math.min(delta, 50));
       this.drawBattle();
       return;
     }
+    if (this.controls.escPressed() && !this.down) this.setPaused(!this.paused);
+    if (this.paused || this.down) {
+      this.gun.quiet();
+      this.controls.sample();
+      if (this.down && this.controls.enterPressed()) this.acceptRestart();
+      return;
+    }
+    this.grenades.step(Math.min(delta, 50));
 
     const input = this.controls.sample();
     const pointer = this.controls.pointer;
@@ -274,6 +301,7 @@ export class Play extends Phaser.Scene {
     else this.soldier.step(step, input, input.firing && this.gun.acceptsTrigger(), this.aim.x, this.aim.y);
 
     this.enemies.step(step, this.soldier.column(), this.view, this.wall);
+    this.infantry.step(step, this.soldier.column(), this.view, this.wall);
     if (this.cleared) {
       this.gun.quiet();
       this.stepClear(step);
@@ -298,7 +326,7 @@ export class Play extends Phaser.Scene {
       this.drawBattle();
       return;
     }
-    for (const column of this.enemies.arrive(step)) {
+    for (const column of [...this.enemies.arrive(step), ...this.infantry.arrive(step)]) {
       if (this.down || this.handoff) break;
       this.resolveIncoming(column);
     }
@@ -354,6 +382,7 @@ export class Play extends Phaser.Scene {
     this.kilns.place(this.view);
     this.rocks.place(this.view);
     this.enemies.bind(this.view);
+    this.infantry.bind(this.view);
     this.props.bind(this.view);
     this.shorts.bind(this.view);
     this.bags.bind(this.view);
@@ -371,6 +400,8 @@ export class Play extends Phaser.Scene {
       this.aim.aimAt(field.x + field.width / 2, field.y + field.height / 2, aimBounds(this.view));
     }
     this.hud.draw(this.view, width, height);
+    this.victoryText.setPosition(width / 2, this.view.hud.y / 2);
+    this.victoryText.setFontSize(`${Math.max(48, Math.round(this.view.hud.y * 0.12))}px`);
     this.drawBattle();
   }
 
@@ -416,7 +447,9 @@ export class Play extends Phaser.Scene {
     const along = this.grenades.intercept(from.x, from.y, at.x, at.y);
     const inCross = this.grenades.sweep(box);
     if (shot.reach <= weapons.rifle.reach && (along || inCross)) return;
+    const covers = this.covers();
     this.enemies.hit(box, shot.damage);
+    this.infantry.hit(box, shot.damage, covers);
     this.props.hit(box, shot.damage);
     this.shorts.hit(box, shot.damage);
     this.bags.hit(box, shot.damage);
@@ -480,8 +513,8 @@ export class Play extends Phaser.Scene {
 
   /**
    * Обычная картинка остаётся как есть: жизнь снята, волна на месте.
-   * Босс обнуляется. Нулевая жизнь ждёт Enter, пока континуэ не кончились.
-   * Континуэ обнуляет счёт, как в порте, и возвращает стартовые жизни.
+   * Босс обнуляется, пока жизнь ещё есть.
+   * Нулевая жизнь ждёт Enter и поднимает уровень с первой картинки.
    */
   private onLifeLost(): void {
     if (this.down || this.handoff) return;
@@ -506,34 +539,17 @@ export class Play extends Phaser.Scene {
     this.tweens.pauseAll();
   }
 
-  private acceptContinue(): void {
-    this.march.continues -= 1;
-    this.march.score = 0;
-    this.march.lives = hudNumbers.lives;
-    this.march.grenades = this.grenades.count();
-    this.down = null;
-    this.hud.setHold(null);
-    if (this.picture.boss) {
-      this.handoff = { ...this.march };
-      return;
-    }
-    this.hud.carry(0, hudNumbers.lives);
-    this.tweens.resumeAll();
+  /** Enter на нуле жизней. Счёт, гранаты и жизни со старта, картинка первая в уровне. */
+  private acceptRestart(): void {
+    this.handoff = restartLevel(this.march);
+    this.gun.quiet();
   }
 
-  /** Дома уже падают. Солдат убегает, затем следующая картинка или лишняя жизнь. */
+  /** Кадр замер. Через три секунды следующая картинка или лишняя жизнь. */
   private stepClear(delta: number): void {
-    this.sparks.step(delta);
-    this.debris.step(delta);
-    this.rails.step(delta);
-    this.barrels.step(delta);
-    this.trees.step(delta);
-    this.pickets.step(delta);
-    this.houses.step(delta);
-    this.kilns.step(delta);
-    this.rocks.step(delta);
     if (this.settled) return;
-    if (!this.soldier.leave(delta)) return;
+    this.clearHold += delta;
+    if (this.clearHold < hud.victoryMs) return;
     this.march.lives = this.hud.livesLeft;
     this.march.score = this.hud.points;
     this.march.grenades = this.grenades.count();
@@ -592,15 +608,36 @@ export class Play extends Phaser.Scene {
     this.hud.setWeapon('rifle');
   }
 
+  /** Целые объекты сцены. Пехота за ними не получает урон и не рисуется поверх. */
+  private covers(): Cover[] {
+    return [
+      ...this.houses.shields(),
+      ...this.trees.shields(),
+      ...this.barrels.shields(),
+      ...this.rocks.shields(),
+      ...this.kilns.shields(),
+      ...this.props.shields(),
+      ...this.shorts.shields(),
+      ...this.bags.shields(),
+      ...this.rails.shields(),
+      ...this.pickets.shields(),
+    ];
+  }
+
   private finish(): void {
     if (this.cleared) return;
     this.cleared = true;
     this.enemies.freeze();
+    this.infantry.freeze();
     this.gun.burn();
     this.restoreRifle();
     this.drops.freeze();
-    this.houses.fall();
-    this.kilns.fall();
+    this.tweens.pauseAll();
+    this.anims.pauseAll();
+    for (const child of this.children.list) {
+      if (child instanceof Phaser.GameObjects.Particles.ParticleEmitter) child.pause();
+    }
+    this.victoryText.setVisible(true);
   }
 
   private drawBattle(): void {
@@ -608,12 +645,14 @@ export class Play extends Phaser.Scene {
     const gfx = this.battleGfx;
     gfx.clear();
     this.props.draw();
-    this.enemies.draw(this.view, this.wall);
+    this.enemies.draw();
+    this.infantry.draw(this.covers());
     this.fences.sync(this.view, this.wall);
     this.wall.draw(gfx, this.view, this.fences.columns());
     this.drops.draw(this.view);
     this.soldier.draw();
     this.enemies.drawBullets(gfx, this.view, this.wall);
+    this.infantry.drawBullets(gfx, this.view, this.wall);
     this.grenades.draw(gfx);
     this.sparks.draw(gfx);
     this.debris.draw();

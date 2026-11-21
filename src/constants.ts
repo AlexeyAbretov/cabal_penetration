@@ -519,8 +519,6 @@ export const green = {
   holdMs: 880,
   /** Пауза между зелёными одной точки. */
   gapMs: 300,
-  /** Маркер точки за столько мс до первого из пачки. */
-  warnMs: 1100,
   score: 210,
 } as const;
 
@@ -535,7 +533,6 @@ export const tank = {
   height: 48,
   holdMs: 520,
   score: 5000,
-  warnMs: 1400,
   /** Доля ширины поля в секунду. */
   speed: 0.28,
 } as const;
@@ -549,7 +546,6 @@ export const wheel = {
   height: 44,
   holdMs: 240,
   score: tank.score,
-  warnMs: 1000,
   speed: 0.62,
 } as const;
 
@@ -563,7 +559,6 @@ export const truck = {
   width: 96,
   height: 36,
   score: 3000,
-  warnMs: 1300,
   driveMs: 1100,
   riders: 4,
   dropGapMs: 360,
@@ -584,6 +579,26 @@ export const depth = {
   near: 1,
 } as const;
 
+/**
+ * Пехота. Бежит по дальней половине поля, останавливается, стреляет одной пулей
+ * и снова выбирает сторону. На сцене не больше cap живых.
+ * Ширина и высота — у ближнего края поля, до глубины.
+ */
+export const infantry = {
+  hp: green.hp,
+  width: 32,
+  height: 36,
+  score: green.score,
+  cap: 6,
+  /** Доля ширины поля в секунду. */
+  speed: 0.22,
+  /** Длина перебежки, доля ширины. Не весь переход, часть пути. */
+  leg: { min: 0.16, max: 0.42 },
+  /** Край поля, за который нога не заступает. */
+  edge: 0.04,
+  holdMs: 200,
+} as const;
+
 /** Полоска ENEMY в рамке. Один сегмент — одно убийство волны. */
 export const enemyBar = {
   width: 156,
@@ -597,6 +612,8 @@ export const hud = {
   scoreDigits: 6,
   hurtMs: 1000,
   blinkMs: 80,
+  /** Пустая полоска держит кадр, затем следующая картинка. */
+  victoryMs: 3000,
 } as const;
 
 export function cssColor(color: number): string {

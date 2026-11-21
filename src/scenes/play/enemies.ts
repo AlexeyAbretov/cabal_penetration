@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { centerBox, rectsOverlap, type HitBox } from '../../combat';
-import { frame, green, grenade, palette, tank, tankVolley, truck, volley, wall, wheel } from '../../constants';
+import { frame, green, grenade, palette, tank, tankVolley, truck, volley, wheel } from '../../constants';
 import { type EnemyKind, type WaveGroup } from '../../wave';
 import { fieldScale, wallTopY, type FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
@@ -57,7 +57,6 @@ type Incoming = {
 
 /**
  * Волна из фиксированных точек: зелёные, два танка и грузовик.
- * Маркер точки горит до выхода. У гусеничного он с башней, у колёсного — с колёсами.
  * Оба танка встают, дают один залп и едут дальше. Колёсный быстрее.
  * Грузовик едет поперёк, высаживает зелёных и уходит. Сам не стреляет.
  * Зелёный выпускает одну пулю из себя. Она летит в запертую колонку медленнее, чем залп танка.
@@ -69,7 +68,6 @@ export class Enemies {
   private incoming: Incoming[] = [];
   private clock = 0;
   private frozen = false;
-  private readonly lanes: Phaser.GameObjects.Graphics;
   private readonly bodies: Phaser.GameObjects.Graphics;
   private readonly sparks: Sparks;
   private readonly onKill: (points: number) => void;
@@ -88,7 +86,6 @@ export class Enemies {
     this.onKill = onKill;
     this.onRelease = onRelease;
     this.pockets = wave.map((spec) => ({ spec, sent: 0 }));
-    this.lanes = scene.add.graphics().setDepth(1.5);
     this.bodies = scene.add.graphics().setDepth(3);
   }
 
@@ -147,9 +144,8 @@ export class Enemies {
     this.bury();
   }
 
-  draw(view: FrameLayout, columns: FrontWall): void {
-    this.drawLanes(view, columns);
-    this.drawBodies(view);
+  draw(): void {
+    this.drawBodies();
   }
 
   drawBullets(gfx: Phaser.GameObjects.Graphics, view: FrameLayout, columns: FrontWall): void {
@@ -524,25 +520,9 @@ export class Enemies {
     this.units = this.units.filter((enemy) => enemy.alive);
   }
 
-  private drawLanes(view: FrameLayout, columns: FrontWall): void {
-    const marked = new Set<number>();
-    for (const enemy of this.units) {
-      if (enemy.phase === 'aim') marked.add(enemy.column);
-    }
-    const gfx = this.lanes;
-    gfx.clear();
-    const geom = columns.geom(view);
-    for (const column of marked) {
-      const x = geom.trackX + column * geom.colW;
-      gfx.fillStyle(palette.enemyLane, 1);
-      gfx.fillRect(x + wall.seam, geom.top, Math.max(1, geom.colW - wall.seam * 2), 8);
-    }
-  }
-
-  private drawBodies(view: FrameLayout): void {
+  private drawBodies(): void {
     const gfx = this.bodies;
     gfx.clear();
-    this.drawMarkers(gfx, view);
     const ordered = [...this.units].sort((a, b) => a.y - b.y);
     for (const enemy of ordered) {
       if (enemy.kind === 'tank') this.drawTank(gfx, enemy);
@@ -669,59 +649,6 @@ export class Enemies {
       gfx.fillStyle(i < full ? palette.wallHurt : palette.barTrack, 1);
       gfx.fillRect(left + i * (pipW + gap), y, pipW, 3);
     }
-  }
-
-  private drawMarkers(gfx: Phaser.GameObjects.Graphics, view: FrameLayout): void {
-    const pulse = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(this.clock / 140));
-    const field = view.field;
-    for (const pocket of this.pockets) {
-      if (!this.marking(pocket)) continue;
-      const point = pocket.spec.point;
-      const x = field.x + point.x * field.width;
-      const y = field.y + point.y * field.height;
-      if (pocket.spec.composition[0] === 'tank') {
-        gfx.fillStyle(palette.enemyLane, pulse);
-        gfx.fillRect(Math.round(x - 16), Math.round(y - 7), 32, 14);
-        gfx.fillStyle(palette.tankBullet, 1);
-        gfx.fillRect(Math.round(x - 3), Math.round(y - 13), 6, 6);
-        gfx.fillRect(Math.round(x - 2), Math.round(y + 7), 4, 22);
-        continue;
-      }
-      if (pocket.spec.composition[0] === 'wheel') {
-        gfx.fillStyle(palette.enemyLane, pulse);
-        gfx.fillRect(Math.round(x - 18), Math.round(y - 6), 36, 10);
-        gfx.fillStyle(palette.black, 1);
-        gfx.fillRect(Math.round(x - 14), Math.round(y + 4), 7, 7);
-        gfx.fillRect(Math.round(x + 7), Math.round(y + 4), 7, 7);
-        gfx.fillStyle(palette.enemyLane, 1);
-        gfx.fillRect(Math.round(x - 1), Math.round(y + 11), 3, 16);
-        continue;
-      }
-      if (pocket.spec.composition[0] === 'truck') {
-        const fromRight = point.x >= 0.5;
-        gfx.fillStyle(palette.enemyLane, pulse);
-        gfx.fillRect(Math.round(x - 22), Math.round(y - 4), 44, 10);
-        gfx.fillStyle(palette.truckCab, 1);
-        gfx.fillRect(Math.round(fromRight ? x - 22 : x + 10), Math.round(y - 10), 12, 8);
-        gfx.fillStyle(palette.enemyLane, 1);
-        gfx.fillRect(Math.round(x - 1), Math.round(y + 6), 3, 18);
-        continue;
-      }
-      const s = 11;
-      gfx.fillStyle(palette.enemyLane, pulse);
-      gfx.fillTriangle(x, y - s, x + s, y, x, y + s);
-      gfx.fillTriangle(x, y - s, x - s, y, x, y + s);
-      gfx.fillRect(Math.round(x - 2), Math.round(y + s - 2), 4, 26);
-    }
-  }
-
-  private marking(pocket: Pocket): boolean {
-    const count = pocket.spec.composition.length;
-    if (count === 0 || pocket.sent >= count) return false;
-    const first = pocket.spec.composition[0];
-    const warn =
-      first === 'tank' ? tank.warnMs : first === 'wheel' ? wheel.warnMs : first === 'truck' ? truck.warnMs : green.warnMs;
-    return this.clock >= pocket.spec.delayMs - warn;
   }
 }
 

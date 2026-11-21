@@ -3,6 +3,7 @@ import type { GroundAt } from '../../campaign/ground';
 import { grenade, house as houseStats, palette } from '../../constants';
 import type { HouseMark } from '../../types/house';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
+import type { Cover } from '../../cover';
 import { belowHorizon, type FrameLayout } from '../../layout';
 import { blit, ensureCanvas } from './blit';
 import { buildingBox, drawBuilding, drawScrap, facadeBands, scrapHeight } from './buildings';
@@ -168,6 +169,17 @@ export class Houses {
       if (house.phase !== 'up' || house.w < 1 || !rectsOverlap(box, facade(house))) continue;
       this.wound(house, amount, at.x, at.y, false);
     }
+  }
+
+  /** Стоящий фасад закрывает пехоту за собой. Лом уже не прячет. */
+  shields(): Cover[] {
+    const out: Cover[] = [];
+    for (const house of this.houses) {
+      if (house.phase !== 'up' || house.w < 1) continue;
+      const box = facade(house);
+      out.push({ box, sole: box.bottom });
+    }
+    return out;
   }
 
   /** Разрыв снимает долю жизни, если фасад входит в круг. Четыре таких доли роняют дом. */

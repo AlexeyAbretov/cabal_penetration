@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { circleHitsRect, distanceToSegment, rectsOverlap, type HitBox } from '../../combat';
+import type { Cover } from '../../cover';
 import { grenade, palette, railFence } from '../../constants';
 import type { RailLayout, RailMark, RailPost } from '../../types/rail';
 import type { FrameLayout } from '../../layout';
@@ -114,6 +115,27 @@ export class Rails {
       if (!this.struck(run, box)) continue;
       this.wound(run, amount, at);
     }
+  }
+
+  /** Целые жерди и столбы закрывают пехоту за собой. */
+  shields(): Cover[] {
+    const out: Cover[] = [];
+    for (const run of this.runs) {
+      if (!run.alive) continue;
+      for (const post of run.posts) {
+        const box = postRect(post);
+        out.push({ box, sole: box.bottom });
+      }
+      for (const line of railLines(run)) {
+        const left = Math.min(line.x0, line.x1);
+        const right = Math.max(line.x0, line.x1);
+        const top = Math.min(line.y0, line.y1) - 2;
+        const bottom = Math.max(line.y0, line.y1) + 2;
+        if (right - left < 2) continue;
+        out.push({ box: { left, right, top, bottom }, sole: bottom });
+      }
+    }
+    return out;
   }
 
   /** Разрыв снимает забор, чья жердь или столб входят в круг. */

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { centerBox, circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
+import type { Cover } from '../../cover';
 import { grenade, palette, scenery, type PropKind } from '../../constants';
 import type { PropMark } from '../../types/prop';
 import { fieldScale, fitScale, wallTopY, type FrameLayout } from '../../layout';
@@ -102,6 +103,17 @@ export class Props {
       any = true;
     }
     if (any) this.bury();
+  }
+
+  /** Живой куст и ящик закрывают пехоту за собой. */
+  shields(): Cover[] {
+    const out: Cover[] = [];
+    for (const prop of this.props) {
+      if (!prop.alive) continue;
+      const box = centerBox(prop.x, prop.y, prop.w, prop.h);
+      out.push({ box, sole: box.bottom });
+    }
+    return out;
   }
 
   /** Куст берётся по листве: круг задел прямоугольник кроны. Ящик — по центру. */

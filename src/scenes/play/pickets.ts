@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
+import type { Cover } from '../../cover';
 import { grenade, palette, picket } from '../../constants';
 import type { PicketMark } from '../../types/picket';
 import { picketBays, picketFrame, picketGap, picketSlat } from '../../types/picket';
@@ -129,6 +130,19 @@ export class Pickets {
         this.wound(run, bay, amount, x, y);
       }
     }
+  }
+
+  /** Целая секция штакетника закрывает пехоту за досками. */
+  shields(): Cover[] {
+    const out: Cover[] = [];
+    for (const run of this.runs) {
+      for (const bay of run.bays) {
+        if (!bay.alive || bay.right <= bay.left) continue;
+        const box = { left: bay.left, right: bay.right, top: bay.top, bottom: bay.bottom };
+        out.push({ box, sole: box.bottom });
+      }
+    }
+    return out;
   }
 
   /** Разрыв снимает каждую секцию, чьи доски входят в круг. */
