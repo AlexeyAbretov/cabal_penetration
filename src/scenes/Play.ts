@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { afterPicture, marchFrom, marchPicture, restartLevel, type March } from '../campaign/march';
 import { route } from '../campaign/route';
 import { bonusList, breakableCount, type Picture } from '../campaign/picture';
-import { circleHitsRect, hitBox, resolveColumnHit, type HitBox } from '../combat';
+import { circleHitsRect, hitBox, resolveColumnHit, type FlightBlock, type HitBox } from '../combat';
 import { bonus, cssColor, grenade, grenadeBoom, grenadeFly, grenadeThrow, gunFire, hitFlash, hud, medal, palette, pickup, star, ton, weapons, type DropKind } from '../constants';
 import type { FenceKind, FenceMark } from '../types/fence';
 import { isInfantry, isPack, waveQuota } from '../wave';
@@ -326,9 +326,17 @@ export class Play extends Phaser.Scene {
       this.drawBattle();
       return;
     }
-    for (const column of [...this.enemies.arrive(step), ...this.infantry.arrive(step)]) {
+    const blocks = this.flightBlocks();
+    for (const shot of [
+      ...this.enemies.arrive(step, this.view, this.wall, blocks),
+      ...this.infantry.arrive(step, this.view, this.wall, blocks),
+    ]) {
       if (this.down || this.handoff) break;
-      this.resolveIncoming(column);
+      if (shot.fence !== null) {
+        this.stopOnFence(shot.fence, shot.x, shot.y);
+        continue;
+      }
+      this.resolveIncoming(shot.column);
     }
     this.soldier.setAlpha(this.hud.stepHurt(step));
     this.sparks.step(step);
@@ -491,6 +499,26 @@ export class Play extends Phaser.Scene {
     if (sheet && fell) this.fences.spray(column, x, y, true);
   }
 
+  /** Кладка передней стены. Лист — по чернилам, голая секция — по лицу колонки. */
+  private flightBlocks(): FlightBlock[] {
+    const blocks = this.fences.blocks();
+    const sheet = this.fences.columns();
+    for (let column = 0; column < this.wall.count(); column += 1) {
+      if (sheet.has(column)) continue;
+      const face = this.wall.stoneRect(this.view, column);
+      if (!face) continue;
+      blocks.push({ column, left: face.left, right: face.right, top: face.top, bottom: face.bottom });
+    }
+    return blocks;
+  }
+
+  /** Пуля упёрлась в секцию по пути. Целая кладка колется, ролик только гасит полёт. */
+  private stopOnFence(column: number, x: number, y: number): void {
+    const standing = this.wall.up(column);
+    this.strikeCover(column, x, y, 1);
+    if (!standing) this.sparks.add(x, y, 120, 'puff');
+  }
+
   private resolveIncoming(column: number): void {
     const x = this.wall.columnCenter(this.view, column);
     const section = this.fences.sectionAt(x);
@@ -651,8 +679,9 @@ export class Play extends Phaser.Scene {
     this.wall.draw(gfx, this.view, this.fences.columns());
     this.drops.draw(this.view);
     this.soldier.draw();
-    this.enemies.drawBullets(gfx, this.view, this.wall);
-    this.infantry.drawBullets(gfx, this.view, this.wall);
+    const blocks = this.flightBlocks();
+    this.enemies.drawBullets(gfx, this.view, this.wall, blocks);
+    this.infantry.drawBullets(gfx, this.view, this.wall, blocks);
     this.grenades.draw(gfx);
     this.sparks.draw(gfx);
     this.debris.draw();

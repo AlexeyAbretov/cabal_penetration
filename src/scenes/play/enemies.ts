@@ -1,5 +1,12 @@
 import Phaser from 'phaser';
-import { centerBox, rectsOverlap, type HitBox } from '../../combat';
+import {
+  centerBox,
+  flightSample,
+  rectsOverlap,
+  type FlightArrival,
+  type FlightBlock,
+  type HitBox,
+} from '../../combat';
 import { frame, green, grenade, palette, tank, tankVolley, truck, volley, wheel } from '../../constants';
 import { type EnemyKind, type WaveGroup } from '../../wave';
 import { fieldScale, wallTopY, type FrameLayout } from '../../layout';
@@ -112,15 +119,20 @@ export class Enemies {
     this.place(view);
   }
 
-  /** Колонки, чья пуля дошла в этом кадре. */
-  arrive(delta: number): number[] {
+  /**
+   * Пули, которые в этом кадре дошли до колонки или раньше упёрлись в кладку.
+   * Наклонный отрезок к дыре останавливает соседняя секция.
+   */
+  arrive(delta: number, view: FrameLayout, columns: FrontWall, blocks: readonly FlightBlock[]): FlightArrival[] {
     if (this.frozen) return [];
-    const landed: number[] = [];
+    const landed: FlightArrival[] = [];
     const pending: Incoming[] = [];
     for (const shot of this.incoming) {
       shot.elapsed += delta;
-      if (shot.elapsed < shot.travelMs) pending.push(shot);
-      else landed.push(shot.column);
+      const to = columns.impact(view, shot.column);
+      const pose = flightSample(shot.fromX, shot.fromY, to.x, to.y, shot.elapsed, shot.travelMs, blocks);
+      if (!pose.arrived) pending.push(shot);
+      else landed.push({ ...pose, column: shot.column });
     }
     this.incoming = pending;
     return landed;
@@ -148,12 +160,17 @@ export class Enemies {
     this.drawBodies();
   }
 
-  drawBullets(gfx: Phaser.GameObjects.Graphics, view: FrameLayout, columns: FrontWall): void {
+  drawBullets(
+    gfx: Phaser.GameObjects.Graphics,
+    view: FrameLayout,
+    columns: FrontWall,
+    blocks: readonly FlightBlock[],
+  ): void {
     for (const shot of this.incoming) {
       const to = columns.impact(view, shot.column);
-      const t = Math.min(1, shot.elapsed / shot.travelMs);
-      const x = shot.fromX + (to.x - shot.fromX) * t;
-      const y = shot.fromY + (to.y - shot.fromY) * t;
+      const pose = flightSample(shot.fromX, shot.fromY, to.x, to.y, shot.elapsed, shot.travelMs, blocks);
+      const x = pose.x;
+      const y = pose.y;
       const thick = shot.heavy ? volley.thickness + 3 : volley.thickness;
       const length = shot.heavy ? volley.length + 6 : volley.length;
       gfx.save();

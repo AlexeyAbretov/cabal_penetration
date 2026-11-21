@@ -75,6 +75,105 @@ export function circleHitsRect(
   return Math.hypot(x - nearestX, y - nearestY) <= radius;
 }
 
+/** Кладка, которая ловит чужую пулю на пути к колонке. */
+export type FlightBlock = {
+  column: number;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
+/** Куда дошла пуля за кадр. fence — секция, которую отрезок пересёк раньше цели. */
+export type FlightPose = {
+  x: number;
+  y: number;
+  fence: number | null;
+  arrived: boolean;
+};
+
+/** Пуля долетела. column — колонка, в которую целились. */
+export type FlightArrival = FlightPose & {
+  column: number;
+};
+
+/**
+ * Первая кладка на отрезке.
+ * Прямой выстрел в дыру её не касается. Наклонный к колонке у ног
+ * пересекает соседнюю секцию и должен остановиться на ней.
+ */
+export function flightSample(
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  elapsed: number,
+  travelMs: number,
+  blocks: readonly FlightBlock[],
+): FlightPose {
+  const u = Math.min(1, elapsed / Math.max(travelMs, 1));
+  const hit = firstBlock(fromX, fromY, toX, toY, blocks);
+  if (hit && u >= hit.t) {
+    return { x: hit.x, y: hit.y, fence: hit.column, arrived: true };
+  }
+  return {
+    x: fromX + (toX - fromX) * u,
+    y: fromY + (toY - fromY) * u,
+    fence: null,
+    arrived: u >= 1,
+  };
+}
+
+function firstBlock(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  blocks: readonly FlightBlock[],
+): { t: number; x: number; y: number; column: number } | null {
+  let best: { t: number; x: number; y: number; column: number } | null = null;
+  for (const block of blocks) {
+    const t = segmentEnter(x0, y0, x1, y1, block);
+    if (t === null || (best && t >= best.t)) continue;
+    best = { t, column: block.column, x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t };
+  }
+  return best;
+}
+
+/** Доля пути до входа в прямоугольник. 0 — старт уже внутри. null — мимо. */
+function segmentEnter(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  rect: { left: number; right: number; top: number; bottom: number },
+): number | null {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const p = [-dx, dx, -dy, dy];
+  const q = [x0 - rect.left, rect.right - x0, y0 - rect.top, rect.bottom - y0];
+  let t0 = 0;
+  let t1 = 1;
+  for (let i = 0; i < 4; i += 1) {
+    const pi = p[i] ?? 0;
+    const qi = q[i] ?? 0;
+    if (pi === 0) {
+      if (qi < 0) return null;
+      continue;
+    }
+    const t = qi / pi;
+    if (pi < 0) {
+      if (t > t1) return null;
+      if (t > t0) t0 = t;
+    } else {
+      if (t < t0) return null;
+      if (t < t1) t1 = t;
+    }
+  }
+  if (t0 > t1 || t1 < 0 || t0 > 1) return null;
+  return Math.max(0, t0);
+}
+
 /** Дистанция от точки до отрезка и доля вдоль отрезка от начала к концу. */
 export function distanceToSegment(
   px: number,

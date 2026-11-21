@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
+import { circleHitsRect, rectsOverlap, type FlightBlock, type HitBox } from '../../combat';
 import { fence, wall } from '../../constants';
 import type { GroundAt } from '../../campaign/ground';
 import type { FenceMark } from '../../types/fence';
@@ -28,6 +28,7 @@ type Piece = {
 
 /**
  * Лист на передней стене, позади солдата. Колонка пулю не пускает, пока цела.
+ * Наклонный полёт останавливает первая кладка на отрезке, не только колонка цели.
  * Когда жизни колонки кончаются, секция играет ролик и оставляет кучу на ширине кладки.
  * Куча пулю не держит. У картинки свой список: какие колонки каким листом закрыты.
  * Удар по камню сыплет осколки, по ржавому железу — искры.
@@ -84,6 +85,23 @@ export class Fences {
       columns.push(piece.column);
     }
     return columns;
+  }
+
+  /** Живая кладка и ролик слома. Куча пулю не держит: у неё hit уже снят. */
+  blocks(): FlightBlock[] {
+    const blocks: FlightBlock[] = [];
+    for (const piece of this.pieces) {
+      const hit = piece.hit;
+      if (!hit || piece.gone) continue;
+      blocks.push({
+        column: piece.column,
+        left: hit.left,
+        right: hit.right,
+        top: hit.top,
+        bottom: hit.bottom,
+      });
+    }
+    return blocks;
   }
 
   /** Секция, чья кладка закрывает эту точку по горизонтали. */

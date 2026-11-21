@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { centerBox } from '../../combat';
+import { centerBox, flightSample, type FlightArrival, type FlightBlock } from '../../combat';
 import { frame, grenade, infantry, palette, volley } from '../../constants';
 import { pointHidden, shotReaches, type Cover } from '../../cover';
 import { infantrySheet } from '../../infantrySheet';
@@ -92,14 +92,20 @@ export class Infantry {
     this.place(view);
   }
 
-  arrive(delta: number): number[] {
+  /**
+   * Пули, которые в этом кадре дошли до колонки или раньше упёрлись в кладку.
+   * Наклонный отрезок к дыре останавливает соседняя секция.
+   */
+  arrive(delta: number, view: FrameLayout, columns: FrontWall, blocks: readonly FlightBlock[]): FlightArrival[] {
     if (this.frozen) return [];
-    const landed: number[] = [];
+    const landed: FlightArrival[] = [];
     const pending: Shot[] = [];
     for (const shot of this.incoming) {
       shot.elapsed += delta;
-      if (shot.elapsed < shot.travelMs) pending.push(shot);
-      else landed.push(shot.column);
+      const to = columns.impact(view, shot.column);
+      const pose = flightSample(shot.fromX, shot.fromY, to.x, to.y, shot.elapsed, shot.travelMs, blocks);
+      if (!pose.arrived) pending.push(shot);
+      else landed.push({ ...pose, column: shot.column });
     }
     this.incoming = pending;
     return landed;
@@ -137,12 +143,17 @@ export class Infantry {
     }
   }
 
-  drawBullets(gfx: Phaser.GameObjects.Graphics, view: FrameLayout, columns: FrontWall): void {
+  drawBullets(
+    gfx: Phaser.GameObjects.Graphics,
+    view: FrameLayout,
+    columns: FrontWall,
+    blocks: readonly FlightBlock[],
+  ): void {
     for (const shot of this.incoming) {
       const to = columns.impact(view, shot.column);
-      const t = Math.min(1, shot.elapsed / shot.travelMs);
-      const x = shot.fromX + (to.x - shot.fromX) * t;
-      const y = shot.fromY + (to.y - shot.fromY) * t;
+      const pose = flightSample(shot.fromX, shot.fromY, to.x, to.y, shot.elapsed, shot.travelMs, blocks);
+      const x = pose.x;
+      const y = pose.y;
       gfx.save();
       gfx.translateCanvas(x, y);
       gfx.rotateCanvas(Math.atan2(to.y - shot.fromY, to.x - shot.fromX));
