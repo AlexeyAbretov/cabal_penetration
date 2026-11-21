@@ -33,6 +33,8 @@ type House = {
   clock: number;
   dust: number;
   art: Pix | null;
+  /** Плотные пиксели фасада. Прозрачный край стены пехоту не закрывает. */
+  mask: Uint8Array | null;
 };
 
 type Puff = {
@@ -116,6 +118,7 @@ export class Houses {
         clock: 0,
         dust: 0,
         art: null,
+        mask: null,
       };
     });
   }
@@ -171,13 +174,13 @@ export class Houses {
     }
   }
 
-  /** Стоящий фасад закрывает пехоту за собой. Лом уже не прячет. */
+  /** Стоящий фасад закрывает пехоту за собой только плотным пикселем. Лом уже не прячет. */
   shields(): Cover[] {
     const out: Cover[] = [];
     for (const house of this.houses) {
-      if (house.phase !== 'up' || house.w < 1) continue;
+      if (house.phase !== 'up' || house.w < 1 || !house.mask) continue;
       const box = facade(house);
-      out.push({ box, sole: box.bottom });
+      out.push({ box, sole: box.bottom, opaque: (x, y) => houseOpaque(house, x, y) });
     }
     return out;
   }
@@ -341,6 +344,7 @@ export class Houses {
     if (house.w < 1 || house.h < 1) return;
     const art = drawBuilding(house.mark.kind, house.w, house.h, house.stage);
     house.art = art;
+    house.mask = shade(art);
     blit(this.scene, house.key, art);
     house.image.setTexture(house.key);
     house.image.setDisplaySize(house.w, house.h);
@@ -409,6 +413,40 @@ function chipOf(house: House, y: number): DebrisKind {
   if (!bands || along > bands.found) return 'brick';
   if (along < bands.roof) return 'tile';
   return kind === 'manor' ? 'stucco' : 'plaster';
+}
+
+function houseOpaque(house: House, x: number, y: number): boolean {
+  const mask = house.mask;
+  if (!mask) return false;
+  const lx = Math.floor(x - (house.root.x - house.w / 2));
+  const ly = Math.floor(y - (house.root.y - house.h));
+  if (lx < 0 || ly < 0 || lx >= house.w || ly >= house.h) return false;
+  return mask[ly * house.w + lx] === 1;
+}
+
+/** Плотный пиксель и его соседи. Шов кладки пехоту не показывает, пустой край стены — показывает. */
+function shade(pix: Pix): Uint8Array {
+  const mask = new Uint8Array(pix.w * pix.h);
+  const src = pix.data;
+  for (let y = 0; y < pix.h; y += 1) {
+    for (let x = 0; x < pix.w; x += 1) {
+      let solid = false;
+      for (let dy = -1; dy <= 1 && !solid; dy += 1) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= pix.h) continue;
+        const row = yy * pix.w;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= pix.w) continue;
+          if (src[(row + xx) * 4 + 3]! < 128) continue;
+          solid = true;
+          break;
+        }
+      }
+      if (solid) mask[y * pix.w + x] = 1;
+    }
+  }
+  return mask;
 }
 
 function facade(house: House): HitBox {
