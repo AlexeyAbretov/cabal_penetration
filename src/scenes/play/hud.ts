@@ -53,6 +53,7 @@ export class Hud {
   private weapon: WeaponId = 'rifle';
   private readonly pauseVeil: Phaser.GameObjects.Graphics;
   private readonly pauseLabel: Phaser.GameObjects.Text;
+  private readonly deathLabel: Phaser.GameObjects.Text;
   private readonly edge: Phaser.GameObjects.Graphics;
   private pictureButtons: HTMLButtonElement[] = [];
   private onPicture: PicturePick | null = null;
@@ -78,6 +79,14 @@ export class Hud {
       })
       .setOrigin(0.5)
       .setVisible(false);
+    this.deathLabel = scene.add
+      .text(0, 0, 'ПОГИБ', {
+        fontFamily,
+        fontSize: '32px',
+        color: cssColor(palette.ink),
+      })
+      .setOrigin(0.5, 1)
+      .setVisible(false);
     this.edge = scene.add.graphics();
     layer.add(this.heart);
     layer.add(this.livesText);
@@ -89,6 +98,7 @@ export class Hud {
     layer.add(this.weaponGfx);
     layer.add(this.pauseVeil);
     layer.add(this.pauseLabel);
+    layer.add(this.deathLabel);
     layer.add(this.edge);
   }
 
@@ -195,8 +205,10 @@ export class Hud {
 
   setHold(hold: 'pause' | 'continue' | 'over' | null, continuesLeft = 0): void {
     const visible = hold !== null;
+    const dead = hold === 'continue' || hold === 'over';
     this.pauseVeil.setVisible(visible);
     this.pauseLabel.setVisible(visible);
+    this.deathLabel.setVisible(dead);
     if (hold === 'pause') this.pauseLabel.setText('ПАУЗА');
     if (hold === 'continue') this.pauseLabel.setText(`ENTER  ${continuesLeft}`);
     if (hold === 'over') this.pauseLabel.setText('ENTER');
@@ -220,6 +232,7 @@ export class Hud {
     this.pauseVeil.fillStyle(palette.black, 0.55);
     this.pauseVeil.fillRect(0, 0, width, height);
     this.pauseLabel.setPosition(width / 2, height / 2);
+    this.deathLabel.setPosition(width / 2, height / 2 - this.pauseLabel.height / 2 - 16);
 
     this.edge.clear();
     this.edge.fillStyle(palette.ink, 1);
