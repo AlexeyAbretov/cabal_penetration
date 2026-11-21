@@ -5,7 +5,7 @@ import { grenade, palette, tree as treeStats } from '../../constants';
 import { belowHorizon, fitScale, type FrameLayout } from '../../layout';
 import type { TreeMark } from '../../types/tree';
 import { blit, ensureCanvas } from './blit';
-import { hash } from './pix';
+import { hash, type Pix } from './pix';
 import { paintTree, type TreeBox } from './treeDraw';
 
 type Tree = {
@@ -23,6 +23,8 @@ type Tree = {
   pixW: number;
   pixH: number;
   hit: TreeBox;
+  /** Плотные пиксели кадра. Дырки листвы закрыты соседней кроной. */
+  mask: Uint8Array | null;
   crown: { left: number; right: number; top: number; sole: number };
   image: Phaser.GameObjects.Image;
   key: string;
@@ -94,6 +96,7 @@ export class Trees {
         pixW: 1,
         pixH: 1,
         hit: { left: 0, right: 0, top: 0, bottom: 0 },
+        mask: null,
         crown: { left: 0, right: 0, top: 0, sole: 0 },
         image,
         key,
@@ -131,13 +134,13 @@ export class Trees {
     }
   }
 
-  /** Целое дерево закрывает пехоту за кроной и стволом. */
+  /** Целое дерево закрывает дальнюю пехоту плотными пикселями кроны и ствола. */
   shields(): Cover[] {
     const out: Cover[] = [];
     for (const tree of this.trees) {
-      if (!tree.whole || tree.pixH < 2) continue;
-      const box = body(tree);
-      out.push({ box, sole: box.bottom });
+      if (!tree.whole || tree.pixH < 2 || !tree.mask) continue;
+      const box = spriteBox(tree);
+      out.push({ box, sole: box.bottom, opaque: (x, y) => treeOpaque(tree, x, y) });
     }
     return out;
   }
@@ -288,6 +291,7 @@ export class Trees {
     const painted = paintTree(tree.height, tree.live, !tree.whole, tree.pile, tree.dir);
     if (!painted) {
       tree.image.setVisible(false);
+      tree.mask = null;
       tree.sig = '';
       return;
     }
@@ -297,10 +301,11 @@ export class Trees {
     tree.pixH = painted.pix.h;
     tree.hit = painted.hit;
     tree.crown = painted.crown;
-    if (sig === tree.sig) {
+    if (sig === tree.sig && tree.mask) {
       tree.image.setPosition(tree.x, tree.sole);
       return;
     }
+    tree.mask = shade(painted.pix);
     tree.sig = sig;
     blit(this.scene, tree.key, painted.pix);
     tree.image.setTexture(tree.key);
@@ -311,12 +316,57 @@ export class Trees {
   }
 }
 
+function spriteBox(tree: Tree): HitBox {
+  const left = tree.x - tree.ox * tree.pixW;
+  const top = tree.sole - tree.pixH;
+  return { left, right: left + tree.pixW, top, bottom: tree.sole };
+}
+
+function treeOpaque(tree: Tree, x: number, y: number): boolean {
+  const mask = tree.mask;
+  if (!mask) return false;
+  const lx = Math.floor(x - tree.x + tree.ox * tree.pixW);
+  const ly = Math.floor(y - tree.sole + tree.pixH);
+  if (lx < 0 || ly < 0 || lx >= tree.pixW || ly >= tree.pixH) return false;
+  return mask[ly * tree.pixW + lx] === 1;
+}
+
+/** Плотный пиксель и его соседи. Одинокая дырка в листве пехоту не показывает. */
+function shade(pix: Pix): Uint8Array {
+  const mask = new Uint8Array(pix.w * pix.h);
+  const src = pix.data;
+  for (let y = 0; y < pix.h; y += 1) {
+    for (let x = 0; x < pix.w; x += 1) {
+      let solid = false;
+      for (let dy = -1; dy <= 1 && !solid; dy += 1) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= pix.h) continue;
+        const row = yy * pix.w;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= pix.w) continue;
+          if (src[(row + xx) * 4 + 3]! < 128) continue;
+          solid = true;
+          break;
+        }
+      }
+      if (solid) mask[y * pix.w + x] = 1;
+    }
+  }
+  return mask;
+}
+
 function body(tree: Tree): HitBox {
+  return placed(tree, tree.hit);
+}
+
+function placed(tree: Tree, box: TreeBox): HitBox {
+  const ox = tree.ox * tree.pixW;
   return {
-    left: tree.x + tree.hit.left - tree.ox * tree.pixW,
-    right: tree.x + tree.hit.right - tree.ox * tree.pixW,
-    top: tree.sole + tree.hit.top - tree.pixH,
-    bottom: tree.sole + tree.hit.bottom - tree.pixH,
+    left: tree.x + box.left - ox,
+    right: tree.x + box.right - ox,
+    top: tree.sole + box.top - tree.pixH,
+    bottom: tree.sole + box.bottom - tree.pixH,
   };
 }
 

@@ -4,6 +4,8 @@ import type { HitBox } from './combat';
 export type Cover = {
   box: HitBox;
   sole: number;
+  /** Плотный пиксель внутри box. Пустая клетка пехоту не закрывает. */
+  opaque?: (x: number, y: number) => boolean;
 };
 
 /** Точка на теле дальше этого низа закрыта ближним объектом. */
@@ -11,7 +13,9 @@ export function pointHidden(x: number, y: number, foot: number, covers: readonly
   for (const cover of covers) {
     if (cover.sole <= foot + 2) continue;
     const box = cover.box;
-    if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) return true;
+    if (x < box.left || x > box.right || y < box.top || y > box.bottom) continue;
+    if (cover.opaque && !cover.opaque(x, y)) continue;
+    return true;
   }
   return false;
 }
