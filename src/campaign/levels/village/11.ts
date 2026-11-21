@@ -196,8 +196,11 @@ const fences: readonly FenceMark[] = [
  * Пехота 1-1. Тридцать бойцов, пять групп по шесть.
  * На сцене не больше шести. Левый и правый край выпускают бойцов одновременно.
  * Пауза step — между бойцами группы, gap — перед группой своего края.
- * from — край, с которого входят. band — полоса дальней половины поля:
- * 0 у горизонта, 1 у дорожки, вторая половина от камеры к горизонту это 0…0.5.
+ * from — край, с которого входят. band — полоса дальней половины опорного поля, как у домов:
+ * 0 у горизонта, 1 у ближнего края картинки. Лишняя высота окна впереди.
+ * Вторая половина от камеры к горизонту — 0…0.5.
+ * Число полосы — центр бойца. Первые группы обоих краёв доходят до горизонта,
+ * на глубину дальнего сарая: его середина выше подошвы и выше прежней черты.
  * Каждый пробегает часть ширины, стреляет одной пулей и снова выбирает сторону.
  */
 const infantryWave: readonly InfantryGroup[] = [
@@ -205,7 +208,7 @@ const infantryWave: readonly InfantryGroup[] = [
     kind: 'infantry',
     count: 6,
     from: 'left',
-    band: { far: 0.08, near: 0.2 },
+    band: { far: 0, near: 0.14 },
     step: { min: 380, max: 980 },
     gap: { min: 700, max: 1200 },
   },
@@ -213,7 +216,7 @@ const infantryWave: readonly InfantryGroup[] = [
     kind: 'infantry',
     count: 6,
     from: 'right',
-    band: { far: 0.16, near: 0.32 },
+    band: { far: 0, near: 0.14 },
     step: { min: 420, max: 1100 },
     gap: { min: 700, max: 1200 },
   },
@@ -221,7 +224,7 @@ const infantryWave: readonly InfantryGroup[] = [
     kind: 'infantry',
     count: 6,
     from: 'left',
-    band: { far: 0.26, near: 0.42 },
+    band: { far: 0.16, near: 0.32 },
     step: { min: 360, max: 920 },
     gap: { min: 1500, max: 2600 },
   },
@@ -229,7 +232,7 @@ const infantryWave: readonly InfantryGroup[] = [
     kind: 'infantry',
     count: 6,
     from: 'right',
-    band: { far: 0.1, near: 0.28 },
+    band: { far: 0.12, near: 0.3 },
     step: { min: 400, max: 1000 },
     gap: { min: 1700, max: 2900 },
   },
@@ -237,7 +240,7 @@ const infantryWave: readonly InfantryGroup[] = [
     kind: 'infantry',
     count: 6,
     from: 'left',
-    band: { far: 0.2, near: 0.46 },
+    band: { far: 0.28, near: 0.46 },
     step: { min: 340, max: 880 },
     gap: { min: 1400, max: 2400 },
   },

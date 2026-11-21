@@ -3,7 +3,7 @@ import { centerBox, flightSample, type FlightArrival, type FlightBlock } from '.
 import { frame, grenade, infantry, palette, volley } from '../../constants';
 import { pointHidden, shotReaches, type Cover } from '../../cover';
 import { infantrySheet } from '../../infantrySheet';
-import { fieldScale, wallTopY, type FrameLayout } from '../../layout';
+import { belowHorizon, fieldScale, wallTopY, type FrameLayout } from '../../layout';
 import type { InfantryGroup, Wait } from '../../wave';
 import type { Sparks } from './sparks';
 import type { FrontWall } from './wall';
@@ -316,7 +316,9 @@ export class Infantry {
     for (const soldier of this.units) {
       const u = soldier.moveT >= 1 ? 1 : 1 - (1 - soldier.moveT) * (1 - soldier.moveT);
       const rx = soldier.sx + (soldier.tx - soldier.sx) * u;
-      let y = field.y + soldier.lane * field.height;
+      // Та же шкала, что у домов: доля опорного поля от горизонта.
+      // Лишняя высота окна остаётся впереди и полосу не опускает.
+      let y = field.y + belowHorizon(soldier.lane, field);
       let scale = fieldScale(y, field);
       const maxY = ceiling - (infantry.height * scale) / 2 - 6;
       if (y > maxY) {

@@ -6,6 +6,7 @@ import type { PropMark } from '../../types/prop';
 import { fieldScale, fitScale, wallTopY, type FrameLayout } from '../../layout';
 import { blit, ensureCanvas } from './blit';
 import { paintBush } from './plants';
+import type { Pix } from './pix';
 import type { Sparks } from './sparks';
 
 type Prop = {
@@ -28,6 +29,8 @@ type Prop = {
   paintedH: number;
   paintedStage: number;
   paintedFlash: boolean;
+  /** Плотные пиксели листа. Пустой край прямоугольника пехоту не закрывает. */
+  mask: Uint8Array | null;
 };
 
 /**
@@ -79,6 +82,7 @@ export class Props {
         paintedH: 0,
         paintedStage: -1,
         paintedFlash: false,
+        mask: null,
       };
     });
     this.gfx = scene.add.graphics().setDepth(2.5);
@@ -105,11 +109,17 @@ export class Props {
     if (any) this.bury();
   }
 
-  /** Живой куст и ящик закрывают пехоту за собой. */
+  /** Живой куст закрывает пехоту плотным пикселем. Ящик — всем прямоугольником. */
   shields(): Cover[] {
     const out: Cover[] = [];
     for (const prop of this.props) {
       if (!prop.alive) continue;
+      if (prop.kind === 'bush') {
+        if (!prop.mask || prop.paintedW < 1) continue;
+        const box = bushBox(prop);
+        out.push({ box, sole: box.bottom, opaque: (x, y) => bushOpaque(prop, x, y) });
+        continue;
+      }
       const box = centerBox(prop.x, prop.y, prop.w, prop.h);
       out.push({ box, sole: box.bottom });
     }
@@ -200,7 +210,9 @@ export class Props {
     const stage = prop.alive ? stageOf(prop.kind, prop.hp) : 3;
     const flash = prop.flash > 0;
     if (w !== prop.paintedW || h !== prop.paintedH || stage !== prop.paintedStage || flash !== prop.paintedFlash) {
-      blit(this.scene, prop.key, paintBush(w, h, stage, flash));
+      const art = paintBush(w, h, stage, flash);
+      blit(this.scene, prop.key, art);
+      prop.mask = shade(art);
       sprite.setTexture(prop.key);
       sprite.setDisplaySize(w, h);
       prop.paintedW = w;
@@ -236,6 +248,46 @@ export class Props {
       gfx.fillRect(left + 2, top + Math.round(h * 0.58), Math.max(2, w - 4), 2);
     }
   }
+}
+
+function bushBox(prop: Prop): HitBox {
+  const left = Math.round(prop.x) - prop.paintedW / 2;
+  const top = Math.round(prop.y) - prop.paintedH / 2;
+  return { left, right: left + prop.paintedW, top, bottom: top + prop.paintedH };
+}
+
+function bushOpaque(prop: Prop, x: number, y: number): boolean {
+  const mask = prop.mask;
+  if (!mask || prop.paintedW < 1) return false;
+  const lx = Math.floor(x - (Math.round(prop.x) - prop.paintedW / 2));
+  const ly = Math.floor(y - (Math.round(prop.y) - prop.paintedH / 2));
+  if (lx < 0 || ly < 0 || lx >= prop.paintedW || ly >= prop.paintedH) return false;
+  return mask[ly * prop.paintedW + lx] === 1;
+}
+
+/** Плотный пиксель и его соседи. Дырка в листве пехоту не показывает, пустой край кадра — показывает. */
+function shade(pix: Pix): Uint8Array {
+  const mask = new Uint8Array(pix.w * pix.h);
+  const src = pix.data;
+  for (let y = 0; y < pix.h; y += 1) {
+    for (let x = 0; x < pix.w; x += 1) {
+      let solid = false;
+      for (let dy = -1; dy <= 1 && !solid; dy += 1) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= pix.h) continue;
+        const row = yy * pix.w;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= pix.w) continue;
+          if (src[(row + xx) * 4 + 3]! < 128) continue;
+          solid = true;
+          break;
+        }
+      }
+      if (solid) mask[y * pix.w + x] = 1;
+    }
+  }
+  return mask;
 }
 
 function stageOf(kind: PropKind, hp: number): number {
