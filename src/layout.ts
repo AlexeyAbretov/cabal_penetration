@@ -1,4 +1,5 @@
 import { bands, depth, frame, soldierBox, wall } from './constants';
+import { screenPixel } from './screen';
 import { soldierSheet } from './soldierSheet';
 
 export type Rect = { x: number; y: number; width: number; height: number };
@@ -20,31 +21,57 @@ function bandHeight(
   return Math.min(spec.max, Math.max(spec.min, raw));
 }
 
+/**
+ * Полосы заданы в пикселях опорного кадра.
+ * На плотном стекле игровой пиксель крупнее, и те же доли занимают меньше клеток.
+ */
+function bandSpec(spec: { ratio: number; min: number; max: number }): {
+  ratio: number;
+  min: number;
+  max: number;
+} {
+  const pixel = screenPixel();
+  return {
+    ratio: spec.ratio,
+    min: Math.max(1, Math.round(spec.min / pixel)),
+    max: Math.max(1, Math.round(spec.max / pixel)),
+  };
+}
+
+function trackHeight(): number {
+  return Math.max(1, Math.round(wall.path / screenPixel()));
+}
+
 /** Небо, поле, дорожка, рамка. Сумма высот равна кадру: поле забирает остаток. */
 export function frameLayout(width: number, height: number): FrameLayout {
-  let skyH = bandHeight(height, bands.sky);
-  let trackH: number = wall.path;
-  let hudH = bandHeight(height, bands.hud);
+  const skyBand = bandSpec(bands.sky);
+  const trackBand = bandSpec(bands.track);
+  const hudBand = bandSpec(bands.hud);
+  const path = trackHeight();
+  const fieldFloor = Math.max(1, Math.round(bands.fieldMin / screenPixel()));
+  let skyH = bandHeight(height, skyBand);
+  let trackH = path;
+  let hudH = bandHeight(height, hudBand);
   let fieldH = height - skyH - trackH - hudH;
 
-  if (fieldH < bands.fieldMin) {
-    let need = bands.fieldMin - fieldH;
+  if (fieldH < fieldFloor) {
+    let need = fieldFloor - fieldH;
     const shrink = (current: number, floor: number): number => {
       const cut = Math.min(Math.max(0, need), Math.max(0, current - floor));
       need -= cut;
       return current - cut;
     };
-    skyH = shrink(skyH, bands.sky.min);
-    trackH = shrink(trackH, bands.track.min);
-    hudH = shrink(hudH, bands.hud.min);
+    skyH = shrink(skyH, skyBand.min);
+    trackH = shrink(trackH, trackBand.min);
+    hudH = shrink(hudH, hudBand.min);
     fieldH = height - skyH - trackH - hudH;
   }
 
   // Окно ниже минимумов: делим кадр пропорциями, чтобы полосы всё равно закрыли его без щели.
   if (fieldH < 0) {
-    skyH = Math.round(height * bands.sky.ratio);
-    trackH = Math.min(wall.path, Math.max(bands.track.min, Math.round(height * bands.track.ratio)));
-    hudH = Math.round(height * bands.hud.ratio);
+    skyH = Math.round(height * skyBand.ratio);
+    trackH = Math.min(path, Math.max(trackBand.min, Math.round(height * trackBand.ratio)));
+    hudH = Math.round(height * hudBand.ratio);
     fieldH = height - skyH - trackH - hudH;
     if (fieldH < 0) {
       hudH = Math.max(0, hudH + fieldH);
@@ -59,14 +86,22 @@ export function frameLayout(width: number, height: number): FrameLayout {
   return { width, height, sky, field, track, hud };
 }
 
-const homeField = frameLayout(frame.width, frame.height).field;
+/**
+ * Опорное поле в тех же игровых пикселях, что и текущий кадр.
+ * На плотном стекле опорные 512×448 уже поделены на масштаб экрана.
+ */
+function homeField(): Rect {
+  const pixel = screenPixel();
+  return frameLayout(frame.width / pixel, frame.height / pixel).field;
+}
 
 /**
  * Окно меньше опорного кадра — сцена сжимается целиком.
  * Шире или выше опорного — пиксель тот же, лишнее место занимает земля.
  */
 export function fitScale(field: Rect): number {
-  return Math.min(1, field.width / homeField.width, field.height / homeField.height);
+  const home = homeField();
+  return Math.min(1, field.width / home.width, field.height / home.height);
 }
 
 /**
@@ -74,7 +109,7 @@ export function fitScale(field: Rect): number {
  * Дальняя деревня меряется ими от горизонта: лишняя высота кадра остаётся впереди.
  */
 export function sceneDepth(field: Rect): number {
-  return homeField.height * fitScale(field);
+  return homeField().height * fitScale(field);
 }
 
 /** Доля опорного поля вниз от горизонта, в пикселях текущего поля. */
