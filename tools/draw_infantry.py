@@ -1,20 +1,12 @@
-"""Свой лист пехоты. Не копия кадров TAD и Rare.
+"""Лист пехоты из кадров в public/assets/enemies/infantry.
 
-Бежит вправо в три четверти: каска меньше плеч, лицо под козырьком,
-винтовка по ходу, ноги длинные и вразножку. Влево игру зеркалит код.
-Остановился — та же фигура, ствол опущен вниз, в солдата игрока.
+Бег вправо: running/frame_000..003. Влево игру зеркалит код.
+Стойка: shooting/frame_000. Выстрел: shooting/frame_002, вспышка у дула.
+Остальные кадры стрельбы на лист не входят: бой держит одну клетку наводки.
 
-Форма — олива, не травяная зелень: на газоне толпа читается контуром и хаки.
-
-Палитра:
-  контур   #1a140e
-  каска    #4e6234  свет #a8ba60  тень #2a361a
-  кожа     #d09870
-  форма    #6a7c3a  свет #b0c468  тень #36421e
-  ботинок  #6a4030  подошва #3e2418
-  дерево   #8a5c32
-  ствол    #5c5a56  блик #c8c4b4
-  вспышка  #fff6d0
+Общее окно 44×48. Ступня самого низкого кадра на нижней строке,
+пустой край исходных 64×64 фигуру не уменьшает.
+Пишет public/assets/infantry.png, 264×48.
 """
 
 from __future__ import annotations
@@ -23,268 +15,23 @@ import struct
 import zlib
 from pathlib import Path
 
-W = 32
-H = 36
-FRAMES = 6
+CELL_W = 44
+CELL_H = 48
+CROP_X = 12
+CROP_Y = 6
 
-OUT = (26, 20, 14, 255)
-HELMET = (78, 98, 52, 255)
-HELMET_HI = (168, 186, 96, 255)
-HELMET_SH = (42, 54, 26, 255)
-SKIN = (208, 152, 112, 255)
-EYE = (26, 20, 14, 255)
-FAT = (106, 124, 58, 255)
-FAT_HI = (176, 196, 104, 255)
-FAT_SH = (54, 66, 30, 255)
-BOOT = (106, 64, 48, 255)
-BOOT_SH = (62, 36, 24, 255)
-WOOD = (138, 92, 50, 255)
-GUN = (92, 90, 86, 255)
-GUN_HI = (200, 196, 180, 255)
-FLASH = (255, 246, 208, 255)
-FLASH_HOT = (255, 254, 244, 255)
-CLEAR = (0, 0, 0, 0)
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "public" / "assets" / "enemies" / "infantry"
+OUT = ROOT / "public" / "assets" / "infantry.png"
 
-PAL = {
-    "h": HELMET_HI,
-    "H": HELMET,
-    "s": HELMET_SH,
-    "n": SKIN,
-    "e": EYE,
-    "F": FAT,
-    "f": FAT_HI,
-    "d": FAT_SH,
-    "w": WOOD,
-    "g": GUN,
-    "G": GUN_HI,
-    "b": BOOT,
-    "B": BOOT_SH,
-    "m": FLASH,
-}
-
-# Каска с козырьком вправо, лицо под ней, куртка шире головы. 15 строк.
-UPPER = """
-..........hhhhhh............
-.........hHHHHHHh...........
-........hHHHHHHHHs..........
-........hHHHssssssh.........
-.........sssssssshh.........
-.........nnnnnnn............
-.........nnnenen............
-..........nnnnn.............
-...........nnnn.............
-.......dFFFFFFFFFFFFFFf.....
-......dFFFFFFFFFFFFFFFf.....
-......dFFFFFFFFFFFFFFFf.....
-......dddFFFFFFFFFFFfff.....
-.......dFFFFFFFFFFFFFd......
-........ddddddddddddd.......
-"""
-
-# Штаны зелёные. Ботинок — три нижних ряда той ноги, что стоит.
-# Дальняя нога тень, ближняя свет. Голень почти отвесная, не шпагат.
-LEG_REACH = """
-...........ddd..FFF.........
-..........ddd....FFF........
-.........ddd......FFF.......
-........ddd........FFF......
-.......ddd..........FFF.....
-.......ddd..........FFF.....
-.......ddd..........FFF.....
-.......ddd..........FFF.....
-.......ddd..........FFF.....
-.......ddd..........FFF.....
-.......ddd..........FFF.....
-.......ddd..........FFF.....
-.......ddd..........FFF.....
-.......bbb..........bbb.....
-.......BBB..........BBB.....
-.......BBB..........BBB.....
-"""
-
-LEG_KICK = """
-..........ddd...FFF.........
-.........ddd.....FFF........
-........ddd.......FFF.......
-........ddd.........bbb.....
-........ddd.........BBB.....
-........ddd.........BBB.....
-........ddd.................
-........ddd.................
-........ddd.................
-........ddd.................
-........ddd.................
-........ddd.................
-........ddd.................
-........bbb.................
-........BBB.................
-........BBB.................
-"""
-
-LEG_PUSH = """
-..........ddd...FFF.........
-.........ddd.....FFF........
-........ddd.......FFF.......
-........bbb.......FFF.......
-........BBB.......FFF.......
-........BBB.......FFF.......
-..................FFF.......
-..................FFF.......
-..................FFF.......
-..................FFF.......
-..................FFF.......
-..................FFF.......
-..................FFF.......
-..................bbb.......
-..................BBB.......
-..................BBB.......
-"""
-
-LEG_PASS = """
-..........ddd..FFF..........
-.........ddd....FFF.........
-........ddd......FFF........
-........ddd.......FFF.......
-........ddd........bb.......
-........ddd........BB.......
-........ddd........BB.......
-........ddd.................
-........ddd.................
-........ddd.................
-........ddd.................
-........ddd.................
-........ddd.................
-........bbb.................
-........BBB.................
-........BBB.................
-"""
-
-# Стойка: ступни под плечами.
-LEG_STAND = """
-..........ddd....FFF........
-..........ddd....FFF........
-..........ddd....FFF........
-..........ddd....FFF........
-..........ddd....FFF........
-..........ddd....FFF........
-..........ddd....FFF........
-..........ddd....FFF........
-..........ddd....FFF........
-..........ddd....FFF........
-..........ddd....FFF........
-..........ddd....FFF........
-..........ddd....FFF........
-..........bbb....bbb........
-..........BBB....BBB........
-..........BBB....BBB........
-"""
-
-
-def blank() -> list:
-    return [[CLEAR for _ in range(W)] for _ in range(H)]
-
-
-def put(frame: list, x: int, y: int, color: tuple[int, int, int, int]) -> None:
-    if 0 <= x < W and 0 <= y < H and color[3]:
-        frame[y][x] = color
-
-
-def paste(frame: list, art: str, x: int, y: int) -> None:
-    for row, line in enumerate(art.strip("\n").split("\n")):
-        for col, ch in enumerate(line):
-            color = PAL.get(ch)
-            if color:
-                put(frame, x + col, y + row, color)
-
-
-def rifle_across(frame: list, y: int) -> None:
-    """Приклад сзади, ствол вперёд по бегу. Дуло торчит за грудь, не во весь кадр."""
-    for x in range(6, 12):
-        put(frame, x, y, WOOD)
-        put(frame, x, y + 1, WOOD)
-    for x in range(11, 28):
-        put(frame, x, y, GUN_HI if x > 24 else GUN)
-        put(frame, x, y + 1, GUN)
-    put(frame, 13, y, SKIN)
-    put(frame, 14, y, SKIN)
-    put(frame, 15, y - 1, SKIN)
-
-
-def rifle_down(frame: list, flash: bool) -> None:
-    """Приклад у груди, ствол вниз-вправо. Дуло у пояса, вспышка сбоку, не на ботинке."""
-    for y in range(12, 15):
-        for x in range(11, 16):
-            put(frame, x, y, WOOD)
-    for i in range(7):
-        x = 16 + i
-        y = 13 + i
-        put(frame, x, y, GUN_HI if i > 4 else GUN)
-        put(frame, x, y + 1, GUN)
-    put(frame, 14, 13, SKIN)
-    put(frame, 15, 14, SKIN)
-    if not flash:
-        return
-    for ox, oy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (2, 0), (0, 2)):
-        put(frame, 24 + ox, 21 + oy, FLASH_HOT if abs(ox) + abs(oy) <= 1 else FLASH)
-
-
-def outline(frame: list) -> list:
-    out = [row[:] for row in frame]
-    for y in range(H):
-        for x in range(W):
-            if frame[y][x][3]:
-                continue
-            if any(
-                0 <= y + oy < H and 0 <= x + ox < W and frame[y + oy][x + ox][3]
-                for ox, oy in ((1, 0), (-1, 0), (0, 1), (0, -1))
-            ):
-                out[y][x] = OUT
-    return out
-
-
-def plant(frame: list, bottom: int) -> list:
-    ys = [y for y in range(H) for x in range(W) if frame[y][x][3]]
-    if not ys:
-        return frame
-    shift = bottom - max(ys)
-    moved = blank()
-    for y in range(H):
-        ny = y + shift
-        if 0 <= ny < H:
-            moved[ny] = frame[y][:]
-    return moved
-
-
-def lines(art: str) -> int:
-    return len(art.strip("\n").split("\n"))
-
-
-def build(legs: str, bob: int, aim: bool, flash: bool) -> list:
-    frame = blank()
-    paste(frame, UPPER, 0, 1 + bob)
-    paste(frame, legs, 0, 1 + lines(UPPER) + bob)
-    if aim:
-        rifle_down(frame, flash)
-    else:
-        rifle_across(frame, 12 + bob)
-    return plant(outline(frame), 33 - bob)
-
-
-def compose() -> list:
-    sheet = [[CLEAR for _ in range(W * FRAMES)] for _ in range(H)]
-    frames = [
-        build(LEG_REACH, 0, False, False),
-        build(LEG_KICK, 1, False, False),
-        build(LEG_PUSH, 0, False, False),
-        build(LEG_PASS, 1, False, False),
-        build(LEG_STAND, 0, True, False),
-        build(LEG_STAND, 0, True, True),
-    ]
-    for index, frame in enumerate(frames):
-        ox = index * W
-        for y in range(H):
-            sheet[y][ox : ox + W] = frame[y]
-    return sheet
+FRAMES = (
+    SRC / "running" / "frame_000.png",
+    SRC / "running" / "frame_001.png",
+    SRC / "running" / "frame_002.png",
+    SRC / "running" / "frame_003.png",
+    SRC / "shooting" / "frame_000.png",
+    SRC / "shooting" / "frame_002.png",
+)
 
 
 def png_bytes(width: int, height: int, rows: list[bytes]) -> bytes:
@@ -297,14 +44,101 @@ def png_bytes(width: int, height: int, rows: list[bytes]) -> bytes:
     ) + chunk(b"IEND", b"")
 
 
+def read_png(path: Path) -> tuple[int, int, list[bytearray]]:
+    data = path.read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise SystemExit(f"{path} is not a PNG")
+    pos = 8
+    width = height = 0
+    idat = b""
+    while pos < len(data):
+        size = struct.unpack(">I", data[pos : pos + 4])[0]
+        tag = data[pos + 4 : pos + 8]
+        chunk = data[pos + 8 : pos + 8 + size]
+        pos += 12 + size
+        if tag == b"IHDR":
+            width, height, depth, color, _compression, _png_filter, interlace = struct.unpack(">IIBBBBB", chunk[:13])
+            if (depth, color, interlace) != (8, 6, 0):
+                raise SystemExit(f"{path.name}: need 8-bit RGBA, got depth {depth} color {color}")
+        elif tag == b"IDAT":
+            idat += chunk
+        elif tag == b"IEND":
+            break
+    raw = zlib.decompress(idat)
+    stride = width * 4
+    rows: list[bytearray] = []
+    index = 0
+    prev = bytearray(stride)
+    for _y in range(height):
+        filt = raw[index]
+        index += 1
+        row = bytearray(raw[index : index + stride])
+        index += stride
+        if filt == 1:
+            for x in range(stride):
+                left = row[x - 4] if x >= 4 else 0
+                row[x] = (row[x] + left) & 255
+        elif filt == 2:
+            for x in range(stride):
+                row[x] = (row[x] + prev[x]) & 255
+        elif filt == 3:
+            for x in range(stride):
+                left = row[x - 4] if x >= 4 else 0
+                row[x] = (row[x] + ((left + prev[x]) // 2)) & 255
+        elif filt == 4:
+            for x in range(stride):
+                a = row[x - 4] if x >= 4 else 0
+                b = prev[x]
+                c = prev[x - 4] if x >= 4 else 0
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                pr = a if pa <= pb and pa <= pc else b if pb <= pc else c
+                row[x] = (row[x] + pr) & 255
+        elif filt != 0:
+            raise SystemExit(f"{path.name}: filter {filt}")
+        prev = row
+        rows.append(row)
+    return width, height, rows
+
+
+def opaque_box(rows: list[bytearray], width: int) -> tuple[int, int, int, int]:
+    min_x, min_y, max_x, max_y = width, len(rows), 0, 0
+    for y, row in enumerate(rows):
+        for x in range(width):
+            if row[x * 4 + 3] <= 16:
+                continue
+            min_x = min(min_x, x)
+            min_y = min(min_y, y)
+            max_x = max(max_x, x)
+            max_y = max(max_y, y)
+    return min_x, min_y, max_x, max_y
+
+
+def crop(rows: list[bytearray]) -> list[bytes]:
+    out: list[bytes] = []
+    for y in range(CELL_H):
+        src = rows[CROP_Y + y]
+        start = CROP_X * 4
+        out.append(bytes(src[start : start + CELL_W * 4]))
+    return out
+
+
 def main() -> None:
-    root = Path(__file__).resolve().parents[1]
-    pixels = compose()
-    raw = [b"".join(bytes(px) for px in row) for row in pixels]
-    path = root / "public" / "assets" / "infantry.png"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(png_bytes(W * FRAMES, H, raw))
-    print(f"{W * FRAMES}x{H}")
+    cells: list[list[bytes]] = []
+    for path in FRAMES:
+        width, height, rows = read_png(path)
+        box = opaque_box(rows, width)
+        right = CROP_X + CELL_W - 1
+        bottom = CROP_Y + CELL_H - 1
+        if box[0] < CROP_X or box[1] < CROP_Y or box[2] > right or box[3] > bottom:
+            raise SystemExit(f"{path.relative_to(SRC)} sticks out of the cell: {box}")
+        if (width, height) != (64, 64):
+            raise SystemExit(f"{path.name}: expected 64x64, got {width}x{height}")
+        cells.append(crop(rows))
+    sheet = [b"".join(cell[y] for cell in cells) for y in range(CELL_H)]
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_bytes(png_bytes(CELL_W * len(cells), CELL_H, sheet))
+    print(f"{CELL_W * len(cells)}x{CELL_H}")
 
 
 if __name__ == "__main__":

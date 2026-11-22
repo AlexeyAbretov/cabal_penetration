@@ -242,12 +242,12 @@ export class Infantry {
       return;
     }
     if (soldier.phase === 'aim') {
+      this.launch(soldier, view, columns);
       soldier.phase = 'burst';
-      soldier.wait = 0;
+      soldier.wait = infantry.muzzleMs;
       return;
     }
     if (soldier.phase === 'burst') {
-      this.launch(soldier, view, columns);
       soldier.phase = 'recover';
       soldier.wait = volley.recoverMs;
       return;
@@ -340,8 +340,7 @@ export class Infantry {
     if (soldier.phase === 'run') {
       return { frame: Math.floor(soldier.anim / 120) % infantrySheet.run, flip: soldier.heading < 0 };
     }
-    const firing = soldier.phase === 'aim' || soldier.phase === 'burst';
-    return { frame: firing ? infantrySheet.fire : infantrySheet.aim, flip: false };
+    return { frame: soldier.phase === 'burst' ? infantrySheet.fire : infantrySheet.aim, flip: false };
   }
 
   private sheet(): ImageData | null {
@@ -372,11 +371,11 @@ export class Infantry {
     const fw = infantrySheet.frameWidth;
     const fh = infantrySheet.frameHeight;
     const sheetW = fw * infantrySheet.frames;
-    const dw = Math.max(1, Math.round(soldier.w));
     const dh = Math.max(1, Math.round(soldier.h));
+    const dw = Math.max(1, Math.round((dh * fw) / fh));
+    const foot = Math.round(this.foot(soldier));
     const left = Math.round(soldier.x - dw / 2);
-    const top = Math.round(soldier.y - dh / 2);
-    const foot = top + dh;
+    const top = foot - dh;
     const data = sheet.data;
     const flash = soldier.flash > 0;
     for (let dy = 0; dy < dh; dy += 1) {
