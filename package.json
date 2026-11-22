@@ -6,13 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:html": "tsc --noEmit && vite build --config vite.singlefile.config.ts",
     "preview": "vite preview"
   },
   "dependencies": {
     "phaser": "4.2.1"
   },
   "devDependencies": {
+    "@types/node": "^26.6.6",
     "typescript": "^5.9.3",
-    "vite": "^7.2.2"
+    "vite": "^7.2.2",
+    "vite-plugin-singlefile": "^2.3.3"
   }
 }
