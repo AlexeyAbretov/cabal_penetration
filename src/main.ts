@@ -9,6 +9,10 @@ new Phaser.Game({
   backgroundColor: palette.black,
   pixelArt: true,
   parent: 'game',
+  input: {
+    /** Стик, крест, граната и пауза могут быть зажаты вместе. */
+    activePointers: 4,
+  },
   scale: {
     mode: Phaser.Scale.EXPAND,
     autoCenter: Phaser.Scale.CENTER_BOTH,

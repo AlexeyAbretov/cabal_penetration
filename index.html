@@ -14,6 +14,9 @@
         height: 100dvh;
         background: #000;
         overflow: hidden;
+        touch-action: none;
+        -webkit-touch-callout: none;
+        user-select: none;
       }
 
       #game {
@@ -23,6 +26,7 @@
       canvas {
         image-rendering: pixelated;
         image-rendering: crisp-edges;
+        touch-action: none;
       }
 
       /* Цифры HUD живут вне холста: его увеличение режет край в пиксель. */

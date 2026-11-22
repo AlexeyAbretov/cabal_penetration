@@ -31,6 +31,7 @@ const packedFiles: Packed[] = [
   png('assets/infantry.png'),
   png('assets/hud-heart.png'),
   png('assets/hud-grenade.png'),
+  png('assets/touch-grenade.png'),
   png('assets/hit-flash.png'),
   png('assets/grenade.png'),
   png('assets/explosion.png'),

@@ -23,6 +23,7 @@ import { treeBrokenAsset, treeWoodAsset } from './play/treeWood';
 import { Aim } from './play/aim';
 import { Barrels } from './play/barrels';
 import { Controls } from './play/input';
+import { touchGrenade, type TouchChrome } from './play/touch';
 import { Debris } from './play/debris';
 import { DropBag, Drops } from './play/drops';
 import { Enemies } from './play/enemies';
@@ -111,6 +112,7 @@ export class Play extends Phaser.Scene {
     if (!this.textures.exists(treeBrokenAsset.key)) this.load.image(treeBrokenAsset.key, treeBrokenAsset.url);
     if (!this.textures.exists(hudIcons.heart)) this.load.image(hudIcons.heart, hudIcons.heartUrl);
     if (!this.textures.exists(hudIcons.grenade)) this.load.image(hudIcons.grenade, hudIcons.grenadeUrl);
+    if (!this.textures.exists(touchGrenade.key)) this.load.image(touchGrenade.key, touchGrenade.url);
     if (!this.textures.exists(grenadeFly.key)) this.load.image(grenadeFly.key, grenadeFly.url);
     if (!this.textures.exists(hitFlash.key)) {
       this.load.spritesheet(hitFlash.key, hitFlash.url, {
@@ -296,6 +298,7 @@ export class Play extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    this.controls.setChrome(this.touchChrome());
     if (this.handoff) {
       const next = this.handoff;
       this.handoff = null;
@@ -327,7 +330,7 @@ export class Play extends Phaser.Scene {
     }
     this.grenades.step(Math.min(delta, 50));
 
-    const input = this.controls.sample();
+    const input = this.controls.sample(this.soldier.rolling);
     const pointer = this.controls.pointer;
     const step = Math.min(delta, 50);
     this.aim.step(step);
@@ -440,6 +443,7 @@ export class Play extends Phaser.Scene {
     this.pickets.bind(this.view);
     this.fences.sync(this.view, this.wall);
     this.placeSoldier();
+    this.controls.setFrame(width, height, aimBounds(this.view), this.view.hud.y);
     const pointer = this.controls.pointer;
     if (pointer) {
       this.aim.aimAt(pointer.x, pointer.y, aimBounds(this.view));
@@ -760,6 +764,14 @@ export class Play extends Phaser.Scene {
     this.pickets.draw();
     this.houses.draw();
     this.kilns.draw();
+  }
+
+  /** Палец: бой, пауза, смерть. На первом выборе сложности слоя нет. */
+  private touchChrome(): TouchChrome {
+    if (this.cleared || this.choosing === 'start') return 'off';
+    if (this.down) return 'down';
+    if (this.choosing === 'restart' || this.paused) return 'pause';
+    return 'play';
   }
 
   private setPaused(paused: boolean): void {

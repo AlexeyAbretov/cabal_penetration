@@ -620,6 +620,21 @@ export const hud = {
   victoryMs: 3000,
 } as const;
 
+/**
+ * Палец. Доли радиуса стика, 1 — палец упёрт в край.
+ * Колено — узкая колонка вниз. Перекат — второе нажатие в ту же сторону за doubleMs.
+ * aimGain — ход креста к ходу пальца. 1 значит столько же, сколько палец проехал по стеклу.
+ */
+export const touch = {
+  dead: 0.22,
+  run: 0.82,
+  kneelX: 0.34,
+  kneelY: 0.4,
+  /** Два нажатия стика в одну сторону ближе этого — короткий перекат. */
+  doubleMs: 300,
+  aimGain: 1.45,
+} as const;
+
 export function cssColor(color: number): string {
   return `#${color.toString(16).padStart(6, '0')}`;
 }

@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import type { Rect } from '../../layout';
+import { TouchLayer, type TouchChrome } from './touch';
 
 export type MoveInput = {
   left: boolean;
@@ -13,9 +15,13 @@ export type MoveInput = {
   grenadePressed: boolean;
 };
 
-/** Клавиатура ног и точка прицела. Правая кнопка — отдельный щелчок гранаты. */
+/**
+ * Клавиатура ног и точка прицела. Правая кнопка — отдельный щелчок гранаты.
+ * Палец добавляет те же флаги. Палец на кресте стреляет, пока солдат не шагает, не бежит и не катится.
+ */
 export class Controls {
   private readonly scene: Phaser.Scene;
+  private readonly touch: TouchLayer;
   private keys!: {
     left: Phaser.Input.Keyboard.Key;
     right: Phaser.Input.Keyboard.Key;
@@ -30,10 +36,9 @@ export class Controls {
     enter: Phaser.Input.Keyboard.Key;
   };
 
-  private livePointer: { x: number; y: number } | null = null;
-
   constructor(scene: Phaser.Scene, onRightClick: () => void) {
     this.scene = scene;
+    this.touch = new TouchLayer(scene);
     const keyboard = scene.input.keyboard;
     if (!keyboard) {
       throw new Error('Клавиатура нужна: ей ходят ноги');
@@ -58,46 +63,65 @@ export class Controls {
     scene.input.setDefaultCursor('none');
 
     scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      this.livePointer = { x: pointer.worldX, y: pointer.worldY };
+      if (pointer.wasTouch) return;
+      this.touch.placeAim(pointer.worldX, pointer.worldY);
     });
     scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      this.livePointer = { x: pointer.worldX, y: pointer.worldY };
+      if (pointer.wasTouch) return;
+      this.touch.placeAim(pointer.worldX, pointer.worldY);
       if (pointer.button !== 2) return;
       onRightClick();
     });
   }
 
+  /** Бой, пауза, экран смерти или слой спрятан. Палец читает это раньше жестов. */
+  setChrome(mode: TouchChrome): void {
+    this.touch.setChrome(mode);
+  }
+
+  /** Размер кадра и прямоугольник, внутри которого живёт крест. */
+  setFrame(width: number, height: number, aimRect: Rect, hudTop: number): void {
+    this.touch.setFrame(width, height, aimRect, hudTop);
+  }
+
   get pointer(): { x: number; y: number } | null {
-    return this.livePointer;
+    return this.touch.aimPoint();
   }
 
   escPressed(): boolean {
-    return Phaser.Input.Keyboard.JustDown(this.keys.esc);
+    return Phaser.Input.Keyboard.JustDown(this.keys.esc) || this.touch.takePause();
   }
 
-  /** Континуэ на Enter. */
+  /** Континуэ на Enter. На пальце ту же роль берёт «Дальше». */
   enterPressed(): boolean {
-    return Phaser.Input.Keyboard.JustDown(this.keys.enter);
+    return Phaser.Input.Keyboard.JustDown(this.keys.enter) || this.touch.takeEnter();
   }
 
-  sample(): MoveInput {
-    const left = this.keys.left.isDown || this.keys.leftArrow.isDown;
-    const right = this.keys.right.isDown || this.keys.rightArrow.isDown;
+  /** rolling — кувырок ещё едет, даже если стик уже отпущен. С такого креста очередь не идёт. */
+  sample(rolling = false): MoveInput {
+    const finger = this.touch.sample();
+    const left = this.keys.left.isDown || this.keys.leftArrow.isDown || finger.left;
+    const right = this.keys.right.isDown || this.keys.rightArrow.isDown || finger.right;
+    const moving = left !== right || finger.locomoting || rolling;
+    const aimFire = finger.aimHeld && !moving;
+    this.touch.noteAimFire(aimFire);
+    const mouse = this.scene.input.mousePointer;
+    const mouseFire = !!mouse && !mouse.wasTouch && mouse.primaryDown && this.touch.mouseLive();
     return {
       left,
       right,
-      shift: this.keys.shift.isDown,
-      kneel: this.keys.down.isDown || this.keys.downArrow.isDown,
+      shift: this.keys.shift.isDown || finger.shift,
+      kneel: this.keys.down.isDown || this.keys.downArrow.isDown || finger.kneel,
       ctrl: this.keys.ctrl.isDown,
-      firing: this.scene.input.activePointer.leftButtonDown(),
+      firing: mouseFire || aimFire,
       dirPressed:
         Phaser.Input.Keyboard.JustDown(this.keys.left) ||
         Phaser.Input.Keyboard.JustDown(this.keys.right) ||
         Phaser.Input.Keyboard.JustDown(this.keys.leftArrow) ||
         Phaser.Input.Keyboard.JustDown(this.keys.rightArrow),
-      shiftPressed: Phaser.Input.Keyboard.JustDown(this.keys.shift),
-      ctrlPressed: Phaser.Input.Keyboard.JustDown(this.keys.ctrl),
-      grenadePressed: Phaser.Input.Keyboard.JustDown(this.keys.grenade),
+      shiftPressed: Phaser.Input.Keyboard.JustDown(this.keys.shift) || finger.shiftPressed,
+      ctrlPressed: Phaser.Input.Keyboard.JustDown(this.keys.ctrl) || finger.ctrlPressed,
+      grenadePressed: Phaser.Input.Keyboard.JustDown(this.keys.grenade) || finger.grenadePressed,
     };
   }
 }
