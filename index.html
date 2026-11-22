@@ -116,6 +116,19 @@
         background: #e7dcc4;
         color: #1a140e;
       }
+
+      .continue-action {
+        position: absolute;
+        z-index: 3;
+        display: none;
+        transform: translate(-50%, 0);
+        pointer-events: none;
+      }
+
+      .continue-action.is-open {
+        display: block;
+        pointer-events: auto;
+      }
     </style>
   </head>
   <body>

@@ -22,6 +22,8 @@ export type MoveInput = {
 export class Controls {
   private readonly scene: Phaser.Scene;
   private readonly touch: TouchLayer;
+  /** В бою стрелка спрятана: вместо неё крест. На проигрыше она нужна, чтобы нажать «ДАЛЬШЕ». */
+  private cursor: 'none' | 'default' = 'none';
   private keys!: {
     left: Phaser.Input.Keyboard.Key;
     right: Phaser.Input.Keyboard.Key;
@@ -33,7 +35,6 @@ export class Controls {
     ctrl: Phaser.Input.Keyboard.Key;
     grenade: Phaser.Input.Keyboard.Key;
     esc: Phaser.Input.Keyboard.Key;
-    enter: Phaser.Input.Keyboard.Key;
   };
 
   constructor(scene: Phaser.Scene, onRightClick: () => void) {
@@ -56,9 +57,8 @@ export class Controls {
       ctrl: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL),
       grenade: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.G),
       esc: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC),
-      enter: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER),
     };
-    keyboard.addCapture('LEFT,RIGHT,UP,DOWN,SHIFT,SPACE,A,D,S,G,ENTER');
+    keyboard.addCapture('LEFT,RIGHT,UP,DOWN,SHIFT,SPACE,A,D,S,G');
     scene.input.mouse?.disableContextMenu();
     scene.input.setDefaultCursor('none');
 
@@ -77,6 +77,10 @@ export class Controls {
   /** Бой, пауза, экран смерти или слой спрятан. Палец читает это раньше жестов. */
   setChrome(mode: TouchChrome): void {
     this.touch.setChrome(mode);
+    const cursor = mode === 'down' ? 'default' : 'none';
+    if (cursor === this.cursor) return;
+    this.cursor = cursor;
+    this.scene.input.setDefaultCursor(cursor);
   }
 
   /** Размер кадра и прямоугольник, внутри которого живёт крест. */
@@ -90,11 +94,6 @@ export class Controls {
 
   escPressed(): boolean {
     return Phaser.Input.Keyboard.JustDown(this.keys.esc) || this.touch.takePause();
-  }
-
-  /** Континуэ на Enter. На пальце ту же роль берёт «Дальше». */
-  enterPressed(): boolean {
-    return Phaser.Input.Keyboard.JustDown(this.keys.enter) || this.touch.takeEnter();
   }
 
   /** rolling — кувырок ещё едет, даже если стик уже отпущен. С такого креста очередь не идёт. */

@@ -177,6 +177,9 @@ export class Play extends Phaser.Scene {
       restart: () => this.startOver(),
     });
     this.hud.setDifficultyMenu((id) => this.pickDifficulty(id));
+    this.hud.setContinue(() => {
+      if (this.down) this.acceptRestart();
+    });
     this.grenades = new Grenades(this, this.sparks);
     this.grenades.setStock(this.march.grenades);
     this.hud.setGrenades(this.grenades.count());
@@ -325,7 +328,6 @@ export class Play extends Phaser.Scene {
     if (this.paused || this.down) {
       this.gun.quiet();
       this.controls.sample();
-      if (this.down && this.controls.enterPressed()) this.acceptRestart();
       return;
     }
     this.grenades.step(Math.min(delta, 50));
@@ -586,7 +588,7 @@ export class Play extends Phaser.Scene {
   /**
    * Обычная картинка остаётся как есть: жизнь снята, волна на месте.
    * Босс обнуляется, пока жизнь ещё есть.
-   * Нулевая жизнь ждёт Enter и поднимает уровень с первой картинки.
+   * Нулевая жизнь ждёт «ДАЛЬШЕ» и поднимает уровень с первой картинки.
    */
   private onLifeLost(lives: number): void {
     if (this.down || this.handoff || this.clearWait > 0) return;
@@ -626,7 +628,7 @@ export class Play extends Phaser.Scene {
     this.gun.quiet();
   }
 
-  /** Enter на нуле жизней. Счёт, гранаты и жизни со старта, картинка первая в уровне. */
+  /** «ДАЛЬШЕ» на нуле жизней. Счёт, гранаты и жизни со старта, картинка первая в уровне. */
   private acceptRestart(): void {
     this.handoff = restartLevel(this.march);
     this.gun.quiet();

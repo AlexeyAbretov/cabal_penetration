@@ -3,7 +3,7 @@ import { frame } from './constants';
 let pixel = 1;
 
 /** На плотном стекле кадр крупнее на 20%: один игровой пиксель — полтора CSS. */
-const densePixel = 1;
+const densePixel = 1.2;
 
 /** CSS-пикселей на один игровой. На компьютере 1, на плотном стекле 1.5. */
 export function screenPixel(): number {

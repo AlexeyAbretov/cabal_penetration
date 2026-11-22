@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { cssColor, palette, touch } from '../../constants';
+import { palette, touch } from '../../constants';
 import type { Rect } from '../../layout';
 
 export type TouchChrome = 'play' | 'pause' | 'down' | 'off';
@@ -39,7 +39,6 @@ export class TouchLayer {
   private readonly root: Phaser.GameObjects.Container;
   private readonly gfx: Phaser.GameObjects.Graphics;
   private readonly grenadeIcon: Phaser.GameObjects.Image | null;
-  private readonly continueText: Phaser.GameObjects.Text;
   private readonly coarse: MediaQueryList | null;
   private readonly owns = new Map<number, Hold>();
   private readonly aimLast = new Map<number, { x: number; y: number }>();
@@ -57,7 +56,6 @@ export class TouchLayer {
   private grenadeBtn: Circle = { x: 0, y: 0, r: 1 };
   private aimRest: Circle = { x: 0, y: 0, r: 1 };
   private pauseBtn: Circle = { x: 0, y: 0, r: 1 };
-  private continueBtn = { x: 0, y: 0, w: 0, h: 0 };
   private nx = 0;
   private ny = 0;
   /** Первое нажатие стика в сторону. Второе в ту же сторону за окно даёт перекат. */
@@ -67,7 +65,6 @@ export class TouchLayer {
   private shiftHeld = false;
   private grenadeEdge = false;
   private pauseEdge = false;
-  private enterEdge = false;
   /** Крест сейчас ещё и спуск: палец на нём, стик тело не ведёт. */
   private aimFiring = false;
 
@@ -83,17 +80,8 @@ export class TouchLayer {
     if (this.grenadeIcon) {
       scene.textures.get(touchGrenade.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
     }
-    const label = {
-      fontFamily: 'Consolas, "Courier New", monospace',
-      fontSize: '16px',
-      color: cssColor(palette.ink),
-      stroke: cssColor(palette.black),
-      strokeThickness: 3,
-    };
-    this.continueText = scene.add.text(0, 0, 'Дальше', { ...label, fontSize: '22px' }).setOrigin(0.5);
     const chrome: Phaser.GameObjects.GameObject[] = [this.gfx];
     if (this.grenadeIcon) chrome.push(this.grenadeIcon);
-    chrome.push(this.continueText);
     this.root = scene.add.container(0, 0, chrome).setDepth(8);
     this.coarse = window.matchMedia?.('(pointer: coarse)') ?? null;
     this.shown = !!this.coarse?.matches;
@@ -179,12 +167,6 @@ export class TouchLayer {
     return pressed;
   }
 
-  takeEnter(): boolean {
-    const pressed = this.enterEdge;
-    this.enterEdge = false;
-    return pressed;
-  }
-
   private body(): Pick<TouchMove, 'left' | 'right' | 'shift' | 'shiftPressed' | 'kneel' | 'ctrlPressed' | 'locomoting'> {
     let left = false;
     let right = false;
@@ -240,7 +222,6 @@ export class TouchLayer {
       r: restR,
     };
     this.pauseBtn = { x: this.width - 36, y: 32, r: 22 };
-    this.continueBtn = { x: this.width / 2, y: this.height * 0.64, w: 168, h: 52 };
   }
 
   private readonly onCoarse = (): void => {
@@ -258,10 +239,7 @@ export class TouchLayer {
     this.noteTouch();
     const x = pointer.worldX;
     const y = pointer.worldY;
-    if (this.chrome === 'down') {
-      if (this.hitBox(this.continueBtn, x, y)) this.enterEdge = true;
-      return;
-    }
+    if (this.chrome === 'down') return;
     if ((this.chrome === 'play' || this.chrome === 'pause') && this.hit(this.pauseBtn, x, y, 1.15)) {
       this.pauseEdge = true;
       this.owns.set(pointer.id, 'pause');
@@ -371,19 +349,10 @@ export class TouchLayer {
     return dx * dx + dy * dy <= reach * reach;
   }
 
-  private hitBox(box: { x: number; y: number; w: number; h: number }, x: number, y: number): boolean {
-    return Math.abs(x - box.x) <= box.w / 2 && Math.abs(y - box.y) <= box.h / 2;
-  }
-
   private paint(): void {
     this.gfx.clear();
     this.grenadeIcon?.setVisible(false);
-    this.continueText.setVisible(false);
-    if (!this.shown || this.chrome === 'off' || this.width <= 0) return;
-    if (this.chrome === 'down') {
-      this.paintContinue();
-      return;
-    }
+    if (!this.shown || this.chrome === 'off' || this.chrome === 'down' || this.width <= 0) return;
     this.paintPause();
     if (this.chrome !== 'play') return;
     this.paintStick();
@@ -439,15 +408,6 @@ export class TouchLayer {
     const h = Math.round(r * 0.7);
     this.gfx.fillRect(x - 5, y - h / 2, w, h);
     this.gfx.fillRect(x + 2, y - h / 2, w, h);
-  }
-
-  private paintContinue(): void {
-    const { x, y, w, h } = this.continueBtn;
-    this.gfx.fillStyle(palette.black, 0.72);
-    this.gfx.fillRect(x - w / 2, y - h / 2, w, h);
-    this.gfx.lineStyle(2, palette.ink, 1);
-    this.gfx.strokeRect(x - w / 2, y - h / 2, w, h);
-    this.continueText.setPosition(x, y).setVisible(true);
   }
 
   private ring(x: number, y: number, r: number, alpha: number): void {

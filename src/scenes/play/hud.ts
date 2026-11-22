@@ -73,6 +73,9 @@ export class Hud {
   private readonly difficultyMenu: HTMLDivElement;
   private readonly difficultyTitle: HTMLParagraphElement;
   private readonly difficultyButtons: HTMLButtonElement[];
+  private readonly continueButton: HTMLButtonElement;
+  private onContinue: (() => void) | null = null;
+  private frameHeight = 0;
 
   constructor(scene: Phaser.Scene, layer: Phaser.GameObjects.Container) {
     this.scene = scene;
@@ -89,6 +92,7 @@ export class Hud {
     this.difficultyMenu = difficulty.menu;
     this.difficultyTitle = difficulty.title;
     this.difficultyButtons = difficulty.buttons;
+    this.continueButton = mountContinueButton(this.figures.root, () => this.onContinue?.());
     this.heart = hudIcon(scene, hudIcons.heart);
     this.livesText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5).setVisible(false);
     this.scoreText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5).setVisible(false);
@@ -173,6 +177,11 @@ export class Hud {
     this.difficultyPick = pick;
   }
 
+  /** «ДАЛЬШЕ» на нуле жизней. Enter эту кнопку не жмёт. */
+  setContinue(go: () => void): void {
+    this.onContinue = go;
+  }
+
   /** Заход или континуэ. Полоска сцены при этом не трогается. */
   carry(score: number, lives: number): void {
     this.score = Math.max(0, score);
@@ -249,8 +258,9 @@ export class Hud {
     this.deathLabel.setVisible(dead);
     this.pauseMenu.classList.toggle('is-open', hold === 'pause');
     this.difficultyMenu.classList.toggle('is-open', hold === 'difficulty');
-    if (hold === 'continue') this.pauseLabel.setText(`ENTER  ${continuesLeft}`);
-    if (hold === 'over') this.pauseLabel.setText('ENTER');
+    this.continueButton.classList.toggle('is-open', dead);
+    if (dead) this.pauseLabel.setText(`ОСТАЛОСЬ ПОПЫТОК  ${continuesLeft}`);
+    if (this.frameWidth > 0) this.placeDeathCopy(this.frameWidth, this.frameHeight);
     if (hold === 'pause') this.placeOverlay(this.pauseMenu, this.pauseTitle, this.pauseButtons);
     if (hold === 'difficulty') this.placeOverlay(this.difficultyMenu, this.difficultyTitle, this.difficultyButtons);
   }
@@ -259,6 +269,7 @@ export class Hud {
     const band = view.hud;
     this.band = band;
     this.frameWidth = width;
+    this.frameHeight = height;
     const mid = band.y + Math.round(band.height / 2);
     const heartRight = this.placeIcon(this.heart, 10, mid, hudIcons.heartTrim);
     this.livesText.setPosition(heartRight + 8, mid);
@@ -272,8 +283,7 @@ export class Hud {
     this.pauseVeil.clear();
     this.pauseVeil.fillStyle(palette.black, 0.55);
     this.pauseVeil.fillRect(0, 0, width, height);
-    this.pauseLabel.setPosition(width / 2, height / 2);
-    this.deathLabel.setPosition(width / 2, height / 2 - this.pauseLabel.height / 2 - 16);
+    this.placeDeathCopy(width, height);
 
     this.edge.clear();
     this.edge.fillStyle(palette.ink, 1);
@@ -305,6 +315,34 @@ export class Hud {
     if (this.difficultyMenu.classList.contains('is-open')) {
       this.placeOverlay(this.difficultyMenu, this.difficultyTitle, this.difficultyButtons);
     }
+    if (this.continueButton.classList.contains('is-open')) this.placeContinue();
+  }
+
+  /** «ПОГИБ» над строкой попыток. Длинная строка мельчает, чтобы влезть в кадр. */
+  private placeDeathCopy(width: number, height: number): void {
+    if (this.pauseLabel.visible) {
+      const letters = Math.max(1, this.pauseLabel.text.length);
+      const size = Math.max(16, Math.min(32, Math.floor((width - 32) / (letters * 0.6))));
+      this.pauseLabel.setFontSize(`${size}px`);
+    }
+    this.pauseLabel.setPosition(width / 2, height / 2);
+    this.deathLabel.setPosition(width / 2, height / 2 - this.pauseLabel.height / 2 - 16);
+    if (this.continueButton.classList.contains('is-open')) this.placeContinue();
+  }
+
+  /** Кнопка под строкой попыток. Середина кадра — её середина. */
+  private placeContinue(): void {
+    const canvas = this.scene.game.canvas;
+    if (canvas.width === 0 || canvas.height === 0) return;
+    const scaleX = canvas.clientWidth / canvas.width;
+    const scaleY = canvas.clientHeight / canvas.height;
+    const button = this.continueButton;
+    button.style.fontSize = `${26 * scaleY}px`;
+    button.style.padding = `${10 * scaleY}px ${22 * scaleX}px`;
+    button.style.borderWidth = `${Math.max(2, Math.round(2 * scaleY))}px`;
+    const below = this.pauseLabel.y + this.pauseLabel.height / 2 + 28;
+    button.style.left = `${canvas.offsetLeft + (canvas.width / 2) * scaleX}px`;
+    button.style.top = `${canvas.offsetTop + below * scaleY}px`;
   }
 
   /** Слово и кнопки — один столбец. Его середина совпадает с серединой кадра. */
@@ -485,6 +523,24 @@ function mountPauseMenu(
   });
   root.append(menu);
   return { menu, title, buttons };
+}
+
+function mountContinueButton(root: HTMLElement, go: () => void): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'pause-action continue-action';
+  button.textContent = 'ДАЛЬШЕ';
+  button.addEventListener('mousedown', (event) => event.preventDefault());
+  button.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') event.preventDefault();
+  });
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    button.blur();
+    go();
+  });
+  root.append(button);
+  return button;
 }
 
 function mountDifficultyMenu(
