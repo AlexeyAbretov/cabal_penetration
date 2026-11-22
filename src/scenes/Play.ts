@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { afterPicture, marchFrom, marchPicture, restartLevel, type March } from '../campaign/march';
+import { afterPicture, marchFrom, marchPicture, openMarch, restartLevel, type March } from '../campaign/march';
 import { route } from '../campaign/route';
 import { bonusList, breakableCount, type Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type FlightBlock, type HitBox } from '../combat';
@@ -162,6 +162,12 @@ export class Play extends Phaser.Scene {
       this.march.picture,
       (index) => this.jumpPicture(index),
     );
+    this.hud.setPauseMenu({
+      resume: () => {
+        if (this.paused) this.setPaused(false);
+      },
+      restart: () => this.startOver(),
+    });
     this.grenades = new Grenades(this, this.sparks);
     this.grenades.setStock(this.march.grenades);
     this.hud.setGrenades(this.grenades.count());
@@ -568,6 +574,13 @@ export class Play extends Phaser.Scene {
       this.hud.setHold('over');
     }
     this.tweens.pauseAll();
+  }
+
+  /** Кнопка «Новая игра» на паузе. Первая картинка, счёт, жизни и гранаты со старта. */
+  private startOver(): void {
+    if (!this.paused || this.handoff) return;
+    this.handoff = openMarch();
+    this.gun.quiet();
   }
 
   /** Enter на нуле жизней. Счёт, гранаты и жизни со старта, картинка первая в уровне. */

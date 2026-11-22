@@ -15,6 +15,13 @@ type HudFigures = {
 
 type PicturePick = (index: number) => void;
 
+type PauseMenu = {
+  /** Снять паузу. */
+  resume: () => void;
+  /** Первый кадр, счёт, жизни и гранаты со старта. */
+  restart: () => void;
+};
+
 /**
  * Значки PixelLab 48×48, в рамке пиксель в пиксель.
  * right и bottom — край непрозрачных пикселей, не включая его.
@@ -30,7 +37,7 @@ export const hudIcons = {
 
 type IconTrim = { left: number; top: number; right: number; bottom: number };
 
-/** Рамка снизу: сердце, жизни, счёт, запас гранат, полоска ENEMY и пауза. */
+/** Рамка снизу: сердце, жизни, счёт, запас гранат, полоска ENEMY. На паузе — «В бой» и «Новая игра». */
 export class Hud {
   private lives: number = hud.lives;
   private score = 0;
@@ -57,11 +64,22 @@ export class Hud {
   private readonly edge: Phaser.GameObjects.Graphics;
   private pictureButtons: HTMLButtonElement[] = [];
   private onPicture: PicturePick | null = null;
+  private pauseActions: PauseMenu | null = null;
+  private readonly pauseMenu: HTMLDivElement;
+  private readonly pauseTitle: HTMLParagraphElement;
+  private readonly pauseButtons: HTMLButtonElement[];
 
   constructor(scene: Phaser.Scene, layer: Phaser.GameObjects.Container) {
     this.scene = scene;
     const font = inkFont(`${figurePx}px`);
     this.figures = mountFigures(scene);
+    const pause = mountPauseMenu(this.figures.root, (kind) => {
+      if (kind === 'resume') this.pauseActions?.resume();
+      else this.pauseActions?.restart();
+    });
+    this.pauseMenu = pause.menu;
+    this.pauseTitle = pause.title;
+    this.pauseButtons = pause.buttons;
     this.heart = hudIcon(scene, hudIcons.heart);
     this.livesText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5).setVisible(false);
     this.scoreText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5).setVisible(false);
@@ -136,6 +154,11 @@ export class Hud {
     });
   }
 
+  /** Кнопки на завесе паузы. На экране смерти их нет. */
+  setPauseMenu(actions: PauseMenu): void {
+    this.pauseActions = actions;
+  }
+
   /** Заход или континуэ. Полоска сцены при этом не трогается. */
   carry(score: number, lives: number): void {
     this.score = Math.max(0, score);
@@ -207,11 +230,12 @@ export class Hud {
     const visible = hold !== null;
     const dead = hold === 'continue' || hold === 'over';
     this.pauseVeil.setVisible(visible);
-    this.pauseLabel.setVisible(visible);
+    this.pauseLabel.setVisible(dead);
     this.deathLabel.setVisible(dead);
-    if (hold === 'pause') this.pauseLabel.setText('ПАУЗА');
+    this.pauseMenu.classList.toggle('is-open', hold === 'pause');
     if (hold === 'continue') this.pauseLabel.setText(`ENTER  ${continuesLeft}`);
     if (hold === 'over') this.pauseLabel.setText('ENTER');
+    if (hold === 'pause') this.placePauseMenu();
   }
 
   draw(view: FrameLayout, width: number, height: number): void {
@@ -258,6 +282,25 @@ export class Hud {
     this.placeFigure(this.figures.score, this.scoreText, scaleX, scaleY, fontPx);
     this.placeFigure(this.figures.grenades, this.grenadeText, scaleX, scaleY, fontPx);
     this.placePictures(scaleX, scaleY, fontPx);
+    if (this.pauseMenu.classList.contains('is-open')) this.placePauseMenu();
+  }
+
+  /** Слово и обе кнопки — один столбец. Его середина совпадает с серединой кадра. */
+  private placePauseMenu(): void {
+    const canvas = this.scene.game.canvas;
+    if (canvas.width === 0 || canvas.height === 0) return;
+    const scaleX = canvas.clientWidth / canvas.width;
+    const scaleY = canvas.clientHeight / canvas.height;
+    const fontPx = 26 * scaleY;
+    this.pauseTitle.style.fontSize = `${32 * scaleY}px`;
+    this.pauseMenu.style.gap = `${18 * scaleY}px`;
+    for (const button of this.pauseButtons) {
+      button.style.fontSize = `${fontPx}px`;
+      button.style.padding = `${10 * scaleY}px ${18 * scaleX}px`;
+      button.style.borderWidth = `${Math.max(2, Math.round(2 * scaleY))}px`;
+    }
+    this.pauseMenu.style.left = `${canvas.offsetLeft + (canvas.width / 2) * scaleX}px`;
+    this.pauseMenu.style.top = `${canvas.offsetTop + (canvas.height / 2) * scaleY}px`;
   }
 
   /** Справа в рамке, от правого края. Текущая картинка уже помечена классом. */
@@ -384,6 +427,38 @@ function mountFigures(scene: Phaser.Scene): HudFigures {
   scene.game.canvas.insertAdjacentElement('afterend', root);
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => root.remove());
   return { root, lives, score, grenades };
+}
+
+function mountPauseMenu(
+  root: HTMLElement,
+  pick: (kind: 'resume' | 'restart') => void,
+): { menu: HTMLDivElement; title: HTMLParagraphElement; buttons: HTMLButtonElement[] } {
+  const menu = document.createElement('div');
+  menu.className = 'pause-menu';
+  const title = document.createElement('p');
+  title.className = 'pause-title';
+  title.textContent = 'ПАУЗА';
+  menu.append(title);
+  const rows: { label: string; kind: 'resume' | 'restart' }[] = [
+    { label: 'В бой', kind: 'resume' },
+    { label: 'Новая игра', kind: 'restart' },
+  ];
+  const buttons = rows.map((row) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'pause-action';
+    button.textContent = row.label;
+    button.addEventListener('mousedown', (event) => event.preventDefault());
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      button.blur();
+      pick(row.kind);
+    });
+    menu.append(button);
+    return button;
+  });
+  root.append(menu);
+  return { menu, title, buttons };
 }
 
 function inkFont(size: string): Phaser.Types.GameObjects.Text.TextStyle {
