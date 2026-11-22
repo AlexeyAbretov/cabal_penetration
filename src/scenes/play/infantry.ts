@@ -74,6 +74,8 @@ export class Infantry {
   private clock = 0;
   private frozen = false;
   private pixels: ImageData | null = null;
+  /** Уже уменьшенные клетки: кадр, зеркало и размер. */
+  private readonly cells = new Map<string, ImageData>();
   private readonly scene: Phaser.Scene;
   private readonly bodies: Phaser.GameObjects.Graphics;
   private readonly sparks: Sparks;
@@ -441,17 +443,15 @@ export class Infantry {
     sole: number,
     covers: readonly Cover[],
   ): void {
-    const fw = infantrySheet.frameWidth;
-    const fh = infantrySheet.frameHeight;
-    const sheetW = fw * infantrySheet.frames;
-    const dh = Math.max(1, Math.round(height));
-    const dw = Math.max(1, Math.round((dh * fw) / fh));
+    const depth = height / infantry.height;
+    const dh = Math.max(1, Math.round(infantrySheet.frameHeight * depth));
+    const dw = Math.max(1, Math.round((dh * infantrySheet.frameWidth) / infantrySheet.frameHeight));
+    const cell = this.cell(sheet, frame, flip, dw, dh);
+    const data = cell.data;
     const foot = Math.round(sole);
     const left = Math.round(x - dw / 2);
     const top = foot - dh;
-    const data = sheet.data;
     for (let dy = 0; dy < dh; dy += 1) {
-      const sy = Math.min(fh - 1, Math.floor((dy * fh) / dh));
       const destY = top + dy;
       let runX = 0;
       let runW = 0;
@@ -463,9 +463,7 @@ export class Infantry {
         runW = 0;
       };
       for (let dx = 0; dx < dw; dx += 1) {
-        const sx = Math.min(fw - 1, Math.floor((dx * fw) / dw));
-        const srcX = flip ? fw - 1 - sx : sx;
-        const i = (sy * sheetW + frame * fw + srcX) * 4;
+        const i = (dy * dw + dx) * 4;
         if ((data[i + 3] ?? 0) < 16) {
           flush();
           continue;
@@ -475,17 +473,27 @@ export class Infantry {
           continue;
         }
         const color = flash ? palette.ink : ((data[i] ?? 0) << 16) | ((data[i + 1] ?? 0) << 8) | (data[i + 2] ?? 0);
-        const x = left + dx;
-        if (runW > 0 && color === runColor && x === runX + runW) runW += 1;
+        const px = left + dx;
+        if (runW > 0 && color === runColor && px === runX + runW) runW += 1;
         else {
           flush();
-          runX = x;
+          runX = px;
           runW = 1;
           runColor = color;
         }
       }
       flush();
     }
+  }
+
+  /** Клетка в экранный размер. Пиксели площади усредняются, прозрачный край цвет не тянет. */
+  private cell(sheet: ImageData, frame: number, flip: boolean, dw: number, dh: number): ImageData {
+    const key = `${frame}:${flip ? 1 : 0}:${dw}x${dh}`;
+    const cached = this.cells.get(key);
+    if (cached) return cached;
+    const scaled = scaleCell(sheet, frame, flip, dw, dh);
+    this.cells.set(key, scaled);
+    return scaled;
   }
 
   private fallback(gfx: Phaser.GameObjects.Graphics, soldier: Soldier, covers: readonly Cover[]): void {
@@ -581,4 +589,54 @@ function sideLanes(groups: readonly InfantryGroup[]): SideLane[] {
 
 function waitMs(span: Wait): number {
   return span.min + Math.random() * (span.max - span.min);
+}
+
+/** Ужимает клетку листа. Цвет — среднее непрозрачных пикселей площади, не один угол. */
+function scaleCell(sheet: ImageData, frame: number, flip: boolean, dw: number, dh: number): ImageData {
+  const fw = infantrySheet.frameWidth;
+  const fh = infantrySheet.frameHeight;
+  const sheetW = fw * infantrySheet.frames;
+  const src = sheet.data;
+  const out = new Uint8ClampedArray(dw * dh * 4);
+  for (let dy = 0; dy < dh; dy += 1) {
+    const y0 = (dy * fh) / dh;
+    const y1 = ((dy + 1) * fh) / dh;
+    const sy0 = Math.floor(y0);
+    const sy1 = Math.min(fh - 1, Math.ceil(y1) - 1);
+    for (let dx = 0; dx < dw; dx += 1) {
+      const x0 = (dx * fw) / dw;
+      const x1 = ((dx + 1) * fw) / dw;
+      const sx0 = Math.floor(x0);
+      const sx1 = Math.min(fw - 1, Math.ceil(x1) - 1);
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 0;
+      for (let sy = sy0; sy <= sy1; sy += 1) {
+        const wy = Math.min(sy + 1, y1) - Math.max(sy, y0);
+        if (wy <= 0) continue;
+        for (let sx = sx0; sx <= sx1; sx += 1) {
+          const wx = Math.min(sx + 1, x1) - Math.max(sx, x0);
+          if (wx <= 0) continue;
+          const srcX = flip ? fw - 1 - sx : sx;
+          const i = (sy * sheetW + frame * fw + srcX) * 4;
+          const alpha = (src[i + 3] ?? 0) / 255;
+          if (alpha <= 0) continue;
+          const w = wx * wy * alpha;
+          r += (src[i] ?? 0) * w;
+          g += (src[i + 1] ?? 0) * w;
+          b += (src[i + 2] ?? 0) * w;
+          a += wx * wy * alpha;
+        }
+      }
+      const area = (x1 - x0) * (y1 - y0);
+      if (area <= 0 || (a / area) * 255 < 16) continue;
+      const o = (dy * dw + dx) * 4;
+      out[o] = Math.round(r / a);
+      out[o + 1] = Math.round(g / a);
+      out[o + 2] = Math.round(b / a);
+      out[o + 3] = Math.round((a / area) * 255);
+    }
+  }
+  return new ImageData(out, dw, dh);
 }

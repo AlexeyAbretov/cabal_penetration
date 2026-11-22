@@ -7,13 +7,14 @@
 
 Общее окно 44×48. Ступня самого низкого кадра на нижней строке,
 пустой край исходных 64×64 фигуру не уменьшает.
-Труп шире этого окна: ближайший сосед ужимает его в клетку
-и сажает низ тела на ту же строку.
+Труп шире этого окна: площадь пикселя усредняется в клетку
+и низ тела садится на ту же строку.
 Пишет public/assets/infantry.png, 308×48.
 """
 
 from __future__ import annotations
 
+import math
 import struct
 import zlib
 from pathlib import Path
@@ -130,7 +131,7 @@ def crop(rows: list[bytearray]) -> list[bytes]:
 
 
 def fit_down(rows: list[bytearray], width: int) -> list[bytes]:
-    """Тело шире клетки. Ближайший сосед, низ на последней строке, по центру."""
+    """Тело шире клетки. Среднее по площади, низ на последней строке, по центру."""
     min_x, min_y, max_x, max_y = opaque_box(rows, width)
     src_w = max_x - min_x + 1
     src_h = max_y - min_y + 1
@@ -141,17 +142,57 @@ def fit_down(rows: list[bytearray], width: int) -> list[bytes]:
     top = CELL_H - dst_h
     cell = [bytearray(CELL_W * 4) for _ in range(CELL_H)]
     for dy in range(dst_h):
-        sy = min_y if dst_h == 1 else min_y + (dy * (src_h - 1)) // (dst_h - 1)
-        src = rows[sy]
+        y0 = min_y + dy * src_h / dst_h
+        y1 = min_y + (dy + 1) * src_h / dst_h
         dest = cell[top + dy]
         for dx in range(dst_w):
-            sx = min_x if dst_w == 1 else min_x + (dx * (src_w - 1)) // (dst_w - 1)
-            i = sx * 4
-            if src[i + 3] <= 16:
+            x0 = min_x + dx * src_w / dst_w
+            x1 = min_x + (dx + 1) * src_w / dst_w
+            sample = average(rows, width, x0, x1, y0, y1)
+            if sample is None:
                 continue
             j = (left + dx) * 4
-            dest[j : j + 4] = src[i : i + 4]
+            dest[j : j + 4] = sample
     return [bytes(row) for row in cell]
+
+
+def average(
+    rows: list[bytearray], width: int, x0: float, x1: float, y0: float, y1: float
+) -> bytes | None:
+    area = (x1 - x0) * (y1 - y0)
+    if area <= 0:
+        return None
+    red = green = blue = covered = 0.0
+    y_last = min(len(rows) - 1, math.ceil(y1) - 1)
+    x_last = min(width - 1, math.ceil(x1) - 1)
+    for sy in range(max(0, math.floor(y0)), y_last + 1):
+        wy = min(sy + 1, y1) - max(sy, y0)
+        if wy <= 0:
+            continue
+        row = rows[sy]
+        for sx in range(max(0, math.floor(x0)), x_last + 1):
+            wx = min(sx + 1, x1) - max(sx, x0)
+            if wx <= 0:
+                continue
+            i = sx * 4
+            alpha = row[i + 3] / 255
+            if alpha <= 0:
+                continue
+            weight = wx * wy * alpha
+            red += row[i] * weight
+            green += row[i + 1] * weight
+            blue += row[i + 2] * weight
+            covered += wx * wy * alpha
+    if covered <= 0 or covered / area * 255 < 16:
+        return None
+    return bytes(
+        (
+            round(red / covered),
+            round(green / covered),
+            round(blue / covered),
+            round(covered / area * 255),
+        )
+    )
 
 
 def main() -> None:
