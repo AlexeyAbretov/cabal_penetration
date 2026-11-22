@@ -31,6 +31,16 @@ type Soldier = {
   h: number;
 };
 
+type Corpse = {
+  lane: number;
+  rx: number;
+  flip: boolean;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
 type Shot = {
   column: number;
   elapsed: number;
@@ -52,10 +62,13 @@ type SideLane = {
  * Между бойцами и между группами одного края пауза случайная.
  * Боец пробегает часть ширины, стреляет одной пулей и снова выбирает сторону.
  * Выстрел и разрыв не берут того, кто закрыт ближним объектом.
+ * Убитый остаётся трупом на той же глубине до смены картинки.
+ * Лужа — фигура под клеткой трупа. В попадание и в предел шести она не входит.
  */
 export class Infantry {
   private readonly lanes: SideLane[];
   private units: Soldier[] = [];
+  private corpses: Corpse[] = [];
   private incoming: Shot[] = [];
   private clock = 0;
   private frozen = false;
@@ -136,10 +149,18 @@ export class Infantry {
     const gfx = this.bodies;
     gfx.clear();
     const sheet = this.sheet();
-    const ordered = [...this.units].sort((a, b) => a.y - b.y);
-    for (const soldier of ordered) {
-      if (sheet) this.stamp(gfx, sheet, soldier, covers);
-      else this.fallback(gfx, soldier, covers);
+    const marks: ({ y: number; soldier: Soldier } | { y: number; corpse: Corpse })[] = [
+      ...this.units.map((soldier) => ({ y: soldier.y, soldier })),
+      ...this.corpses.map((corpse) => ({ y: corpse.y, corpse })),
+    ];
+    marks.sort((a, b) => a.y - b.y);
+    for (const mark of marks) {
+      if ('corpse' in mark) {
+        this.puddle(gfx, mark.corpse, covers);
+        if (sheet) this.stampCorpse(gfx, sheet, mark.corpse, covers);
+        else this.fallbackCorpse(gfx, mark.corpse, covers);
+      } else if (sheet) this.stamp(gfx, sheet, mark.soldier, covers);
+      else this.fallback(gfx, mark.soldier, covers);
     }
   }
 
@@ -306,8 +327,22 @@ export class Infantry {
       return;
     }
     soldier.alive = false;
+    this.corpses.push(this.remains(soldier));
     this.sparks.add(soldier.x, soldier.y, 160, 'land');
     this.onKill(soldier.score);
+  }
+
+  private remains(soldier: Soldier): Corpse {
+    const u = soldier.moveT >= 1 ? 1 : 1 - (1 - soldier.moveT) * (1 - soldier.moveT);
+    return {
+      lane: soldier.lane,
+      rx: soldier.sx + (soldier.tx - soldier.sx) * u,
+      flip: soldier.heading < 0,
+      x: soldier.x,
+      y: soldier.y,
+      w: soldier.w,
+      h: soldier.h,
+    };
   }
 
   private place(view: FrameLayout): void {
@@ -330,6 +365,21 @@ export class Infantry {
       soldier.w = infantry.width * scale;
       soldier.h = infantry.height * scale;
     }
+    for (const corpse of this.corpses) this.placeCorpse(corpse, field, ceiling);
+  }
+
+  private placeCorpse(corpse: Corpse, field: FrameLayout['field'], ceiling: number): void {
+    let y = field.y + belowHorizon(corpse.lane, field);
+    let scale = fieldScale(y, field);
+    const maxY = ceiling - (infantry.height * scale) / 2 - 6;
+    if (y > maxY) {
+      y = maxY;
+      scale = fieldScale(y, field);
+    }
+    corpse.x = field.x + corpse.rx * field.width;
+    corpse.y = y;
+    corpse.w = infantry.width * scale;
+    corpse.h = infantry.height * scale;
   }
 
   private foot(soldier: Soldier): number {
@@ -368,16 +418,29 @@ export class Infantry {
     covers: readonly Cover[],
   ): void {
     const pose = this.pose(soldier);
+    this.paint(gfx, sheet, pose.frame, pose.flip, soldier.flash > 0, soldier.x, soldier.h, this.foot(soldier), covers);
+  }
+
+  private paint(
+    gfx: Phaser.GameObjects.Graphics,
+    sheet: ImageData,
+    frame: number,
+    flip: boolean,
+    flash: boolean,
+    x: number,
+    height: number,
+    sole: number,
+    covers: readonly Cover[],
+  ): void {
     const fw = infantrySheet.frameWidth;
     const fh = infantrySheet.frameHeight;
     const sheetW = fw * infantrySheet.frames;
-    const dh = Math.max(1, Math.round(soldier.h));
+    const dh = Math.max(1, Math.round(height));
     const dw = Math.max(1, Math.round((dh * fw) / fh));
-    const foot = Math.round(this.foot(soldier));
-    const left = Math.round(soldier.x - dw / 2);
+    const foot = Math.round(sole);
+    const left = Math.round(x - dw / 2);
     const top = foot - dh;
     const data = sheet.data;
-    const flash = soldier.flash > 0;
     for (let dy = 0; dy < dh; dy += 1) {
       const sy = Math.min(fh - 1, Math.floor((dy * fh) / dh));
       const destY = top + dy;
@@ -392,8 +455,8 @@ export class Infantry {
       };
       for (let dx = 0; dx < dw; dx += 1) {
         const sx = Math.min(fw - 1, Math.floor((dx * fw) / dw));
-        const srcX = pose.flip ? fw - 1 - sx : sx;
-        const i = (sy * sheetW + pose.frame * fw + srcX) * 4;
+        const srcX = flip ? fw - 1 - sx : sx;
+        const i = (sy * sheetW + frame * fw + srcX) * 4;
         if ((data[i + 3] ?? 0) < 16) {
           flush();
           continue;
@@ -421,6 +484,80 @@ export class Infantry {
     if (pointHidden(soldier.x, soldier.y, this.foot(soldier), covers)) return;
     gfx.fillStyle(soldier.flash > 0 ? palette.ink : palette.enemy, 1);
     gfx.fillRect(body.left, body.top, soldier.w, soldier.h);
+  }
+
+  private stampCorpse(
+    gfx: Phaser.GameObjects.Graphics,
+    sheet: ImageData,
+    corpse: Corpse,
+    covers: readonly Cover[],
+  ): void {
+    this.paint(gfx, sheet, infantrySheet.dead, corpse.flip, false, corpse.x, corpse.h, this.sole(corpse), covers);
+  }
+
+  private fallbackCorpse(gfx: Phaser.GameObjects.Graphics, corpse: Corpse, covers: readonly Cover[]): void {
+    const foot = this.sole(corpse);
+    const dh = Math.max(2, Math.round(corpse.h * 0.28));
+    const dw = Math.max(4, Math.round(corpse.w * 0.9));
+    const left = Math.round(corpse.x - dw / 2);
+    const top = foot - dh;
+    if (pointHidden(corpse.x, top + dh / 2, foot, covers)) return;
+    gfx.fillStyle(palette.enemyShade, 1);
+    gfx.fillRect(left, top, dw, dh);
+  }
+
+  /** Лужа на земле. Дальний дом закрывает её так же, как тело. */
+  private puddle(gfx: Phaser.GameObjects.Graphics, corpse: Corpse, covers: readonly Cover[]): void {
+    const dh = Math.max(1, Math.round(corpse.h));
+    const dw = Math.max(1, Math.round((dh * infantrySheet.frameWidth) / infantrySheet.frameHeight));
+    const foot = this.sole(corpse);
+    const cx = Math.round(corpse.x);
+    const cy = foot - Math.max(1, Math.round(dh * 0.12));
+    this.ellipse(gfx, cx, cy, Math.max(3, Math.round(dw * 0.48)), Math.max(2, Math.round(dh * 0.16)), palette.bloodDeep, foot, covers);
+    this.ellipse(gfx, cx, cy, Math.max(2, Math.round(dw * 0.3)), Math.max(1, Math.round(dh * 0.09)), palette.blood, foot, covers);
+  }
+
+  private ellipse(
+    gfx: Phaser.GameObjects.Graphics,
+    cx: number,
+    cy: number,
+    rx: number,
+    ry: number,
+    color: number,
+    foot: number,
+    covers: readonly Cover[],
+  ): void {
+    gfx.fillStyle(color, 1);
+    for (let dy = -ry; dy <= ry; dy += 1) {
+      const span = 1 - (dy * dy) / (ry * ry);
+      if (span <= 0) continue;
+      const half = Math.round(rx * Math.sqrt(span));
+      const y = cy + dy;
+      let runX = 0;
+      let runW = 0;
+      const flush = (): void => {
+        if (runW <= 0) return;
+        gfx.fillRect(runX, y, runW, 1);
+        runW = 0;
+      };
+      for (let dx = -half; dx <= half; dx += 1) {
+        const x = cx + dx;
+        if (pointHidden(x + 0.5, y + 0.5, foot, covers)) {
+          flush();
+          continue;
+        }
+        if (runW > 0) runW += 1;
+        else {
+          runX = x;
+          runW = 1;
+        }
+      }
+      flush();
+    }
+  }
+
+  private sole(corpse: Corpse): number {
+    return corpse.y + corpse.h / 2;
   }
 }
 

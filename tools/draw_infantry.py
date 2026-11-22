@@ -2,11 +2,14 @@
 
 Бег вправо: running/frame_000..003. Влево игру зеркалит код.
 Стойка: shooting/frame_000. Выстрел: shooting/frame_002, вспышка у дула.
+Труп: dead/frame_000. Лужа на лист не входит, её рисует игра.
 Остальные кадры стрельбы на лист не входят: бой держит одну клетку наводки.
 
 Общее окно 44×48. Ступня самого низкого кадра на нижней строке,
 пустой край исходных 64×64 фигуру не уменьшает.
-Пишет public/assets/infantry.png, 264×48.
+Труп шире этого окна: ближайший сосед ужимает его в клетку
+и сажает низ тела на ту же строку.
+Пишет public/assets/infantry.png, 308×48.
 """
 
 from __future__ import annotations
@@ -31,7 +34,10 @@ FRAMES = (
     SRC / "running" / "frame_003.png",
     SRC / "shooting" / "frame_000.png",
     SRC / "shooting" / "frame_002.png",
+    SRC / "dead" / "frame_000.png",
 )
+
+DEAD = FRAMES[-1]
 
 
 def png_bytes(width: int, height: int, rows: list[bytes]) -> bytes:
@@ -123,6 +129,31 @@ def crop(rows: list[bytearray]) -> list[bytes]:
     return out
 
 
+def fit_down(rows: list[bytearray], width: int) -> list[bytes]:
+    """Тело шире клетки. Ближайший сосед, низ на последней строке, по центру."""
+    min_x, min_y, max_x, max_y = opaque_box(rows, width)
+    src_w = max_x - min_x + 1
+    src_h = max_y - min_y + 1
+    scale = min(CELL_W / src_w, CELL_H / src_h)
+    dst_w = max(1, min(CELL_W, round(src_w * scale)))
+    dst_h = max(1, min(CELL_H, round(src_h * scale)))
+    left = (CELL_W - dst_w) // 2
+    top = CELL_H - dst_h
+    cell = [bytearray(CELL_W * 4) for _ in range(CELL_H)]
+    for dy in range(dst_h):
+        sy = min_y if dst_h == 1 else min_y + (dy * (src_h - 1)) // (dst_h - 1)
+        src = rows[sy]
+        dest = cell[top + dy]
+        for dx in range(dst_w):
+            sx = min_x if dst_w == 1 else min_x + (dx * (src_w - 1)) // (dst_w - 1)
+            i = sx * 4
+            if src[i + 3] <= 16:
+                continue
+            j = (left + dx) * 4
+            dest[j : j + 4] = src[i : i + 4]
+    return [bytes(row) for row in cell]
+
+
 def main() -> None:
     cells: list[list[bytes]] = []
     for path in FRAMES:
@@ -130,10 +161,13 @@ def main() -> None:
         box = opaque_box(rows, width)
         right = CROP_X + CELL_W - 1
         bottom = CROP_Y + CELL_H - 1
-        if box[0] < CROP_X or box[1] < CROP_Y or box[2] > right or box[3] > bottom:
-            raise SystemExit(f"{path.relative_to(SRC)} sticks out of the cell: {box}")
         if (width, height) != (64, 64):
             raise SystemExit(f"{path.name}: expected 64x64, got {width}x{height}")
+        if path == DEAD:
+            cells.append(fit_down(rows, width))
+            continue
+        if box[0] < CROP_X or box[1] < CROP_Y or box[2] > right or box[3] > bottom:
+            raise SystemExit(f"{path.relative_to(SRC)} sticks out of the cell: {box}")
         cells.append(crop(rows))
     sheet = [b"".join(cell[y] for cell in cells) for y in range(CELL_H)]
     OUT.parent.mkdir(parents=True, exist_ok=True)
