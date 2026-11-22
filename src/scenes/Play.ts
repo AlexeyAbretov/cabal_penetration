@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { afterPicture, marchFrom, marchPicture, openMarch, restartLevel, type March } from '../campaign/march';
 import { route } from '../campaign/route';
+import { difficultyById, riderCount, scaleHurt, scaleWave } from '../difficulty';
 import { bonusList, breakableCount, type Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type FlightBlock, type HitBox } from '../combat';
 import { bonus, cssColor, grenade, grenadeBoom, grenadeFly, grenadeThrow, gunFire, hitFlash, hud, medal, palette, pickup, star, ton, weapons, type DropKind } from '../constants';
@@ -86,6 +87,10 @@ export class Play extends Phaser.Scene {
   private debris!: Debris;
   private battleGfx!: Phaser.GameObjects.Graphics;
   private paused = false;
+  /** Старт без выбора или «Новая игра» на паузе. Бой в это время стоит. */
+  private choosing: 'start' | 'restart' | null = null;
+  /** Сколько жизней снимает одна вражеская пуля. */
+  private enemyStrike = 1;
   private cleared = false;
   private clearWait = 0;
   private clearHold = 0;
@@ -125,6 +130,7 @@ export class Play extends Phaser.Scene {
   init(data?: object): void {
     this.march = marchFrom(data);
     this.picture = marchPicture(this.march);
+    this.choosing = difficultyById(this.march.difficulty) ? null : 'start';
     this.paused = false;
     this.cleared = false;
     this.clearWait = 0;
@@ -168,6 +174,7 @@ export class Play extends Phaser.Scene {
       },
       restart: () => this.startOver(),
     });
+    this.hud.setDifficultyMenu((id) => this.pickDifficulty(id));
     this.grenades = new Grenades(this, this.sparks);
     this.grenades.setStock(this.march.grenades);
     this.hud.setGrenades(this.grenades.count());
@@ -190,18 +197,27 @@ export class Play extends Phaser.Scene {
     this.barrels = new Barrels(this, this.picture.barrels, this.stage.field, scatter);
     this.trees = new Trees(this, this.picture.trees, scatter);
     this.pickets = new Pickets(this, this.picture.pickets, this.stage.field, scatter);
+    const difficulty = difficultyById(this.march.difficulty);
+    const enemies = difficulty?.enemies ?? 1;
+    const hp = difficulty?.hp ?? 1;
+    this.enemyStrike = difficulty ? scaleHurt(difficulty.damage) : 1;
+    const wave = scaleWave(this.picture.wave, enemies);
+    const riders = riderCount(enemies);
     this.enemies = new Enemies(
       this,
-      this.picture.wave.filter(isPack),
+      wave.filter(isPack),
       this.sparks,
       (points) => this.onKill(points),
       (count) => this.onGone(count),
+      hp,
+      riders,
     );
     this.infantry = new Infantry(
       this,
-      this.picture.wave.filter(isInfantry),
+      wave.filter(isInfantry),
       this.sparks,
       (points) => this.onKill(points),
+      hp,
     );
     this.houses = new Houses(this, this.picture.houses, this.stage.field, earth, this.debris, scatter);
     this.kilns = new Kilns(this, this.picture.kilns, earth, this.debris, scatter);
@@ -225,7 +241,7 @@ export class Play extends Phaser.Scene {
       this.blastFrontWall(x, y);
     });
     this.controls = new Controls(this, () => this.onRightClick());
-    this.hud.setQuota(waveQuota(this.picture.wave));
+    this.hud.setQuota(waveQuota(wave, riders));
     this.hud.carry(this.march.score, this.march.lives);
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
@@ -233,6 +249,10 @@ export class Play extends Phaser.Scene {
     // Центр секции, не стык. Стык у дыры читается как «стою в проломе».
     this.soldier.standInColumn(Math.min(4, Math.max(0, this.picture.wall.length - 1)));
     this.placeSoldier();
+    if (this.choosing) {
+      this.hud.setHold('difficulty');
+      this.tweens.pauseAll();
+    }
     void this.attachSoldierSheet();
   }
 
@@ -281,6 +301,15 @@ export class Play extends Phaser.Scene {
       this.handoff = null;
       this.gun.quiet();
       this.scene.restart(next);
+      return;
+    }
+    if (this.choosing) {
+      this.gun.quiet();
+      this.controls.sample();
+      if (this.choosing === 'restart' && this.controls.escPressed()) {
+        this.choosing = null;
+        this.hud.setHold('pause');
+      }
       return;
     }
     if (this.cleared) {
@@ -366,7 +395,9 @@ export class Play extends Phaser.Scene {
 
   /** Смена картинки из рамки. Счёт, жизни и гранаты остаются, ствол сгорает вместе со сценой. */
   private jumpPicture(index: number): void {
-    if (index === this.march.picture || this.handoff || this.cleared || this.clearWait > 0 || this.down) return;
+    if (index === this.march.picture || this.handoff || this.cleared || this.clearWait > 0 || this.down || this.choosing) {
+      return;
+    }
     const level = route[this.march.level];
     if (!level || index < 0 || index >= level.pictures.length) return;
     this.handoff = {
@@ -380,7 +411,7 @@ export class Play extends Phaser.Scene {
   }
 
   private onRightClick(): void {
-    if (!this.view || this.paused || this.cleared || this.down) return;
+    if (!this.view || this.paused || this.choosing || this.cleared || this.down) return;
     const pointer = this.controls.pointer;
     if (!pointer) return;
     this.aim.aimAt(pointer.x, pointer.y, aimBounds(this.view));
@@ -545,7 +576,7 @@ export class Play extends Phaser.Scene {
       return;
     }
     this.sparks.add(point.x, point.y, 120, 'puff');
-    if (verdict === 'hurt') this.onLifeLost();
+    if (verdict === 'hurt' && this.enemyStrike > 0) this.onLifeLost(this.enemyStrike);
   }
 
   /**
@@ -553,9 +584,9 @@ export class Play extends Phaser.Scene {
    * Босс обнуляется, пока жизнь ещё есть.
    * Нулевая жизнь ждёт Enter и поднимает уровень с первой картинки.
    */
-  private onLifeLost(): void {
+  private onLifeLost(lives: number): void {
     if (this.down || this.handoff || this.clearWait > 0) return;
-    const spent = this.hud.hurtSoldier();
+    const spent = this.hud.hurtSoldier(lives);
     this.march.lives = this.hud.livesLeft;
     this.march.score = this.hud.points;
     this.march.grenades = this.grenades.count();
@@ -576,10 +607,18 @@ export class Play extends Phaser.Scene {
     this.tweens.pauseAll();
   }
 
-  /** Кнопка «Новая игра» на паузе. Первая картинка, счёт, жизни и гранаты со старта. */
+  /** «Новая игра» на паузе открывает выбор сложности. Esc возвращает к паузе. */
   private startOver(): void {
-    if (!this.paused || this.handoff) return;
-    this.handoff = openMarch();
+    if (!this.paused || this.handoff || this.choosing) return;
+    this.choosing = 'restart';
+    this.hud.setHold('difficulty');
+    this.gun.quiet();
+  }
+
+  /** Выбор на старте или из «Новой игры». Заход начинается с первой картинки. */
+  private pickDifficulty(id: string): void {
+    if (!this.choosing || this.handoff || !difficultyById(id)) return;
+    this.handoff = openMarch(id);
     this.gun.quiet();
   }
 

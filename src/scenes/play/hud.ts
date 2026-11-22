@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { cssColor, enemyBar, hud, palette, type WeaponId } from '../../constants';
+import { difficulties } from '../../difficulty';
 import type { FrameLayout, Rect } from '../../layout';
 
 const fontFamily = 'Consolas, "Courier New", monospace';
@@ -37,7 +38,7 @@ export const hudIcons = {
 
 type IconTrim = { left: number; top: number; right: number; bottom: number };
 
-/** Рамка снизу: сердце, жизни, счёт, запас гранат, полоска ENEMY. На паузе — «В бой» и «Новая игра». */
+/** Рамка снизу: сердце, жизни, счёт, запас гранат, полоска ENEMY. На паузе — «В бой» и «Новая игра». Новая игра спрашивает сложность. */
 export class Hud {
   private lives: number = hud.lives;
   private score = 0;
@@ -65,9 +66,13 @@ export class Hud {
   private pictureButtons: HTMLButtonElement[] = [];
   private onPicture: PicturePick | null = null;
   private pauseActions: PauseMenu | null = null;
+  private difficultyPick: ((id: string) => void) | null = null;
   private readonly pauseMenu: HTMLDivElement;
   private readonly pauseTitle: HTMLParagraphElement;
   private readonly pauseButtons: HTMLButtonElement[];
+  private readonly difficultyMenu: HTMLDivElement;
+  private readonly difficultyTitle: HTMLParagraphElement;
+  private readonly difficultyButtons: HTMLButtonElement[];
 
   constructor(scene: Phaser.Scene, layer: Phaser.GameObjects.Container) {
     this.scene = scene;
@@ -80,6 +85,10 @@ export class Hud {
     this.pauseMenu = pause.menu;
     this.pauseTitle = pause.title;
     this.pauseButtons = pause.buttons;
+    const difficulty = mountDifficultyMenu(this.figures.root, (id) => this.difficultyPick?.(id));
+    this.difficultyMenu = difficulty.menu;
+    this.difficultyTitle = difficulty.title;
+    this.difficultyButtons = difficulty.buttons;
     this.heart = hudIcon(scene, hudIcons.heart);
     this.livesText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5).setVisible(false);
     this.scoreText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5).setVisible(false);
@@ -134,7 +143,7 @@ export class Hud {
 
   /**
    * Подписи картинок справа в рамке. Щелчок зовёт pick.
-   * Текущая подчёркнута. Кнопка не забирает фокус: пробел остаётся перекатом.
+   * Текущая подчёркнута. Кнопка не забирает фокус, пробел её не жмёт.
    */
   setPictures(ids: readonly string[], current: number, pick: PicturePick): void {
     this.onPicture = pick;
@@ -159,6 +168,11 @@ export class Hud {
     this.pauseActions = actions;
   }
 
+  /** Кнопки сложности. Подписи берутся из списка уровней. */
+  setDifficultyMenu(pick: (id: string) => void): void {
+    this.difficultyPick = pick;
+  }
+
   /** Заход или континуэ. Полоска сцены при этом не трогается. */
   carry(score: number, lives: number): void {
     this.score = Math.max(0, score);
@@ -168,10 +182,11 @@ export class Hud {
     this.syncFigures();
   }
 
-  /** true — жизней не осталось. */
-  hurtSoldier(): boolean {
-    this.lives = Math.max(0, this.lives - 1);
-    this.hurtTimer = hud.hurtMs;
+  /** true — жизней не осталось. amount — сколько снять за это попадание. */
+  hurtSoldier(amount = 1): boolean {
+    const loss = Math.max(0, Math.round(amount));
+    this.lives = Math.max(0, this.lives - loss);
+    if (loss > 0) this.hurtTimer = hud.hurtMs;
     this.livesText.setText(String(this.lives));
     this.syncFigures();
     return this.lives === 0;
@@ -226,16 +241,18 @@ export class Hud {
     return blink ? 0.3 : 1;
   }
 
-  setHold(hold: 'pause' | 'continue' | 'over' | null, continuesLeft = 0): void {
+  setHold(hold: 'pause' | 'continue' | 'over' | 'difficulty' | null, continuesLeft = 0): void {
     const visible = hold !== null;
     const dead = hold === 'continue' || hold === 'over';
     this.pauseVeil.setVisible(visible);
     this.pauseLabel.setVisible(dead);
     this.deathLabel.setVisible(dead);
     this.pauseMenu.classList.toggle('is-open', hold === 'pause');
+    this.difficultyMenu.classList.toggle('is-open', hold === 'difficulty');
     if (hold === 'continue') this.pauseLabel.setText(`ENTER  ${continuesLeft}`);
     if (hold === 'over') this.pauseLabel.setText('ENTER');
-    if (hold === 'pause') this.placePauseMenu();
+    if (hold === 'pause') this.placeOverlay(this.pauseMenu, this.pauseTitle, this.pauseButtons);
+    if (hold === 'difficulty') this.placeOverlay(this.difficultyMenu, this.difficultyTitle, this.difficultyButtons);
   }
 
   draw(view: FrameLayout, width: number, height: number): void {
@@ -282,25 +299,30 @@ export class Hud {
     this.placeFigure(this.figures.score, this.scoreText, scaleX, scaleY, fontPx);
     this.placeFigure(this.figures.grenades, this.grenadeText, scaleX, scaleY, fontPx);
     this.placePictures(scaleX, scaleY, fontPx);
-    if (this.pauseMenu.classList.contains('is-open')) this.placePauseMenu();
+    if (this.pauseMenu.classList.contains('is-open')) {
+      this.placeOverlay(this.pauseMenu, this.pauseTitle, this.pauseButtons);
+    }
+    if (this.difficultyMenu.classList.contains('is-open')) {
+      this.placeOverlay(this.difficultyMenu, this.difficultyTitle, this.difficultyButtons);
+    }
   }
 
-  /** Слово и обе кнопки — один столбец. Его середина совпадает с серединой кадра. */
-  private placePauseMenu(): void {
+  /** Слово и кнопки — один столбец. Его середина совпадает с серединой кадра. */
+  private placeOverlay(menu: HTMLElement, title: HTMLElement, buttons: readonly HTMLButtonElement[]): void {
     const canvas = this.scene.game.canvas;
     if (canvas.width === 0 || canvas.height === 0) return;
     const scaleX = canvas.clientWidth / canvas.width;
     const scaleY = canvas.clientHeight / canvas.height;
     const fontPx = 26 * scaleY;
-    this.pauseTitle.style.fontSize = `${32 * scaleY}px`;
-    this.pauseMenu.style.gap = `${18 * scaleY}px`;
-    for (const button of this.pauseButtons) {
+    title.style.fontSize = `${32 * scaleY}px`;
+    menu.style.gap = `${18 * scaleY}px`;
+    for (const button of buttons) {
       button.style.fontSize = `${fontPx}px`;
       button.style.padding = `${10 * scaleY}px ${18 * scaleX}px`;
       button.style.borderWidth = `${Math.max(2, Math.round(2 * scaleY))}px`;
     }
-    this.pauseMenu.style.left = `${canvas.offsetLeft + (canvas.width / 2) * scaleX}px`;
-    this.pauseMenu.style.top = `${canvas.offsetTop + (canvas.height / 2) * scaleY}px`;
+    menu.style.left = `${canvas.offsetLeft + (canvas.width / 2) * scaleX}px`;
+    menu.style.top = `${canvas.offsetTop + (canvas.height / 2) * scaleY}px`;
   }
 
   /** Справа в рамке, от правого края. Текущая картинка уже помечена классом. */
@@ -355,6 +377,10 @@ export class Hud {
     if (this.quota > 1 && segW < 3) {
       segGap = 1;
       segW = (enemyBar.width - segGap * (this.quota - 1)) / this.quota;
+    }
+    if (this.quota > 1 && segW < 1) {
+      segGap = 0;
+      segW = enemyBar.width / this.quota;
     }
     const remaining = this.quota - this.slain;
     this.barGfx.clear();
@@ -453,6 +479,34 @@ function mountPauseMenu(
       event.preventDefault();
       button.blur();
       pick(row.kind);
+    });
+    menu.append(button);
+    return button;
+  });
+  root.append(menu);
+  return { menu, title, buttons };
+}
+
+function mountDifficultyMenu(
+  root: HTMLElement,
+  pick: (id: string) => void,
+): { menu: HTMLDivElement; title: HTMLParagraphElement; buttons: HTMLButtonElement[] } {
+  const menu = document.createElement('div');
+  menu.className = 'pause-menu';
+  const title = document.createElement('p');
+  title.className = 'pause-title';
+  title.textContent = 'НОВАЯ ИГРА';
+  menu.append(title);
+  const buttons = difficulties.map((row) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'pause-action';
+    button.textContent = row.label;
+    button.addEventListener('mousedown', (event) => event.preventDefault());
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      button.blur();
+      pick(row.id);
     });
     menu.append(button);
     return button;

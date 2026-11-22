@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { centerBox, flightSample, type FlightArrival, type FlightBlock } from '../../combat';
 import { frame, grenade, infantry, palette, volley } from '../../constants';
+import { scaleHp } from '../../difficulty';
 import { pointHidden, shotReaches, type Cover } from '../../cover';
 import { infantrySheet } from '../../infantrySheet';
 import { belowHorizon, fieldScale, wallTopY, type FrameLayout } from '../../layout';
@@ -77,12 +78,20 @@ export class Infantry {
   private readonly bodies: Phaser.GameObjects.Graphics;
   private readonly sparks: Sparks;
   private readonly onKill: (points: number) => void;
+  private readonly hpMul: number;
 
-  constructor(scene: Phaser.Scene, groups: readonly InfantryGroup[], sparks: Sparks, onKill: (points: number) => void) {
+  constructor(
+    scene: Phaser.Scene,
+    groups: readonly InfantryGroup[],
+    sparks: Sparks,
+    onKill: (points: number) => void,
+    hpMul = 1,
+  ) {
     this.scene = scene;
     this.lanes = sideLanes(groups);
     this.sparks = sparks;
     this.onKill = onKill;
+    this.hpMul = hpMul;
     this.bodies = scene.add.graphics().setDepth(3);
   }
 
@@ -217,7 +226,7 @@ export class Infantry {
     const leg = this.pickLeg(x0, heading);
     return {
       alive: true,
-      hp: infantry.hp,
+      hp: scaleHp(infantry.hp, this.hpMul),
       score: infantry.score,
       flash: 0,
       lane,

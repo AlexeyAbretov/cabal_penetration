@@ -5,12 +5,10 @@ export type MoveInput = {
   right: boolean;
   shift: boolean;
   kneel: boolean;
-  space: boolean;
   ctrl: boolean;
   firing: boolean;
   dirPressed: boolean;
   shiftPressed: boolean;
-  spacePressed: boolean;
   ctrlPressed: boolean;
   grenadePressed: boolean;
 };
@@ -26,7 +24,6 @@ export class Controls {
     down: Phaser.Input.Keyboard.Key;
     downArrow: Phaser.Input.Keyboard.Key;
     shift: Phaser.Input.Keyboard.Key;
-    space: Phaser.Input.Keyboard.Key;
     ctrl: Phaser.Input.Keyboard.Key;
     grenade: Phaser.Input.Keyboard.Key;
     esc: Phaser.Input.Keyboard.Key;
@@ -51,7 +48,6 @@ export class Controls {
       down: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       downArrow: cursors.down,
       shift: cursors.shift,
-      space: cursors.space,
       ctrl: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL),
       grenade: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.G),
       esc: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC),
@@ -79,7 +75,7 @@ export class Controls {
     return Phaser.Input.Keyboard.JustDown(this.keys.esc);
   }
 
-  /** Континуэ. Пробел занят длинным перекатом. */
+  /** Континуэ на Enter. */
   enterPressed(): boolean {
     return Phaser.Input.Keyboard.JustDown(this.keys.enter);
   }
@@ -92,7 +88,6 @@ export class Controls {
       right,
       shift: this.keys.shift.isDown,
       kneel: this.keys.down.isDown || this.keys.downArrow.isDown,
-      space: this.keys.space.isDown,
       ctrl: this.keys.ctrl.isDown,
       firing: this.scene.input.activePointer.leftButtonDown(),
       dirPressed:
@@ -101,7 +96,6 @@ export class Controls {
         Phaser.Input.Keyboard.JustDown(this.keys.leftArrow) ||
         Phaser.Input.Keyboard.JustDown(this.keys.rightArrow),
       shiftPressed: Phaser.Input.Keyboard.JustDown(this.keys.shift),
-      spacePressed: Phaser.Input.Keyboard.JustDown(this.keys.space),
       ctrlPressed: Phaser.Input.Keyboard.JustDown(this.keys.ctrl),
       grenadePressed: Phaser.Input.Keyboard.JustDown(this.keys.grenade),
     };

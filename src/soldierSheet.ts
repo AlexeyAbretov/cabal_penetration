@@ -38,13 +38,6 @@ export const soldierClips = {
     frameRate: rollRate(4, rollMove.short.durationMs),
     repeat: 0,
   },
-  rollLong: {
-    anim: 'roll-long',
-    row: 5,
-    frames: 8,
-    frameRate: rollRate(8, rollMove.long.durationMs),
-    repeat: 0,
-  },
 } as const;
 
 /** Веер не крутится: клетка 0–2 низко, 3–5 выше, слева направо. Ряд 6 стоя, ряд 7 с колена. */

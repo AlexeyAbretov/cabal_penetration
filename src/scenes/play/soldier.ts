@@ -16,7 +16,7 @@ type Roll = {
 type Pose = 'stand' | 'kneel' | 'roll';
 
 /**
- * Ноги на дорожке: шаг, бег, колено, короткий и длинный перекат.
+ * Ноги на дорожке: шаг, бег, колено, короткий перекат.
  * Очередь сюда не входит. Пока зажат огонь, шаг из этого класса не вызывают.
  * Ступни на дорожке под забором, сразу над рамкой. Макушка забора чуть выше шлема.
  */
@@ -44,7 +44,6 @@ export class Soldier {
   private gait: 'stand' | 'walk' | 'run' = 'stand';
   /** 1 — ряд листа как нарисован, вправо. -1 — зеркало того же ряда. */
   private face: -1 | 1 = 1;
-  private rollKind: 'short' | 'long' = 'short';
   private clip = '';
   private pose: Pose = 'stand';
   private roll: Roll | null = null;
@@ -102,10 +101,7 @@ export class Soldier {
     if (this.roll) return false;
     if (input.left === input.right) return false;
     const dir: -1 | 1 = input.right ? 1 : -1;
-    const long = input.spacePressed || (input.dirPressed && input.space);
-    const short = input.ctrlPressed || (input.dirPressed && input.ctrl);
-    if (long) return this.startRoll('long', dir);
-    if (short) return this.startRoll('short', dir);
+    if (input.ctrlPressed || (input.dirPressed && input.ctrl)) return this.startRoll(dir);
     return false;
   }
 
@@ -272,22 +268,20 @@ export class Soldier {
     };
   }
 
-  private startRoll(kind: 'short' | 'long', dir: -1 | 1): boolean {
+  private startRoll(dir: -1 | 1): boolean {
     const view = this.view;
     const columns = this.columns;
     if (!view || !columns) return false;
-    const spec = rollMove[kind];
     this.roll = {
       dir,
-      duration: spec.durationMs,
+      duration: rollMove.short.durationMs,
       elapsed: 0,
-      distance: spec.columns * columns.columnWidth(view),
+      distance: rollMove.short.columns * columns.columnWidth(view),
       originX: this.soldierX,
     };
     this.kneeling = false;
     this.firing = false;
     this.gait = 'stand';
-    this.rollKind = kind;
     this.face = dir;
     this.runLatched = false;
     this.clip = '';
@@ -325,11 +319,11 @@ export class Soldier {
   /** Стойка смотрит в поле. Зеркало только у хода: шаг, бег, перекат. */
   private turns(): boolean {
     const name = this.clipName();
-    return name === 'walk' || name === 'run' || name === 'rollShort' || name === 'rollLong';
+    return name === 'walk' || name === 'run' || name === 'rollShort';
   }
 
   private clipName(): SoldierClipName {
-    if (this.roll) return this.rollKind === 'long' ? 'rollLong' : 'rollShort';
+    if (this.roll) return 'rollShort';
     if (this.kneeling) return 'kneel';
     if (this.gait === 'run') return 'run';
     if (this.gait === 'walk') return 'walk';

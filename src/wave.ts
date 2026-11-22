@@ -50,13 +50,13 @@ export function isPack(group: WaveOrder): group is WaveGroup {
   return !isInfantry(group);
 }
 
-/** Грузовик держит на полоске ещё и тех, кого высадит. Пехота — по числу в группе. */
-export function waveQuota(wave: readonly WaveOrder[]): number {
+/** Грузовик держит на полоске ещё и тех, кого высадит. Пехота — по числу в группе. riders — десант одного грузовика. */
+export function waveQuota(wave: readonly WaveOrder[], riders: number = truck.riders): number {
   return wave.reduce((sum, group) => {
     if (isInfantry(group)) return sum + group.count;
     return (
       sum +
-      group.composition.reduce((n, kind) => n + (kind === 'truck' ? 1 + truck.riders : 1), 0)
+      group.composition.reduce((n, kind) => n + (kind === 'truck' ? 1 + riders : 1), 0)
     );
   }, 0);
 }

@@ -8,6 +8,7 @@ import {
   type HitBox,
 } from '../../combat';
 import { frame, green, grenade, palette, tank, tankVolley, truck, volley, wheel } from '../../constants';
+import { scaleHp } from '../../difficulty';
 import { type EnemyKind, type WaveGroup } from '../../wave';
 import { fieldScale, wallTopY, type FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
@@ -79,6 +80,8 @@ export class Enemies {
   private readonly sparks: Sparks;
   private readonly onKill: (points: number) => void;
   private readonly onRelease: (count: number) => void;
+  private readonly hpMul: number;
+  private readonly riders: number;
   /** Высадка в этом кадре. В список волны попадает после прохода, чтобы не шагать дважды. */
   private dropped: Actor[] = [];
 
@@ -88,10 +91,14 @@ export class Enemies {
     sparks: Sparks,
     onKill: (points: number) => void,
     onRelease: (count: number) => void,
+    hpMul = 1,
+    riders: number = truck.riders,
   ) {
     this.sparks = sparks;
     this.onKill = onKill;
     this.onRelease = onRelease;
+    this.hpMul = hpMul;
+    this.riders = riders;
     this.pockets = wave.map((spec) => ({ spec, sent: 0 }));
     this.bodies = scene.add.graphics().setDepth(3);
   }
@@ -226,9 +233,9 @@ export class Enemies {
     const fromRight = spec.point.x >= 0.5;
     const body = this.unit('truck', fromRight ? 1.16 : -0.16, spec.point.y, spec.point.x, spec.point.y);
     body.heading = fromRight ? -1 : 1;
-    body.ridersLeft = truck.riders;
-    body.hp = truck.hp;
-    body.maxHp = truck.hp;
+    body.ridersLeft = this.riders;
+    body.hp = scaleHp(truck.hp, this.hpMul);
+    body.maxHp = scaleHp(truck.hp, this.hpMul);
     body.score = truck.score;
     body.baseW = truck.width;
     body.baseH = truck.height;
@@ -240,8 +247,8 @@ export class Enemies {
 
   private dropRider(enemy: Actor): void {
     const pos = this.fieldPos(enemy);
-    const index = truck.riders - enemy.ridersLeft;
-    const span = (truck.riders - 1) / 2;
+    const index = this.riders - enemy.ridersLeft;
+    const span = (this.riders - 1) / 2;
     const shift = (index - span) * green.spread * 0.65;
     const tx = Math.min(0.92, Math.max(0.08, pos.x + shift));
     const ty = Math.min(0.84, pos.y + green.run);
@@ -291,8 +298,8 @@ export class Enemies {
     return {
       kind,
       alive: true,
-      hp: profile.hp,
-      maxHp: profile.hp,
+      hp: scaleHp(profile.hp, this.hpMul),
+      maxHp: scaleHp(profile.hp, this.hpMul),
       score: profile.score,
       flash: 0,
       sx,
