@@ -45,6 +45,36 @@ type Corpse = {
   look: number;
   /** Момент смерти по часам пехоты. */
   born: number;
+  /** Граната не кладёт клетку трупа: на земле только лужа. */
+  torn: boolean;
+};
+
+type Pix = { x: number; y: number; color: number };
+
+type Dot = { dx: number; dy: number; color: number };
+
+type LimbKind = 'head' | 'torso' | 'armL' | 'armR' | 'legL' | 'legR';
+
+/** Кусок фигуры или капля крови. Пиксели свои, от центра. */
+type Limb = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  /** Четверть оборота, пока кусок в воздухе. На земле замирает. */
+  quarter: number;
+  tumble: number;
+  spin: -1 | 1;
+  pixels: Dot[];
+  life: number;
+  max: number;
+  /** Подошва в момент смерти: глубина для закрытия и земля, куда падает кусок. */
+  foot: number;
+  /** Порядок рисования — глубина бойца, не высота полёта. */
+  sortY: number;
+  rest: boolean;
+  bounces: number;
+  blood: boolean;
 };
 
 type Shot = {
@@ -70,13 +100,15 @@ type SideLane = {
  * Между бойцами и между группами одного края пауза случайная.
  * Боец пробегает часть ширины, стреляет одной пулей и снова выбирает сторону.
  * Выстрел и разрыв не берут того, кто закрыт ближним объектом.
- * Убитый лежит трупом на той же глубине три секунды, затем пропадает вместе с лужей.
- * Лужа — фигура под клеткой трупа. В попадание и в предел шести она не входит.
+ * Пуля кладёт труп на той же глубине. Граната рвёт живую клетку на голову, руки, торс и ноги:
+ * куски разлетаются, падают на эту глубину и лежат рядом с лужей. Через три секунды пропадают и труп, и куски, и лужа.
+ * Лужа — фигура игры, не клетка листа. В попадание и в предел шести она не входит.
  */
 export class Infantry {
   private readonly lanes: SideLane[];
   private units: Soldier[] = [];
   private corpses: Corpse[] = [];
+  private limbs: Limb[] = [];
   private incoming: Shot[] = [];
   private clock = 0;
   private frozen = false;
@@ -122,6 +154,7 @@ export class Infantry {
       for (const soldier of this.units) this.advance(soldier, delta, playerColumn, view, columns);
       this.units = this.units.filter((soldier) => soldier.alive);
       this.corpses = this.corpses.filter((corpse) => this.clock - corpse.born < infantry.corpseMs);
+      this.stepLimbs(delta);
       this.spawn();
     }
     this.place(view);
@@ -165,7 +198,7 @@ export class Infantry {
       const cx = (body.left + body.right) / 2;
       const cy = (body.top + body.bottom) / 2;
       if (pointHidden(cx, cy, this.foot(soldier), covers)) continue;
-      this.wound(soldier, soldier.hp);
+      this.wound(soldier, soldier.hp, { x, y });
     }
     this.units = this.units.filter((soldier) => soldier.alive);
   }
@@ -173,14 +206,18 @@ export class Infantry {
   draw(covers: readonly Cover[]): void {
     const gfx = this.bodies;
     gfx.clear();
-    const marks: ({ y: number; soldier: Soldier } | { y: number; corpse: Corpse })[] = [
+    const marks: ({ y: number; soldier: Soldier } | { y: number; corpse: Corpse } | { y: number; limb: Limb })[] = [
       ...this.units.map((soldier) => ({ y: soldier.y, soldier })),
       ...this.corpses.map((corpse) => ({ y: corpse.y, corpse })),
+      ...this.limbs.map((limb) => ({ y: limb.sortY, limb })),
     ];
     marks.sort((a, b) => a.y - b.y);
     for (const mark of marks) {
-      if ('corpse' in mark) {
+      if ('limb' in mark) {
+        this.paintLimb(gfx, mark.limb, covers);
+      } else if ('corpse' in mark) {
         this.puddle(gfx, mark.corpse, covers);
+        if (mark.corpse.torn) continue;
         const sheet = this.sheet(mark.corpse.look);
         if (sheet) this.stampCorpse(gfx, sheet, mark.corpse, covers);
         else this.fallbackCorpse(gfx, mark.corpse, covers);
@@ -353,7 +390,7 @@ export class Infantry {
     return columns.impact(view, shot.column, { column: shot.column, x: shot.aimX });
   }
 
-  private wound(soldier: Soldier, amount: number): void {
+  private wound(soldier: Soldier, amount: number, blast?: { x: number; y: number }): void {
     if (!soldier.alive || amount <= 0) return;
     const mark = this.bodyBox(soldier);
     const x = (mark.left + mark.right) / 2;
@@ -365,12 +402,13 @@ export class Infantry {
       return;
     }
     soldier.alive = false;
-    this.corpses.push(this.remains(soldier));
-    this.sparks.add(x, y, 160, 'land');
+    this.corpses.push(this.remains(soldier, blast !== undefined));
+    if (blast) this.tear(soldier, blast);
+    else this.sparks.add(x, y, 160, 'land');
     this.onKill(soldier.score);
   }
 
-  private remains(soldier: Soldier): Corpse {
+  private remains(soldier: Soldier, torn: boolean): Corpse {
     const u = soldier.moveT >= 1 ? 1 : 1 - (1 - soldier.moveT) * (1 - soldier.moveT);
     return {
       lane: soldier.lane,
@@ -382,7 +420,172 @@ export class Infantry {
       h: soldier.h,
       look: soldier.look,
       born: this.clock,
+      torn,
     };
+  }
+
+  /** Живая клетка рвётся по телу. Вспышка у дула в куски не входит: берётся стойка. */
+  private tear(soldier: Soldier, blast: { x: number; y: number }): void {
+    const spec = this.look(soldier.look);
+    const sheet = this.sheet(soldier.look);
+    const pose = this.pose(soldier);
+    const frame = soldier.phase === 'burst' ? spec.aim : pose.frame;
+    const dots = sheet
+      ? this.frameDots(sheet, spec, frame, pose.flip, soldier)
+      : this.blockDots(soldier);
+    const foot = this.foot(soldier);
+    for (const part of carve(dots)) {
+      this.limbs.push(limbOf(part, blast, foot, soldier.y, infantry.corpseMs));
+    }
+    this.spray(soldier.x, (this.bodyBox(soldier).top + foot) / 2, foot, soldier.y);
+  }
+
+  private frameDots(
+    sheet: ImageData,
+    spec: InfantryLook,
+    frame: number,
+    flip: boolean,
+    soldier: Soldier,
+  ): Pix[] {
+    const fw = spec.frameWidth;
+    const fh = spec.frameHeight;
+    const foot = Math.round(this.foot(soldier));
+    const left = Math.round(soldier.x - fw / 2);
+    const top = foot - fh;
+    const dots: Pix[] = [];
+    for (let dy = 0; dy < fh; dy += 1) {
+      for (let dx = 0; dx < fw; dx += 1) {
+        const srcX = flip ? fw - 1 - dx : dx;
+        const i = (dy * sheet.width + frame * fw + srcX) * 4;
+        if ((sheet.data[i + 3] ?? 0) < 16) continue;
+        const color = ((sheet.data[i] ?? 0) << 16) | ((sheet.data[i + 1] ?? 0) << 8) | (sheet.data[i + 2] ?? 0);
+        dots.push({ x: left + dx, y: top + dy, color });
+      }
+    }
+    return dots;
+  }
+
+  /** Нет листа — зелёный прямоугольник режется теми же долями. */
+  private blockDots(soldier: Soldier): Pix[] {
+    const spec = this.look(soldier.look);
+    const fw = spec.frameWidth;
+    const fh = spec.frameHeight;
+    const foot = Math.round(this.foot(soldier));
+    const left = Math.round(soldier.x - fw / 2);
+    const top = foot - fh;
+    const bodyLeft = left + Math.round(fw * 0.28);
+    const bodyRight = left + Math.round(fw * 0.72);
+    const dots: Pix[] = [];
+    for (let y = top + Math.round(fh * 0.08); y < top + Math.round(fh * 0.92); y += 1) {
+      const band = (y - top) / fh;
+      const color = band < 0.28 ? palette.ink : band > 0.66 ? palette.enemyShade : palette.enemy;
+      for (let x = bodyLeft; x < bodyRight; x += 1) dots.push({ x, y, color });
+    }
+    return dots;
+  }
+
+  private spray(x: number, y: number, foot: number, sortY: number): void {
+    for (let i = 0; i < 14; i += 1) {
+      const ang = -Math.PI * (0.12 + Math.random() * 0.76);
+      const speed = 40 + Math.random() * 120;
+      const life = 480 + Math.random() * 360;
+      const thick = Math.random() < 0.35;
+      const color = Math.random() < 0.45 ? palette.bloodDeep : palette.blood;
+      const pixels: Dot[] = [{ dx: 0, dy: 0, color }];
+      if (thick) pixels.push({ dx: 1, dy: 0, color });
+      this.limbs.push({
+        x: x + (Math.random() - 0.5) * 6,
+        y: y + (Math.random() - 0.5) * 4,
+        vx: Math.cos(ang) * speed,
+        vy: Math.sin(ang) * speed,
+        quarter: 0,
+        tumble: 0,
+        spin: 1,
+        pixels,
+        life,
+        max: life,
+        foot,
+        sortY,
+        rest: false,
+        bounces: 0,
+        blood: true,
+      });
+    }
+  }
+
+  private stepLimbs(delta: number): void {
+    const dt = delta / 1000;
+    const next: Limb[] = [];
+    for (const limb of this.limbs) {
+      limb.life -= delta;
+      if (limb.life <= 0) continue;
+      if (!limb.rest) {
+        limb.vy += 920 * dt;
+        limb.x += limb.vx * dt;
+        limb.y += limb.vy * dt;
+        if (!limb.blood) {
+          limb.tumble += delta;
+          if (limb.tumble >= 80) {
+            const steps = Math.floor(limb.tumble / 80);
+            limb.tumble -= steps * 80;
+            limb.quarter = (limb.quarter + steps * limb.spin) & 3;
+          }
+        }
+        const drop = lowest(limb.pixels, limb.quarter);
+        if (limb.y + drop >= limb.foot && limb.vy > 0) {
+          limb.y = limb.foot - drop;
+          limb.bounces += 1;
+          if (limb.bounces >= 2 || limb.blood) {
+            limb.rest = true;
+            limb.vx = 0;
+            limb.vy = 0;
+          } else {
+            limb.vy *= -0.32;
+            limb.vx *= 0.55;
+          }
+        }
+      }
+      next.push(limb);
+    }
+    this.limbs = next;
+  }
+
+  private paintLimb(gfx: Phaser.GameObjects.Graphics, limb: Limb, covers: readonly Cover[]): void {
+    const alpha = limb.blood ? Math.max(0, limb.life / limb.max) : limb.life < 400 ? Math.max(0, limb.life / 400) : 1;
+    if (alpha <= 0) return;
+    const rows = new Map<number, { x: number; color: number }[]>();
+    for (const p of limb.pixels) {
+      const spun = turn(p.dx, p.dy, limb.quarter);
+      const x = Math.round(limb.x + spun.x);
+      const y = Math.round(limb.y + spun.y);
+      if (pointHidden(x + 0.5, y + 0.5, limb.foot, covers)) continue;
+      const row = rows.get(y);
+      const dot = { x, color: p.color };
+      if (row) row.push(dot);
+      else rows.set(y, [dot]);
+    }
+    for (const [y, row] of rows) {
+      row.sort((a, b) => a.x - b.x);
+      let runX = 0;
+      let runW = 0;
+      let runColor = 0;
+      const flush = (): void => {
+        if (runW <= 0) return;
+        gfx.fillStyle(runColor, alpha);
+        gfx.fillRect(runX, y, runW, 1);
+        runW = 0;
+      };
+      for (const px of row) {
+        if (runW > 0 && px.color === runColor && px.x === runX + runW) runW += 1;
+        else {
+          flush();
+          runX = px.x;
+          runW = 1;
+          runColor = px.color;
+        }
+      }
+      flush();
+    }
   }
 
   private place(view: FrameLayout): void {
@@ -614,8 +817,12 @@ export class Infantry {
     const foot = this.sole(corpse);
     const cx = Math.round(corpse.x);
     const cy = foot - Math.max(1, Math.round(dh * 0.12));
-    this.ellipse(gfx, cx, cy, Math.max(3, Math.round(dw * 0.48)), Math.max(2, Math.round(dh * 0.16)), palette.bloodDeep, foot, covers);
-    this.ellipse(gfx, cx, cy, Math.max(2, Math.round(dw * 0.3)), Math.max(1, Math.round(dh * 0.09)), palette.blood, foot, covers);
+    const spread = corpse.torn ? 1.45 : 1;
+    this.ellipse(gfx, cx, cy, Math.max(3, Math.round(dw * 0.48 * spread)), Math.max(2, Math.round(dh * 0.16 * spread)), palette.bloodDeep, foot, covers);
+    this.ellipse(gfx, cx, cy, Math.max(2, Math.round(dw * 0.3 * spread)), Math.max(1, Math.round(dh * 0.09 * spread)), palette.blood, foot, covers);
+    if (!corpse.torn) return;
+    this.ellipse(gfx, cx - Math.round(dw * 0.28), cy + 1, Math.max(2, Math.round(dw * 0.16)), Math.max(1, Math.round(dh * 0.08)), palette.blood, foot, covers);
+    this.ellipse(gfx, cx + Math.round(dw * 0.32), cy, Math.max(2, Math.round(dw * 0.14)), Math.max(1, Math.round(dh * 0.07)), palette.bloodDeep, foot, covers);
   }
 
   private ellipse(
@@ -660,6 +867,130 @@ export class Infantry {
   private sole(corpse: Corpse): number {
     return corpse.y + corpse.h / 2;
   }
+}
+
+type Part = { kind: LimbKind; dots: Pix[] };
+
+/** Доли роста: голова, руки с торсом, ноги. Узкий край сливается с соседом, а не летит крошкой. */
+function carve(dots: Pix[]): Part[] {
+  const first = dots[0];
+  if (!first) return [];
+  let minX = first.x;
+  let maxX = first.x;
+  let minY = first.y;
+  let maxY = first.y;
+  for (const dot of dots) {
+    if (dot.x < minX) minX = dot.x;
+    if (dot.x > maxX) maxX = dot.x;
+    if (dot.y < minY) minY = dot.y;
+    if (dot.y > maxY) maxY = dot.y;
+  }
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
+  const headY = minY + height * 0.3;
+  const legY = minY + height * 0.64;
+  const mid = (minX + maxX) / 2;
+  const arm = Math.max(2, width * 0.22);
+  const bins: Record<LimbKind, Pix[]> = { head: [], torso: [], armL: [], armR: [], legL: [], legR: [] };
+  for (const dot of dots) {
+    if (dot.y < headY) {
+      if (dot.x < mid - arm) bins.armL.push(dot);
+      else if (dot.x > mid + arm) bins.armR.push(dot);
+      else bins.head.push(dot);
+    } else if (dot.y >= legY) {
+      if (dot.x < mid) bins.legL.push(dot);
+      else bins.legR.push(dot);
+    } else if (dot.x < mid - arm) bins.armL.push(dot);
+    else if (dot.x > mid + arm) bins.armR.push(dot);
+    else bins.torso.push(dot);
+  }
+  absorb(bins.armL, bins.torso, 3);
+  absorb(bins.armR, bins.torso, 3);
+  if (bins.legL.length < 3) absorb(bins.legL, bins.legR, 3);
+  else if (bins.legR.length < 3) absorb(bins.legR, bins.legL, 3);
+  absorb(bins.legL, bins.torso, 3);
+  absorb(bins.legR, bins.torso, 3);
+  absorb(bins.head, bins.torso, 3);
+  seam(bins.head, (dot) => dot.y >= headY - 1);
+  seam(bins.legL, (dot) => dot.y <= legY);
+  seam(bins.legR, (dot) => dot.y <= legY);
+  seam(bins.armL, (dot) => dot.x >= mid - arm - 1);
+  seam(bins.armR, (dot) => dot.x <= mid + arm + 1);
+  seam(bins.torso, (dot) => dot.y <= headY + 1 || dot.y >= legY - 1);
+  const order: LimbKind[] = ['legL', 'legR', 'torso', 'armL', 'armR', 'head'];
+  return order.filter((kind) => bins[kind].length >= 3).map((kind) => ({ kind, dots: bins[kind] }));
+}
+
+function absorb(small: Pix[], into: Pix[], min: number): void {
+  if (small.length >= min) return;
+  into.push(...small);
+  small.length = 0;
+}
+
+function seam(dots: Pix[], edge: (dot: Pix) => boolean): void {
+  for (const dot of dots) {
+    if (edge(dot)) dot.color = palette.blood;
+  }
+}
+
+function limbOf(part: Part, blast: { x: number; y: number }, foot: number, sortY: number, life: number): Limb {
+  let sx = 0;
+  let sy = 0;
+  for (const dot of part.dots) {
+    sx += dot.x;
+    sy += dot.y;
+  }
+  const cx = sx / part.dots.length;
+  const cy = sy / part.dots.length;
+  const flight = kick(part.kind, cx, cy, blast);
+  return {
+    x: cx,
+    y: cy,
+    vx: flight.vx,
+    vy: flight.vy,
+    quarter: 0,
+    tumble: 0,
+    spin: Math.random() < 0.5 ? -1 : 1,
+    pixels: part.dots.map((dot) => ({ dx: dot.x - cx, dy: dot.y - cy, color: dot.color })),
+    life,
+    max: life,
+    foot,
+    sortY,
+    rest: false,
+    bounces: 0,
+    blood: false,
+  };
+}
+
+function kick(kind: LimbKind, cx: number, cy: number, blast: { x: number; y: number }): { vx: number; vy: number } {
+  const dx = cx - blast.x;
+  const dy = cy - blast.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  const awayX = dx / dist;
+  const side = kind === 'armL' || kind === 'legL' ? -1 : kind === 'armR' || kind === 'legR' ? 1 : awayX < 0 ? -1 : 1;
+  const up = kind === 'head' ? 190 : kind === 'torso' ? 80 : kind === 'armL' || kind === 'armR' ? 120 : 50;
+  const wide = kind === 'head' ? 36 : kind === 'torso' ? 28 : kind === 'armL' || kind === 'armR' ? 110 : 90;
+  return {
+    vx: awayX * 55 + side * wide * (0.7 + Math.random() * 0.45),
+    vy: -(up * (0.75 + Math.random() * 0.4)) + Math.min(0, (dy / dist) * 30),
+  };
+}
+
+function lowest(pixels: readonly Dot[], quarter: number): number {
+  let max = 0;
+  for (const pixel of pixels) {
+    const y = turn(pixel.dx, pixel.dy, quarter).y;
+    if (y > max) max = y;
+  }
+  return max;
+}
+
+function turn(dx: number, dy: number, quarter: number): { x: number; y: number } {
+  const q = quarter & 3;
+  if (q === 1) return { x: -dy, y: dx };
+  if (q === 2) return { x: -dx, y: -dy };
+  if (q === 3) return { x: dy, y: -dx };
+  return { x: dx, y: dy };
 }
 
 function sideLanes(groups: readonly InfantryGroup[]): SideLane[] {
