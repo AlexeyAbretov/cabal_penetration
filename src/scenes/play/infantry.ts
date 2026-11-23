@@ -40,6 +40,8 @@ type Corpse = {
   y: number;
   w: number;
   h: number;
+  /** Момент смерти по часам пехоты. */
+  born: number;
 };
 
 type Shot = {
@@ -65,7 +67,7 @@ type SideLane = {
  * Между бойцами и между группами одного края пауза случайная.
  * Боец пробегает часть ширины, стреляет одной пулей и снова выбирает сторону.
  * Выстрел и разрыв не берут того, кто закрыт ближним объектом.
- * Убитый остаётся трупом на той же глубине до смены картинки.
+ * Убитый лежит трупом на той же глубине три секунды, затем пропадает вместе с лужей.
  * Лужа — фигура под клеткой трупа. В попадание и в предел шести она не входит.
  */
 export class Infantry {
@@ -118,6 +120,7 @@ export class Infantry {
       this.clock += delta;
       for (const soldier of this.units) this.advance(soldier, delta, playerColumn, view, columns);
       this.units = this.units.filter((soldier) => soldier.alive);
+      this.corpses = this.corpses.filter((corpse) => this.clock - corpse.born < infantry.corpseMs);
       this.spawn();
     }
     this.place(view);
@@ -372,6 +375,7 @@ export class Infantry {
       y: soldier.y,
       w: soldier.w,
       h: soldier.h,
+      born: this.clock,
     };
   }
 
