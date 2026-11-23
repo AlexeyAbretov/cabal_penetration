@@ -310,6 +310,61 @@ export const grenadeFly = {
 } as const;
 
 /**
+ * Пачка гранат на дорожке. Кадр 32×32, первая клетка листа.
+ * Своими пикселями. Нет файла — остаётся зелёный прямоугольник.
+ */
+export const grenadeDrop = {
+  key: 'grenade-drop',
+  url: 'assets/pickup-grenade.png',
+  width: 32,
+  height: 32,
+} as const;
+
+/**
+ * Широкий ствол на дорожке. Кадр 40×24, третий в первом ряду листа.
+ * Своими пикселями. Нет файла — остаётся красная полоса.
+ */
+export const spreadDrop = {
+  key: 'spread-drop',
+  url: 'assets/pickup-spread.png',
+  width: 40,
+  height: 24,
+} as const;
+
+/**
+ * Частый ствол на дорожке. Кадр 40×24, третий в первом ряду листа.
+ * Своими пикселями. Нет файла — остаются три синие полосы.
+ */
+export const rapidDrop = {
+  key: 'rapid-drop',
+  url: 'assets/pickup-rapid.png',
+  width: 40,
+  height: 24,
+} as const;
+
+/**
+ * Звезда на дорожке. Кадр 32×32, первая клетка листа.
+ * Своими пикселями. Нет файла — остаётся жёлтый ромб.
+ */
+export const starDrop = {
+  key: 'star-drop',
+  url: 'assets/pickup-star.png',
+  width: 32,
+  height: 32,
+} as const;
+
+/**
+ * Плашка таблички на дорожке. Кадр 48×24.
+ * Цифры рисует код по центру. Нет файла — остаётся жёлтый прямоугольник.
+ */
+export const plaqueDrop = {
+  key: 'plaque-drop',
+  url: 'assets/pickup-plaque.png',
+  width: 48,
+  height: 24,
+} as const;
+
+/**
  * Ролик разрыва гранаты. Один переключатель.
  * `ring` — старый круг. `ground` — вспышка с земли.
  */
@@ -325,7 +380,7 @@ export const pickup = {
   feet: 10,
 } as const;
 
-export type DropKind = 'grenades' | 'rapid' | 'spread' | 'star' | 'bonus' | 'medal' | 'ton';
+export type DropKind = 'grenades' | 'rapid' | 'spread' | 'star' | 'bonus' | 'medal' | 'ton' | 'fivek' | 'tenk';
 
 /** Звезда — отдельный номинал, не очки за сам объект. */
 export const star = {
@@ -345,6 +400,16 @@ export const medal = {
 /** Табличка 100. Очки приходят, когда солдат на неё наступает. */
 export const ton = {
   score: 100,
+} as const;
+
+/** Табличка 5000. Очки приходят, когда солдат на неё наступает. */
+export const fivek = {
+  score: 5000,
+} as const;
+
+/** Табличка 10000. Очки приходят, когда солдат на неё наступает. */
+export const tenk = {
+  score: 10000,
 } as const;
 
 /**

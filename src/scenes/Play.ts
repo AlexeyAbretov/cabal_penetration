@@ -4,7 +4,7 @@ import { route } from '../campaign/route';
 import { difficultyById, riderCount, scaleHurt, scaleWave } from '../difficulty';
 import { bonusList, breakableCount, type Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type FlightBlock, type HitBox } from '../combat';
-import { bonus, cssColor, grenade, grenadeBoom, grenadeFly, grenadeThrow, gunFire, hitFlash, hud, medal, palette, pickup, star, ton, weapons, type DropKind } from '../constants';
+import { bonus, cssColor, fivek, grenade, grenadeBoom, grenadeDrop, grenadeFly, grenadeThrow, gunFire, hitFlash, hud, medal, palette, pickup, plaqueDrop, rapidDrop, spreadDrop, star, starDrop, tenk, ton, weapons, type DropKind } from '../constants';
 import type { FenceKind, FenceMark } from '../types/fence';
 import { isInfantry, isPack, waveQuota } from '../wave';
 import { infantryLooks } from '../infantrySheet';
@@ -120,6 +120,11 @@ export class Play extends Phaser.Scene {
     if (!this.textures.exists(hudIcons.grenade)) this.load.image(hudIcons.grenade, hudIcons.grenadeUrl);
     if (!this.textures.exists(touchGrenade.key)) this.load.image(touchGrenade.key, touchGrenade.url);
     if (!this.textures.exists(grenadeFly.key)) this.load.image(grenadeFly.key, grenadeFly.url);
+    if (!this.textures.exists(grenadeDrop.key)) this.load.image(grenadeDrop.key, grenadeDrop.url);
+    if (!this.textures.exists(spreadDrop.key)) this.load.image(spreadDrop.key, spreadDrop.url);
+    if (!this.textures.exists(rapidDrop.key)) this.load.image(rapidDrop.key, rapidDrop.url);
+    if (!this.textures.exists(starDrop.key)) this.load.image(starDrop.key, starDrop.url);
+    if (!this.textures.exists(plaqueDrop.key)) this.load.image(plaqueDrop.key, plaqueDrop.url);
     if (!this.textures.exists(hitFlash.key)) {
       this.load.spritesheet(hitFlash.key, hitFlash.url, {
         frameWidth: hitFlash.frameWidth,
@@ -730,6 +735,14 @@ export class Play extends Phaser.Scene {
     }
     if (kind === 'ton') {
       this.hud.addScore(ton.score);
+      return;
+    }
+    if (kind === 'fivek') {
+      this.hud.addScore(fivek.score);
+      return;
+    }
+    if (kind === 'tenk') {
+      this.hud.addScore(tenk.score);
       return;
     }
     this.gun.equip(kind);

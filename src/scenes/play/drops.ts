@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { palette, pickup, soldierBox, type DropKind } from '../../constants';
+import { grenadeDrop, palette, pickup, plaqueDrop, rapidDrop, soldierBox, spreadDrop, starDrop, type DropKind } from '../../constants';
 import { soldierFeetY, type FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
 
@@ -10,6 +10,7 @@ type Item = {
   fall: number;
   landed: boolean;
   taken: boolean;
+  icon: Phaser.GameObjects.Image | null;
 };
 
 type Body = {
@@ -55,6 +56,8 @@ export class Drops {
   private items: Item[] = [];
   private frozen = false;
   private readonly gfx: Phaser.GameObjects.Graphics;
+  /** Цифры таблички. Выше плашки, иначе их закрывает картинка. */
+  private readonly marks: Phaser.GameObjects.Graphics;
   private readonly scene: Phaser.Scene;
   private readonly sparks: Sparks;
   private readonly onTake: (kind: DropKind) => void;
@@ -64,10 +67,19 @@ export class Drops {
     this.sparks = sparks;
     this.onTake = onTake;
     this.gfx = scene.add.graphics().setDepth(4.2);
+    this.marks = scene.add.graphics().setDepth(4.3);
   }
 
   spawn(kind: DropKind, rx: number, ry: number): void {
-    const item: Item = { kind, rx, ry, fall: 0, landed: false, taken: false };
+    const item: Item = {
+      kind,
+      rx,
+      ry,
+      fall: 0,
+      landed: false,
+      taken: false,
+      icon: this.dropIcon(kind),
+    };
     this.items.push(item);
     this.scene.tweens.add({
       targets: item,
@@ -91,20 +103,27 @@ export class Drops {
     for (const item of this.items) {
       if (!item.landed || item.taken) continue;
       const at = this.point(view, item);
-      const size = pickupSpan(item.kind);
-      if (!overlaps(at.x, at.y, size, size, body.x, body.y, body.w, body.h)) continue;
+      const box = item.icon ? iconBox(item.kind) : null;
+      const span = pickupSpan(item.kind);
+      const width = box?.width ?? span;
+      const height = box?.height ?? span;
+      if (!overlaps(at.x, at.y, width, height, body.x, body.y, body.w, body.h)) continue;
       item.taken = true;
       taken.push(item);
       this.sparks.add(at.x, at.y, 120, 'pop');
     }
     if (taken.length === 0) return;
     this.items = this.items.filter((item) => !item.taken);
-    for (const item of taken) this.onTake(item.kind);
+    for (const item of taken) {
+      item.icon?.destroy();
+      this.onTake(item.kind);
+    }
   }
 
   draw(view: FrameLayout): void {
     const gfx = this.gfx;
     gfx.clear();
+    this.marks.clear();
     for (const item of this.items) {
       if (item.taken) continue;
       const at = this.point(view, item);
@@ -112,8 +131,21 @@ export class Drops {
         gfx.fillStyle(palette.black, 0.45);
         gfx.fillRect(Math.round(at.x - 6), Math.round(at.landY - 2), 12, 3);
       }
+      if (item.icon) {
+        item.icon.setPosition(Math.round(at.x), Math.round(at.y));
+        const glyphs = plaqueGlyphs(item.kind);
+        if (glyphs) paintDigits(this.marks, at.x, at.y, glyphs);
+        continue;
+      }
       paint(gfx, item.kind, at.x, at.y);
     }
+  }
+
+  /** Картинка бонуса. Нет файла — в draw остаётся фигура кода. */
+  private dropIcon(kind: DropKind): Phaser.GameObjects.Image | null {
+    const box = iconBox(kind);
+    if (!box || !this.scene.textures.exists(box.key)) return null;
+    return this.scene.add.image(0, 0, box.key).setOrigin(0.5, 0.5).setDepth(4.25);
   }
 
   private point(view: FrameLayout, item: Item): { x: number; y: number; landY: number } {
@@ -126,17 +158,19 @@ export class Drops {
   }
 }
 
+function iconBox(kind: DropKind): { key: string; width: number; height: number } | null {
+  if (kind === 'grenades') return grenadeDrop;
+  if (kind === 'rapid') return rapidDrop;
+  if (kind === 'spread') return spreadDrop;
+  if (kind === 'star') return starDrop;
+  if (plaqueGlyphs(kind)) return plaqueDrop;
+  return null;
+}
+
 function paint(gfx: Phaser.GameObjects.Graphics, kind: DropKind, x: number, y: number): void {
-  if (kind === 'bonus') {
-    paintPlaque(gfx, x, y, plaque500);
-    return;
-  }
-  if (kind === 'ton') {
-    paintPlaque(gfx, x, y, plaque100);
-    return;
-  }
-  if (kind === 'medal') {
-    paintPlaque(gfx, x, y, plaque1000);
+  const glyphs = plaqueGlyphs(kind);
+  if (glyphs) {
+    paintPlaque(gfx, x, y, glyphs);
     return;
   }
   const s = pickup.size;
@@ -169,24 +203,60 @@ function paint(gfx: Phaser.GameObjects.Graphics, kind: DropKind, x: number, y: n
   gfx.fillTriangle(x, y - r, x - r, y, x, y + r);
 }
 
-/** «500» и «1000». Клетка 3×5, точка 2 пикселя. */
-const plaque500 = ['###,#  ,###,  #,###', '###,# #,# #,# #,###', '###,# #,# #,# #,###'] as const;
-const plaque100 = [
-  '#  ,## , # , # ,###',
-  '###,# #,# #,# #,###',
-  '###,# #,# #,# #,###',
-] as const;
-const plaque1000 = [
-  '#  ,## , # , # ,###',
-  '###,# #,# #,# #,###',
-  '###,# #,# #,# #,###',
-  '###,# #,# #,# #,###',
-] as const;
+/** «0», «1» и «5». Клетка 3×5. */
+const digitGlyph = {
+  '0': '###,# #,# #,# #,###',
+  '1': '#  ,## , # , # ,###',
+  '5': '###,#  ,###,  #,###',
+} as const;
+
+function plaqueGlyphs(kind: DropKind): readonly string[] | null {
+  const text =
+    kind === 'ton'
+      ? '100'
+      : kind === 'bonus'
+        ? '500'
+        : kind === 'medal'
+          ? '1000'
+          : kind === 'fivek'
+            ? '5000'
+            : kind === 'tenk'
+              ? '10000'
+              : null;
+  if (!text) return null;
+  return [...text].map((char) => digitGlyph[char as keyof typeof digitGlyph]);
+}
 
 function pickupSpan(kind: DropKind): number {
-  if (kind === 'medal') return 36;
+  if (kind === 'tenk') return 44;
+  if (kind === 'medal' || kind === 'fivek') return 36;
   if (kind === 'bonus') return 28;
   return pickup.size;
+}
+
+/** Только цифры, по центру плашки. Точка 2 пикселя. */
+function paintDigits(
+  gfx: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  glyphs: readonly string[],
+): void {
+  const dot = 2;
+  const gap = 2;
+  const digitW = 3 * dot;
+  const digitH = 5 * dot;
+  const width = glyphs.length * digitW + (glyphs.length - 1) * gap;
+  const left = Math.round(x - width / 2);
+  const top = Math.round(y - digitH / 2);
+  gfx.fillStyle(palette.black, 1);
+  glyphs.forEach((glyph, index) => {
+    const ox = left + index * (digitW + gap);
+    glyph.split(',').forEach((row, ry) => {
+      for (let rx = 0; rx < row.length; rx += 1) {
+        if (row[rx] === '#') gfx.fillRect(ox + rx * dot, top + ry * dot, dot, dot);
+      }
+    });
+  });
 }
 
 function paintPlaque(gfx: Phaser.GameObjects.Graphics, x: number, y: number, glyphs: readonly string[]): void {
@@ -201,15 +271,7 @@ function paintPlaque(gfx: Phaser.GameObjects.Graphics, x: number, y: number, gly
   gfx.fillRect(left - 3, top - 3, width + 6, digitH + 6);
   gfx.fillStyle(palette.star, 1);
   gfx.fillRect(left - 2, top - 2, width + 4, digitH + 4);
-  gfx.fillStyle(palette.black, 1);
-  glyphs.forEach((glyph, index) => {
-    const ox = left + index * (digitW + gap);
-    glyph.split(',').forEach((row, ry) => {
-      for (let rx = 0; rx < row.length; rx += 1) {
-        if (row[rx] === '#') gfx.fillRect(ox + rx * dot, top + ry * dot, dot, dot);
-      }
-    });
-  });
+  paintDigits(gfx, x, y, glyphs);
 }
 
 function overlaps(
