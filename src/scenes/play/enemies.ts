@@ -61,6 +61,8 @@ type Incoming = {
   travelMs: number;
   fromX: number;
   fromY: number;
+  /** Горизонталь цели в момент выстрела. Середина колонки сюда не подставляется. */
+  aimX: number;
 };
 
 /**
@@ -76,6 +78,8 @@ export class Enemies {
   private incoming: Incoming[] = [];
   private clock = 0;
   private frozen = false;
+  /** Где стоял солдат, когда волна шагала. Пуля открытой колонки целится сюда. */
+  private playerX = 0;
   private readonly bodies: Phaser.GameObjects.Graphics;
   private readonly sparks: Sparks;
   private readonly onKill: (points: number) => void;
@@ -112,7 +116,8 @@ export class Enemies {
     this.place(view);
   }
 
-  step(delta: number, playerColumn: number, view: FrameLayout, columns: FrontWall): void {
+  step(delta: number, playerColumn: number, view: FrameLayout, columns: FrontWall, playerX: number): void {
+    this.playerX = playerX;
     if (!this.frozen) {
       this.clock += delta;
       this.spawn();
@@ -136,7 +141,7 @@ export class Enemies {
     const pending: Incoming[] = [];
     for (const shot of this.incoming) {
       shot.elapsed += delta;
-      const to = columns.impact(view, shot.column);
+      const to = this.flightEnd(view, columns, shot);
       const pose = flightSample(shot.fromX, shot.fromY, to.x, to.y, shot.elapsed, shot.travelMs, blocks);
       if (!pose.arrived) pending.push(shot);
       else landed.push({ ...pose, column: shot.column });
@@ -174,7 +179,7 @@ export class Enemies {
     blocks: readonly FlightBlock[],
   ): void {
     for (const shot of this.incoming) {
-      const to = columns.impact(view, shot.column);
+      const to = this.flightEnd(view, columns, shot);
       const pose = flightSample(shot.fromX, shot.fromY, to.x, to.y, shot.elapsed, shot.travelMs, blocks);
       const x = pose.x;
       const y = pose.y;
@@ -450,7 +455,7 @@ export class Enemies {
     view: FrameLayout,
     columns: FrontWall,
   ): void {
-    const to = columns.impact(view, enemy.column);
+    const to = columns.impact(view, enemy.column, { column: enemy.column, x: this.playerX });
     const dist = Math.hypot(to.x - enemy.x, to.y - enemy.y);
     const span = view.width / frame.width;
     const travelMs = Math.max(volley.minTravelMs, (dist / (speed * span)) * 1000);
@@ -461,7 +466,13 @@ export class Enemies {
       travelMs,
       fromX: enemy.x,
       fromY: enemy.y,
+      aimX: to.x,
     });
+  }
+
+  /** Высота следует за стеной. По горизонтали пуля держит тело, в которое целились. */
+  private flightEnd(view: FrameLayout, columns: FrontWall, shot: Incoming): { x: number; y: number } {
+    return { x: shot.aimX, y: columns.impact(view, shot.column).y };
   }
 
   private driveAway(enemy: Actor): void {

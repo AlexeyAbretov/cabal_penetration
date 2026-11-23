@@ -252,6 +252,16 @@ export class Soldier {
     return { x: this.cx, y: this.cy, w: this.bodyW, h: this.bodyH };
   }
 
+  /** Стойка у текущих ступней. Колено прямоугольник не сжимает: это поза, не укрытие. */
+  hurtBox(): { left: number; right: number; top: number; bottom: number } {
+    return {
+      left: this.cx - soldierBox.width / 2,
+      right: this.cx + soldierBox.width / 2,
+      top: this.feetY - soldierBox.height,
+      bottom: this.feetY,
+    };
+  }
+
   /** Верх прямоугольника. Граната вылетает отсюда, стена точку не подменяет. */
   muzzlePoint(): { x: number; y: number } {
     return { x: this.cx, y: this.cy - this.bodyH / 2 };

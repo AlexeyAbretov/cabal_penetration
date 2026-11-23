@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { centerBox, flightSample, type FlightArrival, type FlightBlock } from '../../combat';
+import { centerBox, circleHitsRect, flightSample, type FlightArrival, type FlightBlock, type HitBox } from '../../combat';
 import { frame, grenade, infantry, palette, volley } from '../../constants';
 import { scaleHp } from '../../difficulty';
 import { pointHidden, shotReaches, type Cover } from '../../cover';
@@ -48,6 +48,8 @@ type Shot = {
   travelMs: number;
   fromX: number;
   fromY: number;
+  /** Горизонталь цели в момент выстрела. Середина колонки сюда не подставляется. */
+  aimX: number;
 };
 
 type SideLane = {
@@ -73,7 +75,11 @@ export class Infantry {
   private incoming: Shot[] = [];
   private clock = 0;
   private frozen = false;
+  /** Где стоял солдат, когда пехота шагала. Пуля открытой колонки целится сюда. */
+  private playerX = 0;
   private pixels: ImageData | null = null;
+  /** Непрозрачный край клетки. Пустая кромка кадра в удар не входит. */
+  private readonly ink = new Map<number, { x0: number; y0: number; x1: number; y1: number }>();
   /** Уже уменьшенные клетки: кадр, зеркало и размер. */
   private readonly cells = new Map<string, ImageData>();
   private readonly scene: Phaser.Scene;
@@ -106,7 +112,8 @@ export class Infantry {
     this.place(view);
   }
 
-  step(delta: number, playerColumn: number, view: FrameLayout, columns: FrontWall): void {
+  step(delta: number, playerColumn: number, view: FrameLayout, columns: FrontWall, playerX: number): void {
+    this.playerX = playerX;
     if (!this.frozen) {
       this.clock += delta;
       for (const soldier of this.units) this.advance(soldier, delta, playerColumn, view, columns);
@@ -126,7 +133,7 @@ export class Infantry {
     const pending: Shot[] = [];
     for (const shot of this.incoming) {
       shot.elapsed += delta;
-      const to = columns.impact(view, shot.column);
+      const to = this.flightEnd(view, columns, shot);
       const pose = flightSample(shot.fromX, shot.fromY, to.x, to.y, shot.elapsed, shot.travelMs, blocks);
       if (!pose.arrived) pending.push(shot);
       else landed.push({ ...pose, column: shot.column });
@@ -138,7 +145,7 @@ export class Infantry {
   hit(box: { left: number; right: number; top: number; bottom: number }, amount: number, covers: readonly Cover[]): void {
     for (const soldier of this.units) {
       if (!soldier.alive) continue;
-      const body = centerBox(soldier.x, soldier.y, soldier.w, soldier.h);
+      const body = this.bodyBox(soldier);
       if (!shotReaches(body, box, this.foot(soldier), covers)) continue;
       this.wound(soldier, amount);
     }
@@ -149,8 +156,11 @@ export class Infantry {
     const radius = grenade.blastRadius;
     for (const soldier of this.units) {
       if (!soldier.alive) continue;
-      if (Math.hypot(soldier.x - x, soldier.y - y) > radius) continue;
-      if (pointHidden(soldier.x, soldier.y, this.foot(soldier), covers)) continue;
+      const body = this.bodyBox(soldier);
+      if (!circleHitsRect(x, y, radius, body)) continue;
+      const cx = (body.left + body.right) / 2;
+      const cy = (body.top + body.bottom) / 2;
+      if (pointHidden(cx, cy, this.foot(soldier), covers)) continue;
       this.wound(soldier, soldier.hp);
     }
     this.units = this.units.filter((soldier) => soldier.alive);
@@ -182,7 +192,7 @@ export class Infantry {
     blocks: readonly FlightBlock[],
   ): void {
     for (const shot of this.incoming) {
-      const to = columns.impact(view, shot.column);
+      const to = this.flightEnd(view, columns, shot);
       const pose = flightSample(shot.fromX, shot.fromY, to.x, to.y, shot.elapsed, shot.travelMs, blocks);
       const x = pose.x;
       const y = pose.y;
@@ -316,7 +326,7 @@ export class Infantry {
   }
 
   private launch(soldier: Soldier, view: FrameLayout, columns: FrontWall): void {
-    const to = columns.impact(view, soldier.column);
+    const to = columns.impact(view, soldier.column, { column: soldier.column, x: this.playerX });
     const dist = Math.hypot(to.x - soldier.x, to.y - soldier.y);
     const span = view.width / frame.width;
     const travelMs = Math.max(volley.minTravelMs, (dist / (volley.speed * span)) * 1000);
@@ -326,20 +336,29 @@ export class Infantry {
       travelMs,
       fromX: soldier.x,
       fromY: soldier.y - soldier.h * 0.15,
+      aimX: to.x,
     });
+  }
+
+  /** Высота следует за стеной. По горизонтали пуля держит тело, в которое целились. */
+  private flightEnd(view: FrameLayout, columns: FrontWall, shot: Shot): { x: number; y: number } {
+    return { x: shot.aimX, y: columns.impact(view, shot.column).y };
   }
 
   private wound(soldier: Soldier, amount: number): void {
     if (!soldier.alive || amount <= 0) return;
+    const mark = this.bodyBox(soldier);
+    const x = (mark.left + mark.right) / 2;
+    const y = (mark.top + mark.bottom) / 2;
     soldier.hp -= amount;
     if (soldier.hp > 0) {
       soldier.flash = 70;
-      this.sparks.add(soldier.x, soldier.y, 80, 'pop');
+      this.sparks.add(x, y, 80, 'pop');
       return;
     }
     soldier.alive = false;
     this.corpses.push(this.remains(soldier));
-    this.sparks.add(soldier.x, soldier.y, 160, 'land');
+    this.sparks.add(x, y, 160, 'land');
     this.onKill(soldier.score);
   }
 
@@ -395,6 +414,58 @@ export class Infantry {
 
   private foot(soldier: Soldier): number {
     return soldier.y + soldier.h / 2;
+  }
+
+  /** Прямоугольник непрозрачных пикселей текущей клетки. Пустая кромка кадра удар не берёт. */
+  private bodyBox(soldier: Soldier): HitBox {
+    const pose = this.pose(soldier);
+    const sheet = this.sheet();
+    const depth = soldier.h / infantry.height;
+    const dh = Math.max(1, Math.round(infantrySheet.frameHeight * depth));
+    const dw = Math.max(1, Math.round((dh * infantrySheet.frameWidth) / infantrySheet.frameHeight));
+    const foot = this.foot(soldier);
+    const left = soldier.x - dw / 2;
+    const top = foot - dh;
+    const ink = sheet ? this.frameInk(sheet, pose.frame) : null;
+    if (!ink) return centerBox(soldier.x, soldier.y, soldier.w, soldier.h);
+    const fw = infantrySheet.frameWidth;
+    const x0 = pose.flip ? fw - 1 - ink.x1 : ink.x0;
+    const x1 = pose.flip ? fw - 1 - ink.x0 : ink.x1;
+    return {
+      left: left + (x0 / fw) * dw,
+      right: left + ((x1 + 1) / fw) * dw,
+      top: top + (ink.y0 / infantrySheet.frameHeight) * dh,
+      bottom: top + ((ink.y1 + 1) / infantrySheet.frameHeight) * dh,
+    };
+  }
+
+  private frameInk(
+    sheet: ImageData,
+    frame: number,
+  ): { x0: number; y0: number; x1: number; y1: number } | null {
+    const cached = this.ink.get(frame);
+    if (cached) return cached;
+    const fw = infantrySheet.frameWidth;
+    const fh = infantrySheet.frameHeight;
+    const origin = frame * fw;
+    let x0: number = fw;
+    let y0: number = fh;
+    let x1 = -1;
+    let y1 = -1;
+    for (let y = 0; y < fh; y += 1) {
+      for (let x = 0; x < fw; x += 1) {
+        const i = (y * sheet.width + origin + x) * 4;
+        if ((sheet.data[i + 3] ?? 0) < 16) continue;
+        if (x < x0) x0 = x;
+        if (y < y0) y0 = y;
+        if (x > x1) x1 = x;
+        if (y > y1) y1 = y;
+      }
+    }
+    if (x1 < 0) return null;
+    const box = { x0, y0, x1, y1 };
+    this.ink.set(frame, box);
+    return box;
   }
 
   private pose(soldier: Soldier): { frame: number; flip: boolean } {

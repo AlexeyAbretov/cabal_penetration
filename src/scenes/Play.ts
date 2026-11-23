@@ -342,8 +342,8 @@ export class Play extends Phaser.Scene {
     if (this.soldier.rolling) this.soldier.advanceRoll(step);
     else this.soldier.step(step, input, input.firing && this.gun.acceptsTrigger(), this.aim.x, this.aim.y);
 
-    this.enemies.step(step, this.soldier.column(), this.view, this.wall);
-    this.infantry.step(step, this.soldier.column(), this.view, this.wall);
+    this.enemies.step(step, this.soldier.column(), this.view, this.wall, this.soldier.body().x);
+    this.infantry.step(step, this.soldier.column(), this.view, this.wall, this.soldier.body().x);
     if (this.cleared) {
       this.gun.quiet();
       this.stepClear(step);
@@ -378,7 +378,7 @@ export class Play extends Phaser.Scene {
         this.stopOnFence(shot.fence, shot.x, shot.y);
         continue;
       }
-      this.resolveIncoming(shot.column);
+      this.resolveIncoming(shot.column, shot.x, shot.y);
     }
     this.soldier.setAlpha(this.hud.stepHurt(step));
     this.sparks.step(step);
@@ -565,18 +565,19 @@ export class Play extends Phaser.Scene {
     if (!standing) this.sparks.add(x, y, 120, 'puff');
   }
 
-  private resolveIncoming(column: number): void {
-    const x = this.wall.columnCenter(this.view, column);
-    const section = this.fences.sectionAt(x);
+  private resolveIncoming(column: number, atX: number, atY: number): void {
+    const lane = this.wall.columnCenter(this.view, column);
+    const section = this.fences.sectionAt(lane);
     const cover = section !== null && this.wall.up(section);
     const wallUp = cover || (!this.fences.columns().has(column) && this.wall.up(column));
+    const body = this.soldier.hurtBox();
+    const reached = atX >= body.left && atX <= body.right && atY >= body.top && atY <= body.bottom;
     const verdict = resolveColumnHit({
-      column,
-      soldierColumn: this.soldier.column(),
       wallUp,
+      reached,
       invulnerable: this.soldier.rolling || this.hud.hurt,
     });
-    const point = cover ? { x, y: this.wall.geom(this.view).top } : this.wall.impact(this.view, column);
+    const point = cover ? { x: lane, y: this.wall.geom(this.view).top } : { x: atX, y: atY };
     if (verdict === 'wall') {
       this.strikeCover(section ?? column, point.x, point.y, 1);
       return;

@@ -8,18 +8,18 @@ export function columnIndex(x: number, origin: number, width: number, count: num
 }
 
 /**
- * Пуля уже выбрала колонку.
- * Целая секция ловит её. Иначе тело в этой колонке теряет жизнь,
- * если сейчас не кувырок и не мигание после ранения.
+ * Пуля уже выбрала колонку и долетела.
+ * Целая секция ловит её. Иначе жизнь снимается, только если точка
+ * попала в стойку: пустая полоса колонки вокруг тела не считается.
+ * Кувырок и мигание после ранения удар пропускают.
  */
 export function resolveColumnHit(args: {
-  column: number;
-  soldierColumn: number;
   wallUp: boolean;
+  reached: boolean;
   invulnerable: boolean;
 }): BulletVerdict {
   if (args.wallUp) return 'wall';
-  if (args.column !== args.soldierColumn) return 'miss';
+  if (!args.reached) return 'miss';
   if (args.invulnerable) return 'whiff';
   return 'hurt';
 }

@@ -55,11 +55,17 @@ export class FrontWall {
     return columns;
   }
 
-  /** Точка, куда прилетает пуля: макушка секции или середина тела, если секции нет. */
-  impact(view: FrameLayout, column: number): { x: number; y: number } {
+  /**
+   * Куда летит пуля. Целая секция — макушка по центру колонки.
+   * Открытая колонка — середина стойки по высоте и тело, если оно передано:
+   * середина широкой полосы до солдата не доходит.
+   */
+  impact(view: FrameLayout, column: number, body?: { column: number; x: number }): { x: number; y: number } {
     const geom = this.geom(view);
-    const y = this.up(column) ? geom.top : soldierBodyY(view.track);
-    return { x: this.columnCenter(view, column), y };
+    const open = !this.up(column);
+    const y = open ? soldierBodyY(view.track) : geom.top;
+    const x = open && body && body.column === column ? body.x : this.columnCenter(view, column);
+    return { x, y };
   }
 
   /**
