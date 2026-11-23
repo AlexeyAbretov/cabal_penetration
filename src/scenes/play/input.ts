@@ -67,7 +67,14 @@ export class Controls {
       this.touch.placeAim(pointer.worldX, pointer.worldY);
     });
     scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.wasTouch || this.touch.blocksMouse() || this.touch.overPause(pointer.worldX, pointer.worldY)) return;
+      if (
+        pointer.wasTouch ||
+        this.touch.blocksMouse() ||
+        this.touch.overPause(pointer.worldX, pointer.worldY) ||
+        this.touch.overHelp(pointer.worldX, pointer.worldY)
+      ) {
+        return;
+      }
       this.touch.placeAim(pointer.worldX, pointer.worldY);
       if (pointer.button !== 2) return;
       onRightClick();
@@ -94,6 +101,15 @@ export class Controls {
 
   escPressed(): boolean {
     return Phaser.Input.Keyboard.JustDown(this.keys.esc) || this.touch.takePause();
+  }
+
+  helpPressed(): boolean {
+    return this.touch.takeHelp();
+  }
+
+  /** Телефон показывает жесты, компьютер — клавиши. */
+  fingerHints(): boolean {
+    return this.touch.fingerHints();
   }
 
   /** rolling — кувырок ещё едет, даже если стик уже отпущен. С такого креста очередь не идёт. */

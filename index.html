@@ -129,6 +129,106 @@
         display: block;
         pointer-events: auto;
       }
+
+      .help-dialog {
+        position: absolute;
+        inset: 0;
+        z-index: 4;
+        display: none;
+      }
+
+      .help-dialog.is-open {
+        display: block;
+        background: rgba(0, 0, 0, 0.55);
+        pointer-events: auto;
+      }
+
+      .help-card {
+        position: absolute;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        overflow: hidden;
+        background: #1a140e;
+        border-style: solid;
+        border-color: #e7dcc4;
+        transform: translate(-50%, -50%);
+      }
+
+      .help-x {
+        position: absolute;
+        top: 0;
+        right: 0;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        padding: 0;
+        border: none;
+        background: transparent;
+        font-family: Consolas, "Courier New", monospace;
+        font-weight: 400;
+        line-height: 1;
+        color: #e7dcc4;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .help-x:hover,
+      .help-x:focus-visible {
+        background: #e7dcc4;
+        color: #1a140e;
+      }
+
+      .help-note {
+        margin: 0;
+        font-family: Consolas, "Courier New", monospace;
+        font-weight: 400;
+        line-height: 1.2;
+        color: #c2ae84;
+        text-align: center;
+        user-select: none;
+      }
+
+      .help-list {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .help-list.is-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .help-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-family: Consolas, "Courier New", monospace;
+        font-weight: 400;
+        line-height: 1.25;
+        color: #e7dcc4;
+        user-select: none;
+      }
+
+      .help-key {
+        color: #c2ae84;
+      }
+
+      .help-act {
+        text-align: right;
+      }
+
+      .help-list.is-grid .help-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .help-list.is-grid .help-act {
+        text-align: left;
+      }
     </style>
   </head>
   <body>

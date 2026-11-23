@@ -88,6 +88,8 @@ export class Play extends Phaser.Scene {
   private debris!: Debris;
   private battleGfx!: Phaser.GameObjects.Graphics;
   private paused = false;
+  /** Подсказка по кнопкам. Бой стоит, меню паузы под ней не снимается. */
+  private helpOpen = false;
   /** Старт без выбора или «Новая игра» на паузе. Бой в это время стоит. */
   private choosing: 'start' | 'restart' | null = null;
   /** Сколько жизней снимает одна вражеская пуля. */
@@ -134,6 +136,7 @@ export class Play extends Phaser.Scene {
     this.picture = marchPicture(this.march);
     this.choosing = difficultyById(this.march.difficulty) ? null : 'start';
     this.paused = false;
+    this.helpOpen = false;
     this.cleared = false;
     this.clearWait = 0;
     this.clearHold = 0;
@@ -179,6 +182,9 @@ export class Play extends Phaser.Scene {
     this.hud.setDifficultyMenu((id) => this.pickDifficulty(id));
     this.hud.setContinue(() => {
       if (this.down) this.acceptRestart();
+    });
+    this.hud.setHelpMenu(() => {
+      if (this.helpOpen) this.setHelp(false);
     });
     this.grenades = new Grenades(this, this.sparks);
     this.grenades.setStock(this.march.grenades);
@@ -309,10 +315,15 @@ export class Play extends Phaser.Scene {
       this.scene.restart(next);
       return;
     }
+    const helpPressed = this.controls.helpPressed();
+    if (helpPressed && !this.down && this.clearWait <= 0 && !this.cleared && this.choosing !== 'start') {
+      this.setHelp(!this.helpOpen);
+    }
     if (this.choosing) {
       this.gun.quiet();
       this.controls.sample();
-      if (this.choosing === 'restart' && this.controls.escPressed()) {
+      if (this.helpOpen && this.controls.escPressed()) this.setHelp(false);
+      else if (this.choosing === 'restart' && this.controls.escPressed()) {
         this.choosing = null;
         this.hud.setHold('pause');
       }
@@ -324,8 +335,11 @@ export class Play extends Phaser.Scene {
       this.drawBattle();
       return;
     }
-    if (this.controls.escPressed() && !this.down && this.clearWait <= 0) this.setPaused(!this.paused);
-    if (this.paused || this.down) {
+    if (this.controls.escPressed() && !this.down && this.clearWait <= 0) {
+      if (this.helpOpen) this.setHelp(false);
+      else this.setPaused(!this.paused);
+    }
+    if (this.paused || this.down || this.helpOpen) {
       this.gun.quiet();
       this.controls.sample();
       return;
@@ -400,7 +414,15 @@ export class Play extends Phaser.Scene {
 
   /** Смена картинки из рамки. Счёт, жизни и гранаты остаются, ствол сгорает вместе со сценой. */
   private jumpPicture(index: number): void {
-    if (index === this.march.picture || this.handoff || this.cleared || this.clearWait > 0 || this.down || this.choosing) {
+    if (
+      index === this.march.picture ||
+      this.handoff ||
+      this.cleared ||
+      this.clearWait > 0 ||
+      this.down ||
+      this.choosing ||
+      this.helpOpen
+    ) {
       return;
     }
     const level = route[this.march.level];
@@ -416,7 +438,7 @@ export class Play extends Phaser.Scene {
   }
 
   private onRightClick(): void {
-    if (!this.view || this.paused || this.choosing || this.cleared || this.down) return;
+    if (!this.view || this.paused || this.helpOpen || this.choosing || this.cleared || this.down) return;
     const pointer = this.controls.pointer;
     if (!pointer) return;
     this.aim.aimAt(pointer.x, pointer.y, aimBounds(this.view));
@@ -482,7 +504,7 @@ export class Play extends Phaser.Scene {
 
   private throwGrenade(): void {
     this.grenades.throw({
-      paused: this.paused,
+      paused: this.paused || this.helpOpen,
       rolling: this.soldier.rolling,
       from: this.soldier.muzzlePoint(),
       aimX: this.aim.x,
@@ -782,6 +804,18 @@ export class Play extends Phaser.Scene {
     this.hud.setHold(paused ? 'pause' : null);
     if (paused) this.tweens.pauseAll();
     else this.tweens.resumeAll();
+  }
+
+  /** Список клавиш или жестов. Поверх паузы бой так и остаётся на паузе. */
+  private setHelp(open: boolean): void {
+    if (open === this.helpOpen) return;
+    this.helpOpen = open;
+    this.hud.setHelp(open, this.controls.fingerHints());
+    if (open) {
+      this.tweens.pauseAll();
+      return;
+    }
+    if (!this.paused && !this.choosing && !this.down) this.tweens.resumeAll();
   }
 }
 

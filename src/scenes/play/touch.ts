@@ -26,7 +26,7 @@ export const touchGrenade = {
 
 type Circle = { x: number; y: number; r: number };
 
-type Hold = 'stick' | 'aim' | 'grenade' | 'pause';
+type Hold = 'stick' | 'aim' | 'grenade' | 'pause' | 'help';
 
 /**
  * Палец. Слева стик: вбок шаг, у края бег, прямо вниз колено.
@@ -34,6 +34,7 @@ type Hold = 'stick' | 'aim' | 'grenade' | 'pause';
  * Справа палец тащит крест и не переносит его на себя. Тот же палец стреляет, пока солдат стоит.
  * Гранату жмут над стиком, не отпуская очередь.
  * Кнопку паузы в углу видит и мышь: щелчок по ней не ведёт крест и не стреляет.
+ * Слева от неё такая же кнопка помощи.
  */
 export class TouchLayer {
   private readonly input: Phaser.Input.InputPlugin;
@@ -57,6 +58,7 @@ export class TouchLayer {
   private grenadeBtn: Circle = { x: 0, y: 0, r: 1 };
   private aimRest: Circle = { x: 0, y: 0, r: 1 };
   private pauseBtn: Circle = { x: 0, y: 0, r: 1 };
+  private helpBtn: Circle = { x: 0, y: 0, r: 1 };
   private nx = 0;
   private ny = 0;
   /** Первое нажатие стика в сторону. Второе в ту же сторону за окно даёт перекат. */
@@ -66,8 +68,10 @@ export class TouchLayer {
   private shiftHeld = false;
   private grenadeEdge = false;
   private pauseEdge = false;
-  /** Левая кнопка мыши зажата на паузе. Пока так, крест стоит и очередь молчит. */
+  private helpEdge = false;
+  /** Левая кнопка мыши зажата на паузе или помощи. Пока так, крест стоит и очередь молчит. */
   private mousePause = false;
+  private mouseHelp = false;
   /** Крест сейчас ещё и спуск: палец на нём, стик тело не ведёт. */
   private aimFiring = false;
 
@@ -170,14 +174,30 @@ export class TouchLayer {
     return pressed;
   }
 
-  /** Щелчок мыши пришёлся в кнопку паузы и кнопка ещё зажата. */
+  takeHelp(): boolean {
+    const pressed = this.helpEdge;
+    this.helpEdge = false;
+    return pressed;
+  }
+
+  /** Телефон: в подсказке жесты. Компьютер: клавиши и мышь. */
+  fingerHints(): boolean {
+    return !!this.coarse?.matches;
+  }
+
+  /** Щелчок мыши пришёлся в кнопку паузы или помощи и кнопка ещё зажата. */
   blocksMouse(): boolean {
-    return this.mousePause;
+    return this.mousePause || this.mouseHelp;
   }
 
   /** Точка на круге паузы. Слой ввода читает это раньше, чем поставит крест. */
   overPause(x: number, y: number): boolean {
     return this.hitPause(x, y);
+  }
+
+  /** Точка на круге помощи. Щелчок не ведёт крест и не стреляет. */
+  overHelp(x: number, y: number): boolean {
+    return this.hitHelp(x, y);
   }
 
   private body(): Pick<TouchMove, 'left' | 'right' | 'shift' | 'shiftPressed' | 'kneel' | 'ctrlPressed' | 'locomoting'> {
@@ -238,6 +258,7 @@ export class TouchLayer {
     const pauseRight = 14 + pauseR;
     const pauseTop = 10 + pauseR;
     this.pauseBtn = { x: this.width - pauseRight, y: pauseTop, r: pauseR };
+    this.helpBtn = { x: this.pauseBtn.x - pauseR * 2 - 8, y: pauseTop, r: pauseR };
   }
 
   private readonly onCoarse = (): void => {
@@ -258,6 +279,9 @@ export class TouchLayer {
       if (this.hitPause(x, y)) {
         this.mousePause = true;
         if (pointer.button === 0) this.pauseEdge = true;
+      } else if (this.hitHelp(x, y)) {
+        this.mouseHelp = true;
+        if (pointer.button === 0) this.helpEdge = true;
       }
       return;
     }
@@ -266,6 +290,11 @@ export class TouchLayer {
     if (this.hitPause(x, y)) {
       this.pauseEdge = true;
       this.owns.set(pointer.id, 'pause');
+      return;
+    }
+    if (this.hitHelp(x, y)) {
+      this.helpEdge = true;
+      this.owns.set(pointer.id, 'help');
       return;
     }
     if (this.chrome !== 'play') return;
@@ -304,6 +333,7 @@ export class TouchLayer {
   private readonly onUp = (pointer: Phaser.Input.Pointer): void => {
     if (!pointer.wasTouch) {
       this.mousePause = false;
+      this.mouseHelp = false;
       return;
     }
     this.noteTouch();
@@ -349,7 +379,7 @@ export class TouchLayer {
 
   private releasePlay(): void {
     for (const [id, kind] of this.owns) {
-      if (kind === 'pause') continue;
+      if (kind === 'pause' || kind === 'help') continue;
       this.owns.delete(id);
       this.aimLast.delete(id);
     }
@@ -370,8 +400,15 @@ export class TouchLayer {
 
   /** Бой и пауза. На смерти и на первом выборе сложности кнопки нет. */
   private hitPause(x: number, y: number): boolean {
-    if (this.width <= 0 || (this.chrome !== 'play' && this.chrome !== 'pause')) return false;
-    return this.hit(this.pauseBtn, x, y, 1.15);
+    return this.cornerLive() && this.hit(this.pauseBtn, x, y, 1.15);
+  }
+
+  private hitHelp(x: number, y: number): boolean {
+    return this.cornerLive() && this.hit(this.helpBtn, x, y, 1.15);
+  }
+
+  private cornerLive(): boolean {
+    return this.width > 0 && (this.chrome === 'play' || this.chrome === 'pause');
   }
 
   private hit(circle: Circle, x: number, y: number, slop: number): boolean {
@@ -386,6 +423,7 @@ export class TouchLayer {
     this.grenadeIcon?.setVisible(false);
     if (this.chrome === 'off' || this.chrome === 'down' || this.width <= 0) return;
     this.paintPause();
+    this.paintHelp();
     if (!this.shown || this.chrome !== 'play') return;
     this.paintStick();
     this.paintGrenade();
@@ -441,6 +479,24 @@ export class TouchLayer {
     const h = Math.round(r * 0.7);
     this.gfx.fillRect(x - Math.round(5 * scale), y - h / 2, w, h);
     this.gfx.fillRect(x + Math.round(2 * scale), y - h / 2, w, h);
+  }
+
+  /** Знак вопроса из клеток, чтобы на мелкой кнопке он не расплылся. */
+  private paintHelp(): void {
+    const { x, y, r } = this.helpBtn;
+    this.ring(x, y, r, 0.4, r < 22 ? 1 : 2);
+    const cell = r < 22 ? 1 : 2;
+    const glyph = [' ### ', '#   #', '    #', '   # ', '  #  ', '     ', '  #  '];
+    const left = Math.round(x - (5 * cell) / 2);
+    const top = Math.round(y - (glyph.length * cell) / 2);
+    this.gfx.fillStyle(palette.ink, 0.95);
+    for (let row = 0; row < glyph.length; row += 1) {
+      const line = glyph[row] ?? '';
+      for (let col = 0; col < line.length; col += 1) {
+        if (line[col] !== '#') continue;
+        this.gfx.fillRect(left + col * cell, top + row * cell, cell, cell);
+      }
+    }
   }
 
   private ring(x: number, y: number, r: number, alpha: number, stroke = 2): void {

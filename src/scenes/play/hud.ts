@@ -75,6 +75,15 @@ export class Hud {
   private readonly difficultyButtons: HTMLButtonElement[];
   private readonly continueButton: HTMLButtonElement;
   private onContinue: (() => void) | null = null;
+  private helpCloseAction: (() => void) | null = null;
+  /** Первые миллисекунды после открытия щелчок сквозь кнопку не закрывает диалог. */
+  private helpGuard = 0;
+  private readonly helpDialog: HTMLDivElement;
+  private readonly helpCard: HTMLDivElement;
+  private readonly helpTitle: HTMLParagraphElement;
+  private readonly helpNote: HTMLParagraphElement;
+  private readonly helpList: HTMLDivElement;
+  private readonly helpClose: HTMLButtonElement;
   private frameHeight = 0;
 
   constructor(scene: Phaser.Scene, layer: Phaser.GameObjects.Container) {
@@ -93,6 +102,17 @@ export class Hud {
     this.difficultyTitle = difficulty.title;
     this.difficultyButtons = difficulty.buttons;
     this.continueButton = mountContinueButton(this.figures.root, () => this.onContinue?.());
+    const help = mountHelpDialog(
+      this.figures.root,
+      () => this.helpCloseAction?.(),
+      () => performance.now() >= this.helpGuard,
+    );
+    this.helpDialog = help.dialog;
+    this.helpCard = help.card;
+    this.helpTitle = help.title;
+    this.helpNote = help.note;
+    this.helpList = help.list;
+    this.helpClose = help.close;
     this.heart = hudIcon(scene, hudIcons.heart);
     this.livesText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5).setVisible(false);
     this.scoreText = scene.add.text(0, 0, '', font).setOrigin(0, 0.5).setVisible(false);
@@ -180,6 +200,22 @@ export class Hud {
   /** «ДАЛЬШЕ» на нуле жизней. Enter эту кнопку не жмёт. */
   setContinue(go: () => void): void {
     this.onContinue = go;
+  }
+
+  /** Крестик, Esc и щелчок по затемнению. */
+  setHelpMenu(close: () => void): void {
+    this.helpCloseAction = close;
+  }
+
+  /** Подсказка. finger — жесты телефона, иначе клавиши и мышь. */
+  setHelp(open: boolean, finger: boolean): void {
+    this.helpNote.textContent = finger ? 'Палец' : 'Клавиатура и мышь';
+    fillHelpRows(this.helpList, finger ? fingerHints : keyHints);
+    this.helpDialog.classList.toggle('is-open', open);
+    this.pauseMenu.style.visibility = open ? 'hidden' : '';
+    this.difficultyMenu.style.visibility = open ? 'hidden' : '';
+    this.helpGuard = open ? performance.now() + 400 : 0;
+    if (open) this.placeHelp();
   }
 
   /** Заход или континуэ. Полоска сцены при этом не трогается. */
@@ -316,6 +352,7 @@ export class Hud {
       this.placeOverlay(this.difficultyMenu, this.difficultyTitle, this.difficultyButtons);
     }
     if (this.continueButton.classList.contains('is-open')) this.placeContinue();
+    if (this.helpDialog.classList.contains('is-open')) this.placeHelp();
   }
 
   /** «ПОГИБ» над строкой попыток. Длинная строка мельчает, чтобы влезть в кадр. */
@@ -361,6 +398,36 @@ export class Hud {
     }
     menu.style.left = `${canvas.offsetLeft + (canvas.width / 2) * scaleX}px`;
     menu.style.top = `${canvas.offsetTop + (canvas.height / 2) * scaleY}px`;
+  }
+
+  /** Карточка по центру кадра. На низком окне строки встают в две колонки. */
+  private placeHelp(): void {
+    const canvas = this.scene.game.canvas;
+    if (canvas.width === 0 || canvas.height === 0) return;
+    const scaleX = canvas.clientWidth / canvas.width;
+    const scaleY = canvas.clientHeight / canvas.height;
+    const card = this.helpCard;
+    const short = canvas.clientHeight < 520;
+    this.helpList.classList.toggle('is-grid', short);
+    card.style.left = `${canvas.offsetLeft + (canvas.width / 2) * scaleX}px`;
+    card.style.top = `${canvas.offsetTop + (canvas.height / 2) * scaleY}px`;
+    card.style.width = `${Math.min(canvas.clientWidth * 0.92, 460 * scaleX)}px`;
+    const cross = Math.max(28, Math.round(32 * scaleY));
+    card.style.gap = `${10 * scaleY}px`;
+    card.style.padding = `${cross}px ${16 * scaleX}px ${14 * scaleY}px`;
+    card.style.borderWidth = `${Math.max(2, Math.round(2 * scaleY))}px`;
+    this.helpTitle.style.fontSize = `${28 * scaleY}px`;
+    this.helpNote.style.fontSize = `${16 * scaleY}px`;
+    const rowPx = `${(short ? 15 : 18) * scaleY}px`;
+    const rowGap = `${(short ? 8 : 14) * scaleX}px`;
+    for (const row of this.helpList.querySelectorAll<HTMLElement>('.help-row')) {
+      row.style.fontSize = rowPx;
+      row.style.gap = short ? `${2 * scaleY}px` : rowGap;
+    }
+    this.helpList.style.gap = `${8 * scaleY}px`;
+    this.helpClose.style.width = `${cross}px`;
+    this.helpClose.style.height = `${cross}px`;
+    this.helpClose.style.fontSize = `${Math.round(cross * 0.72)}px`;
   }
 
   /** Справа в рамке, от правого края. Текущая картинка уже помечена классом. */
@@ -569,6 +636,94 @@ function mountDifficultyMenu(
   });
   root.append(menu);
   return { menu, title, buttons };
+}
+
+const keyHints: { key: string; act: string }[] = [
+  { key: 'Мышь', act: 'Прицел' },
+  { key: 'Левая кнопка', act: 'Очередь, ноги стоят' },
+  { key: 'Правая, G', act: 'Граната' },
+  { key: 'A, D, стрелки', act: 'Шаг' },
+  { key: 'Shift и направление', act: 'Бег' },
+  { key: 'S, стрелка вниз', act: 'Колено' },
+  { key: 'Ctrl и направление', act: 'Перекат' },
+  { key: 'Esc', act: 'Пауза' },
+  { key: 'Наступить', act: 'Подбор' },
+];
+
+const fingerHints: { key: string; act: string }[] = [
+  { key: 'Стик вбок', act: 'Шаг' },
+  { key: 'Стик к краю', act: 'Бег' },
+  { key: 'Стик вниз', act: 'Колено' },
+  { key: 'Дважды в сторону', act: 'Перекат' },
+  { key: 'Палец справа', act: 'Прицел и огонь стоя' },
+  { key: 'Круг над стиком', act: 'Граната' },
+  { key: 'Кнопка в углу', act: 'Пауза' },
+  { key: 'Наступить', act: 'Подбор' },
+];
+
+function fillHelpRows(list: HTMLElement, rows: readonly { key: string; act: string }[]): void {
+  list.replaceChildren();
+  for (const row of rows) {
+    const line = document.createElement('div');
+    line.className = 'help-row';
+    const key = document.createElement('span');
+    key.className = 'help-key';
+    key.textContent = row.key;
+    const act = document.createElement('span');
+    act.className = 'help-act';
+    act.textContent = row.act;
+    line.append(key, act);
+    list.append(line);
+  }
+}
+
+function mountHelpDialog(
+  root: HTMLElement,
+  close: () => void,
+  scrimReady: () => boolean,
+): {
+  dialog: HTMLDivElement;
+  card: HTMLDivElement;
+  title: HTMLParagraphElement;
+  note: HTMLParagraphElement;
+  list: HTMLDivElement;
+  close: HTMLButtonElement;
+} {
+  const dialog = document.createElement('div');
+  dialog.className = 'help-dialog';
+  const card = document.createElement('div');
+  card.className = 'help-card';
+  const title = document.createElement('p');
+  title.className = 'pause-title';
+  title.textContent = 'УПРАВЛЕНИЕ';
+  const note = document.createElement('p');
+  note.className = 'help-note';
+  const list = document.createElement('div');
+  list.className = 'help-list';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'help-x';
+  button.textContent = '×';
+  button.setAttribute('aria-label', 'Закрыть');
+  button.addEventListener('mousedown', (event) => event.preventDefault());
+  button.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') event.preventDefault();
+  });
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    button.blur();
+    close();
+  });
+  card.append(title, note, list, button);
+  dialog.append(card);
+  dialog.addEventListener('mousedown', (event) => event.preventDefault());
+  dialog.addEventListener('click', (event) => {
+    if (event.target !== dialog || !scrimReady()) return;
+    close();
+  });
+  root.append(dialog);
+  return { dialog, card, title, note, list, close: button };
 }
 
 function inkFont(size: string): Phaser.Types.GameObjects.Text.TextStyle {
