@@ -345,7 +345,7 @@ export class Infantry {
 
   /** Высота следует за стеной. По горизонтали пуля держит тело, в которое целились. */
   private flightEnd(view: FrameLayout, columns: FrontWall, shot: Shot): { x: number; y: number } {
-    return { x: shot.aimX, y: columns.impact(view, shot.column).y };
+    return columns.impact(view, shot.column, { column: shot.column, x: shot.aimX });
   }
 
   private wound(soldier: Soldier, amount: number): void {

@@ -588,10 +588,10 @@ export class Play extends Phaser.Scene {
   }
 
   private resolveIncoming(column: number, atX: number, atY: number): void {
-    const lane = this.wall.columnCenter(this.view, column);
-    const section = this.fences.sectionAt(lane);
+    const section = this.fences.sectionAt(atX);
     const cover = section !== null && this.wall.up(section);
-    const wallUp = cover || (!this.fences.columns().has(column) && this.wall.up(column));
+    const bare = !this.fences.columns().has(column) && this.wall.covers(this.view, column, atX);
+    const wallUp = cover || bare;
     const body = this.soldier.hurtBox();
     const reached = atX >= body.left && atX <= body.right && atY >= body.top && atY <= body.bottom;
     const verdict = resolveColumnHit({
@@ -599,7 +599,7 @@ export class Play extends Phaser.Scene {
       reached,
       invulnerable: this.soldier.rolling || this.hud.hurt,
     });
-    const point = cover ? { x: lane, y: this.wall.geom(this.view).top } : { x: atX, y: atY };
+    const point = cover ? { x: atX, y: this.wall.geom(this.view).top } : { x: atX, y: atY };
     if (verdict === 'wall') {
       this.strikeCover(section ?? column, point.x, point.y, 1);
       return;

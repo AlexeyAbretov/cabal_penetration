@@ -17,9 +17,18 @@ export type WallGeom = {
 /** Передняя стена по колонкам дорожки. Целая секция закрывает тело. */
 export class FrontWall {
   private readonly hp: number[];
+  /** Кладка листа. null — лица ещё нет, голая секция берёт всю полосу колонки. */
+  private readonly face: ({ left: number; right: number } | null)[];
 
   constructor(mask: readonly boolean[]) {
     this.hp = mask.map((up) => (up ? wall.hits : 0));
+    this.face = mask.map(() => null);
+  }
+
+  /** Горизонталь непрозрачной кладки. Лист уже сдвинут встык и колонку целиком не держит. */
+  setFace(column: number, face: { left: number; right: number } | null): void {
+    if (column < 0 || column >= this.face.length) return;
+    this.face[column] = face;
   }
 
   up(column: number): boolean {
@@ -56,16 +65,25 @@ export class FrontWall {
   }
 
   /**
-   * Куда летит пуля. Целая секция — макушка по центру колонки.
-   * Открытая колонка — середина стойки по высоте и тело, если оно передано:
-   * середина широкой полосы до солдата не доходит.
+   * Куда летит пуля. Горизонталь — тело, если оно передано.
+   * Высота — макушка стены, только когда кладка закрывает эту точку.
+   * Сдвинутый лист оставляет пустую полосу колонки: туда пуля идёт в стойку.
    */
   impact(view: FrameLayout, column: number, body?: { column: number; x: number }): { x: number; y: number } {
     const geom = this.geom(view);
-    const open = !this.up(column);
-    const y = open ? soldierBodyY(view.track) : geom.top;
-    const x = open && body && body.column === column ? body.x : this.columnCenter(view, column);
+    const x = body && body.column === column ? body.x : this.columnCenter(view, column);
+    const y = this.covers(view, column, x) ? geom.top : soldierBodyY(view.track);
     return { x, y };
+  }
+
+  /** Стоящая кладка закрывает x. Лист — по своим чернилам, голая секция — по всей полосе. */
+  covers(view: FrameLayout, column: number, x: number): boolean {
+    if (!this.up(column)) return false;
+    const ink = this.face[column];
+    if (ink) return x >= ink.left && x < ink.right;
+    const stone = this.stoneRect(view, column);
+    if (!stone) return false;
+    return x >= stone.left && x < stone.right;
   }
 
   /**

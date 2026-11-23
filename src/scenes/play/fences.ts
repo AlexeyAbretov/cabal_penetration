@@ -158,6 +158,7 @@ export class Fences {
       const x = centers.get(piece.column) ?? Math.round(front.columnCenter(view, piece.column));
       if (piece.gone) {
         piece.hit = null;
+        front.setFace(piece.column, null);
         const ruin = fenceRuinKey(piece.kind, piece.column % ruinVariants);
         if (sprite.texture.key !== ruin) sprite.setTexture(ruin);
         sprite.setPosition(x, bottom);
@@ -168,6 +169,7 @@ export class Fences {
       sprite.setPosition(x, bottom);
       sprite.setDisplaySize(width, height);
       piece.hit = inkRect(piece.kind, x, bottom, width, height);
+      front.setFace(piece.column, { left: piece.hit.left, right: piece.hit.right });
       sprite.setVisible(true);
       if (front.up(piece.column) || piece.breaking) continue;
       piece.breaking = true;
