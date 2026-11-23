@@ -372,6 +372,8 @@ export class Play extends Phaser.Scene {
       aimX: this.aim.x,
       aimY: this.aim.y,
       muzzlePoint: () => this.soldier.barrelPoint(),
+      gripPoint: () => this.soldier.gripPoint(),
+      bodyCovers: (x, y) => this.soldier.covers(x, y),
       onShot: (from, at, mark) => {
         this.aim.flash();
         this.resolvePlayerShot(from, at, mark);

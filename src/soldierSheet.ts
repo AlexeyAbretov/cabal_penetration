@@ -5,8 +5,10 @@ import { rollMove, soldierBox } from './constants';
  * Контракт листа. Кадр 32×48, хитбокс боя остаётся 32×44:
  * четыре верхних пикселя торчат над прямоугольником.
  * Ряд — это анимация, пустые клетки ряда прозрачные.
- * Файл кладётся в public/assets/soldier.png и грузится как assets/soldier.png.
+ * Собирает tools/pack_soldier.py из public/assets/character.
+ * Файл — public/assets/soldier.png, в игре assets/soldier.png.
  * Пока файла нет или размер другой, на дорожке остаётся прямоугольник.
+ * Веер рисует код: вбок берётся кадр шага и зеркало, прямо — стойка или колено.
  */
 export const soldierSheet = {
   key: 'soldier',
@@ -28,45 +30,24 @@ function rollRate(frames: number, durationMs: number): number {
  */
 export const soldierClips = {
   stand: { anim: 'stand', row: 0, frames: 4, frameRate: 5, repeat: -1 },
-  kneel: { anim: 'kneel', row: 1, frames: 4, frameRate: 4, repeat: -1 },
+  kneel: { anim: 'kneel', row: 1, frames: 4, frameRate: 5, repeat: -1 },
   walk: { anim: 'walk', row: 2, frames: 8, frameRate: 12, repeat: -1 },
   run: { anim: 'run', row: 3, frames: 8, frameRate: 18, repeat: -1 },
   rollShort: {
     anim: 'roll-short',
     row: 4,
-    frames: 4,
-    frameRate: rollRate(4, rollMove.short.durationMs),
+    frames: 6,
+    frameRate: rollRate(6, rollMove.short.durationMs),
     repeat: 0,
   },
 } as const;
 
-/** Веер не крутится: клетка 0–2 низко, 3–5 выше, слева направо. Ряд 6 стоя, ряд 7 с колена. */
-export const aimRows = { stand: 6, kneel: 7 } as const;
-
-/** Центр вспышки у дула, пиксель кадра 32×48. Порядок тот же, что у колонок веера. */
-export const aimMuzzle = {
-  stand: [
-    { x: 2, y: 16 },
-    { x: 19, y: 12 },
-    { x: 31, y: 16 },
-    { x: 4, y: 7 },
-    { x: 18, y: 4 },
-    { x: 30, y: 7 },
-  ],
-  kneel: [
-    { x: 2, y: 24 },
-    { x: 19, y: 20 },
-    { x: 31, y: 24 },
-    { x: 4, y: 15 },
-    { x: 18, y: 12 },
-    { x: 30, y: 15 },
-  ],
-} as const;
-
-export function aimFrame(kneeling: boolean, column: number): number {
-  const row = kneeling ? aimRows.kneel : aimRows.stand;
-  return row * soldierSheet.columns + column;
-}
+/**
+ * Кадр шага, который держится, пока очередь смотрит вбок.
+ * Ряд нарисован вправо. Влево игра зеркалит его, как обычный шаг.
+ * Ряды 6 и 7 листа пустые: веер рисует код, не клетка.
+ */
+export const aimSideFrame = soldierClips.walk.row * soldierSheet.columns + 2;
 
 export type SoldierClipName = keyof typeof soldierClips;
 

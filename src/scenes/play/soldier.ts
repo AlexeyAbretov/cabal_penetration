@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { aimFan, frame, kneelScale, motion, palette, rollMove, soldierBox } from '../../constants';
 import { soldierFeetY, type FrameLayout } from '../../layout';
-import { aimFrame, aimMuzzle, soldierAnimKey, soldierSheet, type SoldierClipName } from '../../soldierSheet';
+import { aimSideFrame, soldierAnimKey, soldierSheet, type SoldierClipName } from '../../soldierSheet';
 import type { MoveInput } from './input';
 import type { FrontWall } from './wall';
 
@@ -35,12 +35,18 @@ export class Soldier {
   private angle = 0;
   private fill: number = palette.soldier;
   private alpha = 1;
+  /** Непрозрачные пиксели текущего кадра. Ствол по ним не рисуется. */
+  private inkName = '';
+  private ink: Uint8Array | null = null;
   /** Бег держится, пока Shift в связке с направлением. Огонь и перекат связку рвут. */
   private runLatched = false;
   private kneeling = false;
   private firing = false;
   /** 0–2 низко влево/прямо/вправо, 3–5 то же выше. Пока очередь не идёт, не читается. */
   private aimColumn = 4;
+  /** Куда смотрел крест в последний выстрел. Язык отсчитывается от этой точки. */
+  private aimX = 0;
+  private aimY = 0;
   private gait: 'stand' | 'walk' | 'run' = 'stand';
   /** 1 — ряд листа как нарисован, вправо. -1 — зеркало того же ряда. */
   private face: -1 | 1 = 1;
@@ -247,6 +253,57 @@ export class Soldier {
     this.alpha = alpha;
   }
 
+  /**
+   * Пиксель кадра непрозрачный. Мигание после ранения альфу спрайта роняет,
+   * но дырки в текстуре от этого не появляются: ствол под телом не кладётся.
+   */
+  covers(x: number, y: number): boolean {
+    const sprite = this.sprite;
+    if (!sprite) {
+      const left = this.cx - this.bodyW / 2;
+      const top = this.cy - this.bodyH / 2;
+      return x >= left && x < left + this.bodyW && y >= top && y < top + this.bodyH;
+    }
+    const ink = this.frameInk(sprite);
+    if (!ink) return false;
+    const { frameWidth, frameHeight } = soldierSheet;
+    let lx = Math.round(x) - (this.cx - frameWidth / 2);
+    const ly = Math.round(y) - (this.feetY - frameHeight);
+    if (sprite.flipX) lx = frameWidth - 1 - lx;
+    if (lx < 0 || ly < 0 || lx >= frameWidth || ly >= frameHeight) return false;
+    return ink[ly * frameWidth + lx] === 1;
+  }
+
+  private frameInk(sprite: Phaser.GameObjects.Sprite): Uint8Array | null {
+    const name = sprite.frame.name;
+    if (this.ink && this.inkName === name) return this.ink;
+    const image = sprite.frame.source.image;
+    if (!image) return null;
+    const { frameWidth, frameHeight } = soldierSheet;
+    const canvas = document.createElement('canvas');
+    canvas.width = frameWidth;
+    canvas.height = frameHeight;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(
+      image,
+      sprite.frame.cutX,
+      sprite.frame.cutY,
+      frameWidth,
+      frameHeight,
+      0,
+      0,
+      frameWidth,
+      frameHeight,
+    );
+    const data = ctx.getImageData(0, 0, frameWidth, frameHeight).data;
+    const ink = new Uint8Array(frameWidth * frameHeight);
+    for (let i = 0; i < ink.length; i += 1) ink[i] = (data[i * 4 + 3] ?? 0) >= 128 ? 1 : 0;
+    this.ink = ink;
+    this.inkName = name;
+    return ink;
+  }
+
   /** Центр и размер хитбокса. Подбор смотрит на тело, не на кнопку. */
   body(): { x: number; y: number; w: number; h: number } {
     return { x: this.cx, y: this.cy, w: this.bodyW, h: this.bodyH };
@@ -267,14 +324,47 @@ export class Soldier {
     return { x: this.cx, y: this.cy - this.bodyH / 2 };
   }
 
-  /** Дуло текущей клетки веера. Очередь стартует отсюда, не от макушки. */
+  /** Плечо или грудь. Отсюда чёрное дуло идёт к вспышке. */
+  gripPoint(): { x: number; y: number } {
+    if (!this.sprite) return this.muzzlePoint();
+    const side = this.aimSide();
+    const { frameHeight } = soldierSheet;
+    const grip = this.kneeling
+      ? { x: side * 4, y: 22 }
+      : side === 0
+        ? { x: 0, y: 18 }
+        : { x: side * 2, y: 18 };
+    return {
+      x: Math.round(this.cx + grip.x),
+      y: Math.round(this.feetY - frameHeight + grip.y),
+    };
+  }
+
+  /**
+   * Передний край, не спина. Прямо — макушка в поле.
+   * Вбок — грудь кадра, который смотрит в сторону выстрела.
+   * Точка ещё сдвигается к кресту, чтобы язык не лежал на теле.
+   */
   barrelPoint(): { x: number; y: number } {
     if (!this.sprite) return this.muzzlePoint();
-    const tip = (this.kneeling ? aimMuzzle.kneel : aimMuzzle.stand)[this.aimColumn];
-    const { frameWidth, frameHeight } = soldierSheet;
+    const side = this.aimSide();
+    const { frameHeight } = soldierSheet;
+    const front = this.kneeling && side !== 0
+      ? { x: side * 14, y: 16 }
+      : side === 0
+        ? { x: 0, y: this.kneeling ? 6 : 4 }
+        : { x: side * 8, y: 12 };
+    const raw = {
+      x: this.cx + front.x,
+      y: this.feetY - frameHeight + front.y,
+    };
+    const dx = this.aimX - raw.x;
+    const dy = this.aimY - raw.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const nudge = Math.min(6, dist / 2);
     return {
-      x: Math.round(this.cx + tip.x + 0.5 - frameWidth / 2),
-      y: Math.round(this.feetY - frameHeight + tip.y + 0.5),
+      x: Math.round(raw.x + (dx / dist) * nudge),
+      y: Math.round(raw.y + (dy / dist) * nudge),
     };
   }
 
@@ -304,10 +394,12 @@ export class Soldier {
     else if (input.left) this.face = -1;
   }
 
-  /** Три клетки от ног, две по высоте поля. Зеркало шага сюда не подставляется. */
+  /** Три клетки от ног, две по высоте поля. Вбок корпус зеркалится, как шаг. */
   private look(aimX: number, aimY: number): void {
     const view = this.view;
     if (!view) return;
+    this.aimX = aimX;
+    this.aimY = aimY;
     const field = view.field;
     const band = Math.max(36, view.width * aimFan.across);
     const dx = aimX - this.cx;
@@ -316,14 +408,36 @@ export class Soldier {
     this.aimColumn = across + (high ? 3 : 0);
   }
 
+  /** -1 влево, 1 вправо, 0 прямо в поле. */
+  private aimSide(): -1 | 0 | 1 {
+    const across = this.aimColumn % 3;
+    if (across === 0) return -1;
+    if (across === 2) return 1;
+    return 0;
+  }
+
+  /**
+   * Прямо — стойка или колено, спиной в поле.
+   * Вбок — один кадр шага. Он нарисован вправо, влево зеркало, как у хода.
+   * Колено своего бокового кадра не имеет: зеркало переносит ствол, он нарисован влево.
+   */
   private showAim(sprite: Phaser.GameObjects.Sprite): void {
-    sprite.setFlipX(false);
-    const index = aimFrame(this.kneeling, this.aimColumn);
-    const key = `aim-${index}`;
+    const side = this.aimSide();
+    if (this.kneeling || side === 0) {
+      sprite.setFlipX(this.kneeling && side > 0);
+      const key = soldierAnimKey(this.kneeling ? 'kneel' : 'stand');
+      if (this.clip !== key) {
+        this.clip = key;
+        sprite.play(key);
+      }
+      return;
+    }
+    sprite.setFlipX(side < 0);
+    const key = 'aim-side';
     if (this.clip === key) return;
     this.clip = key;
     sprite.anims.stop();
-    sprite.setFrame(index);
+    sprite.setFrame(aimSideFrame);
   }
 
   /** Стойка смотрит в поле. Зеркало только у хода: шаг, бег, перекат. */

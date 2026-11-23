@@ -1,19 +1,7 @@
-"""Свой лист солдата, пиксель в пиксель. Не копия кадров TAD и Rare.
+"""Прежний лист, нарисованный пикселями в этом файле.
 
-Стойка — спина в поле. Шаг и бег доворачивают ноги вправо вдоль дорожки.
-Влево игру зеркалит код. Колено, перекат и вспышка — тот же человек, чтобы
-пустые клетки листа не гасили позу.
-
-Палитра:
-  контур   #1a140e
-  шлем     #c6b24a  свет #e4d078  тень #7a6828
-  кожа     #d09870
-  форма    #3a4a28  свет #7a8a52  тень #243018
-  ранец    #2a341c
-  ботинок  #6a4030  подошва #3e2418
-  дерево   #8a5c32
-  ствол    #5c5a56  блик #c8c4b4
-  вспышка  #fff6d0
+Игра его больше не берёт. Лист собирает tools/pack_soldier.py
+из роликов public/assets/character. Запуск этого скрипта файл не пишет.
 """
 
 from __future__ import annotations
@@ -423,9 +411,10 @@ def write_png(path: Path, pixels: list[list[tuple[int, int, int, int]]]) -> None
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parents[1]
-    write_png(root / "public" / "assets" / "soldier.png", compose())
-    print(f"{W * COLS}x{H * ROWS}")
+    raise SystemExit(
+        "Лист солдата собирает tools/pack_soldier.py из public/assets/character. "
+        "Этот скрипт больше не пишет public/assets/soldier.png."
+    )
 
 
 if __name__ == "__main__":
