@@ -24,7 +24,7 @@ export type Picture = {
   id: string;
   /** Своя земля. Нет — сцена заливает поле и дорожку одним цветом. */
   ground?: Ground;
-  /** Смерть начинает картинку заново. Босса снимают за одну жизнь. */
+  /** Пока сердца есть, попадание картинку не начинает заново. */
   boss: boolean;
   wall: readonly boolean[];
   houses: readonly HouseMark[];

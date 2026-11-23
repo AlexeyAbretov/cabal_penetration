@@ -227,14 +227,22 @@ export class Hud {
     this.syncFigures();
   }
 
-  /** true — жизней не осталось. amount — сколько снять за это попадание. */
-  hurtSoldier(amount = 1): boolean {
+  /**
+   * true — сердец не осталось. amount — сколько снять за это попадание.
+   * blink включает мигание сразу: пока окно идёт, пули не берут.
+   */
+  hurtSoldier(amount = 1, blink = true): boolean {
     const loss = Math.max(0, Math.round(amount));
     this.lives = Math.max(0, this.lives - loss);
-    if (loss > 0) this.hurtTimer = hud.hurtMs;
+    if (loss > 0 && blink) this.hurtTimer = hud.hurtMs;
     this.livesText.setText(String(this.lives));
     this.syncFigures();
     return this.lives === 0;
+  }
+
+  /** Окно после подъёма. Пока оно идёт, тело мигает и пули его не берут. */
+  startBlink(): void {
+    this.hurtTimer = hud.hurtMs;
   }
 
   setQuota(quota: number): void {

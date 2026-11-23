@@ -29,6 +29,8 @@ function ruins(folder: string): Packed[] {
 // Те же пути, что игра берёт из public/. Исходные кадры пехоты в assets/enemies игра не грузит.
 const packedFiles: Packed[] = [
   png('assets/soldier.png'),
+  png('assets/soldier-death.png'),
+  png('assets/soldier-dead.png'),
   png('assets/infantry.png'),
   png('assets/infantry2.png'),
   png('assets/hud-heart.png'),

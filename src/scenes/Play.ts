@@ -43,6 +43,7 @@ import { Sandbags } from './play/sandbag';
 import { ShortFences } from './play/shortFence';
 import { Trees } from './play/trees';
 import { registerSoldierAnims, soldierSheet, soldierSheetReady } from '../soldierSheet';
+import { soldierDead, soldierDeath } from '../soldierDeath';
 import { Soldier } from './play/soldier';
 import { Sparks } from './play/sparks';
 import { Stage } from './play/stage';
@@ -101,6 +102,8 @@ export class Play extends Phaser.Scene {
   private clearHold = 0;
   private victoryText!: Phaser.GameObjects.Text;
   private down: 'continue' | 'over' | null = null;
+  /** Нулевая жизнь: после трупа выходит надпись, сам он остаётся. */
+  private deathSpent = false;
   private handoff: March | null = null;
   private settled = false;
   private march: March = marchFrom(undefined);
@@ -125,6 +128,13 @@ export class Play extends Phaser.Scene {
     if (!this.textures.exists(rapidDrop.key)) this.load.image(rapidDrop.key, rapidDrop.url);
     if (!this.textures.exists(starDrop.key)) this.load.image(starDrop.key, starDrop.url);
     if (!this.textures.exists(plaqueDrop.key)) this.load.image(plaqueDrop.key, plaqueDrop.url);
+    if (!this.textures.exists(soldierDeath.key)) {
+      this.load.spritesheet(soldierDeath.key, soldierDeath.url, {
+        frameWidth: soldierDeath.frameWidth,
+        frameHeight: soldierDeath.frameHeight,
+      });
+    }
+    if (!this.textures.exists(soldierDead.key)) this.load.image(soldierDead.key, soldierDead.url);
     if (!this.textures.exists(hitFlash.key)) {
       this.load.spritesheet(hitFlash.key, hitFlash.url, {
         frameWidth: hitFlash.frameWidth,
@@ -150,6 +160,7 @@ export class Play extends Phaser.Scene {
     this.clearWait = 0;
     this.clearHold = 0;
     this.down = null;
+    this.deathSpent = false;
     this.handoff = null;
     this.settled = false;
   }
@@ -362,11 +373,16 @@ export class Play extends Phaser.Scene {
     const pointer = this.controls.pointer;
     const step = Math.min(delta, 50);
     this.aim.step(step);
-    if (pointer) this.aim.aimAt(pointer.x, pointer.y, aimBounds(this.view));
-    if (input.grenadePressed) this.throwGrenade();
-    if (this.soldier.tryRoll(input)) this.gun.interrupt(input.firing);
-    if (this.soldier.rolling) this.soldier.advanceRoll(step);
-    else this.soldier.step(step, input, input.firing && this.gun.acceptsTrigger(), this.aim.x, this.aim.y);
+    if (this.soldier.dying) {
+      this.gun.quiet();
+      this.soldier.advanceDeath(step);
+    } else {
+      if (pointer) this.aim.aimAt(pointer.x, pointer.y, aimBounds(this.view));
+      if (input.grenadePressed) this.throwGrenade();
+      if (this.soldier.tryRoll(input)) this.gun.interrupt(input.firing);
+      if (this.soldier.rolling) this.soldier.advanceRoll(step);
+      else this.soldier.step(step, input, input.firing && this.gun.acceptsTrigger(), this.aim.x, this.aim.y);
+    }
 
     this.enemies.step(step, this.soldier.column(), this.view, this.wall, this.soldier.body().x);
     this.infantry.step(step, this.soldier.column(), this.view, this.wall, this.soldier.body().x);
@@ -376,7 +392,7 @@ export class Play extends Phaser.Scene {
       this.drawBattle();
       return;
     }
-    const weaponSpent = this.gun.step(step, {
+    const weaponSpent = !this.soldier.dying && this.gun.step(step, {
       rolling: this.soldier.rolling,
       triggerDown: input.firing,
       aimX: this.aim.x,
@@ -408,7 +424,7 @@ export class Play extends Phaser.Scene {
       }
       this.resolveIncoming(shot.column, shot.x, shot.y);
     }
-    this.soldier.setAlpha(this.hud.stepHurt(step));
+    this.soldier.setAlpha(this.soldier.dying ? 1 : this.hud.stepHurt(step));
     this.sparks.step(step);
     this.debris.step(step);
     this.props.step(step);
@@ -424,6 +440,7 @@ export class Play extends Phaser.Scene {
     this.drops.step(this.view, this.soldier.body());
     this.stepVictoryWait(step);
     this.drawBattle();
+    this.settleDeath();
   }
 
   /** Смена картинки из рамки. Счёт, жизни и гранаты остаются, ствол сгорает вместе со сценой. */
@@ -611,7 +628,7 @@ export class Play extends Phaser.Scene {
     const verdict = resolveColumnHit({
       wallUp,
       reached,
-      invulnerable: this.soldier.rolling || this.hud.hurt,
+      invulnerable: this.soldier.rolling || this.soldier.dying || this.hud.hurt,
     });
     const point = cover ? { x: atX, y: this.wall.geom(this.view).top } : { x: atX, y: atY };
     if (verdict === 'wall') {
@@ -623,22 +640,35 @@ export class Play extends Phaser.Scene {
   }
 
   /**
-   * Обычная картинка остаётся как есть: жизнь снята, волна на месте.
-   * Босс обнуляется, пока жизнь ещё есть.
-   * Нулевая жизнь ждёт «ДАЛЬШЕ» и поднимает уровень с первой картинки.
+   * Попадание снимает сердца. Пока число больше нуля, солдат стоит и мигает.
+   * Нуль — падение, затем «ДАЛЬШЕ». Волна остаётся до надписи.
    */
   private onLifeLost(lives: number): void {
-    if (this.down || this.handoff || this.clearWait > 0) return;
-    const spent = this.hud.hurtSoldier(lives);
+    if (this.down || this.handoff || this.clearWait > 0 || this.soldier.dying) return;
+    const spent = this.hud.hurtSoldier(lives, true);
     this.march.lives = this.hud.livesLeft;
     this.march.score = this.hud.points;
     this.march.grenades = this.grenades.count();
-    if (this.picture.boss && this.march.lives > 0) {
-      this.handoff = { ...this.march };
-      this.gun.quiet();
+    if (!spent) return;
+    this.gun.quiet();
+    this.gun.interrupt(true);
+    this.deathSpent = true;
+    if (this.soldier.fall(this.soldier.lookDir())) return;
+    this.openDeathScreen();
+  }
+
+  /** Труп полежал на нуле сердец. Надпись, тело остаётся. */
+  private settleDeath(): void {
+    if (!this.soldier.deathSettled || this.down) return;
+    if (!this.deathSpent) {
+      this.soldier.rise();
+      this.hud.startBlink();
       return;
     }
-    if (!spent) return;
+    this.openDeathScreen();
+  }
+
+  private openDeathScreen(): void {
     this.gun.quiet();
     if (this.march.continues > 0) {
       this.down = 'continue';

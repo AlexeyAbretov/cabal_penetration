@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
-import { aimFan, frame, kneelScale, motion, palette, rollMove, soldierBox } from '../../constants';
+import { aimFan, deathFall, frame, kneelScale, motion, palette, rollMove, soldierBox } from '../../constants';
 import { soldierFeetY, type FrameLayout } from '../../layout';
 import { aimSideFrame, soldierAnimKey, soldierSheet, type SoldierClipName } from '../../soldierSheet';
+import { deathAngle, deathTorso, soldierDead, soldierDeath } from '../../soldierDeath';
 import type { MoveInput } from './input';
 import type { FrontWall } from './wall';
 
@@ -23,7 +24,11 @@ type Pose = 'stand' | 'kneel' | 'roll';
 export class Soldier {
   private readonly scene: Phaser.Scene;
   private readonly gfx: Phaser.GameObjects.Graphics;
+  private readonly blood: Phaser.GameObjects.Graphics;
   private sprite: Phaser.GameObjects.Sprite | null = null;
+  private deathSprite: Phaser.GameObjects.Sprite | null = null;
+  /** Падение и труп. Угол — противоположная сторона взгляда. Север падает на запад. */
+  private fallState: { elapsed: number; angle: number; corpse: boolean } | null = null;
   /** 0 — левый край хитбокса, 1 — правый. На ресайзе солдат остаётся на той же доле. */
   private soldierRatio = 0.5;
   private soldierX = 0;
@@ -61,6 +66,70 @@ export class Soldier {
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.gfx = scene.add.graphics().setDepth(4.5);
+    this.blood = scene.add.graphics().setDepth(4.4);
+    if (scene.textures.exists(soldierDeath.key) && scene.textures.exists(soldierDead.key)) {
+      this.deathSprite = scene.add
+        .sprite(0, 0, soldierDeath.key, 0)
+        .setOrigin(soldierDeath.footX, soldierDeath.footY)
+        .setScale(soldierDeath.scale)
+        .setDepth(4.5)
+        .setVisible(false);
+    }
+  }
+
+  /** Падение или труп на земле. Ввод и попадания в это время не берутся. */
+  get dying(): boolean {
+    return this.fallState !== null;
+  }
+
+  /** Труп уже полежал. Сцена либо поднимает его, либо оставляет под надписью. */
+  get deathSettled(): boolean {
+    const fall = this.fallState;
+    if (!fall) return false;
+    return fall.elapsed >= deathFall.frameMs * soldierDeath.frames + deathFall.lieMs;
+  }
+
+  /**
+   * Куда смотрел в момент удара.
+   * Огонь — сторона креста. Ход и перекат — вдоль дорожки. Стойка и колено — север, в поле.
+   */
+  lookDir(): -1 | 0 | 1 {
+    if (this.firing) return this.aimSide();
+    if (this.roll || this.gait !== 'stand') return this.face;
+    return 0;
+  }
+
+  /**
+   * Падение назад, лицом вверх. look — куда смотрел: -1 запад, 0 север, 1 восток.
+   * Ролик и труп поворачиваются в противоположную сторону. Север — на запад.
+   * false — клеток нет, сцена оставляет мигание.
+   */
+  fall(look: -1 | 0 | 1): boolean {
+    if (!this.deathSprite || this.fallState) return false;
+    this.fallState = { elapsed: 0, angle: deathAngle(look), corpse: false };
+    this.firing = false;
+    this.kneeling = false;
+    this.roll = null;
+    this.gait = 'stand';
+    this.runLatched = false;
+    this.clip = '';
+    return true;
+  }
+
+  advanceDeath(delta: number): void {
+    const fall = this.fallState;
+    if (!fall) return;
+    fall.elapsed += delta;
+    if (fall.elapsed >= deathFall.frameMs * soldierDeath.frames) fall.corpse = true;
+  }
+
+  /** Жизни ещё есть: снова стойка. Мигание включает сцена. */
+  rise(): void {
+    this.fallState = null;
+    this.blood.clear();
+    this.deathSprite?.setVisible(false);
+    this.sprite?.setVisible(true).setAngle(0);
+    this.clip = '';
   }
 
   /** Лист уже проверен по размеру. Анимации регистрирует сцена. */
@@ -217,8 +286,16 @@ export class Soldier {
 
   /** Свой буфер, глубже стены по списку. Так тело закрывает кладку. Лист стоит на тех же ногах. */
   draw(): void {
+    if (this.fallState) {
+      this.drawDeath();
+      return;
+    }
+    this.blood.clear();
+    this.deathSprite?.setVisible(false);
     const sprite = this.sprite;
     if (sprite) {
+      sprite.setVisible(true);
+      sprite.setAngle(0);
       sprite.setPosition(this.cx, this.feetY);
       sprite.setAlpha(this.alpha);
       if (this.firing) {
@@ -235,6 +312,7 @@ export class Soldier {
     }
     const gfx = this.gfx;
     gfx.clear();
+    gfx.setVisible(true);
     gfx.setPosition(0, 0);
     gfx.setAngle(0);
     gfx.fillStyle(this.fill, this.alpha);
@@ -247,6 +325,69 @@ export class Soldier {
     gfx.rotateCanvas(Phaser.Math.DegToRad(this.angle));
     gfx.fillRect(-this.bodyW / 2, -this.bodyH / 2, this.bodyW, this.bodyH);
     gfx.restore();
+  }
+
+  /** Ролик до земли, затем труп. Лужа появляется вместе с трупом. */
+  private drawDeath(): void {
+    const fall = this.fallState;
+    const sprite = this.deathSprite;
+    if (!fall || !sprite) return;
+    this.sprite?.setVisible(false);
+    this.gfx.clear();
+    this.gfx.setVisible(false);
+    const frame = Math.min(
+      soldierDeath.frames - 1,
+      Math.floor(fall.elapsed / deathFall.frameMs),
+    );
+    if (fall.corpse) {
+      if (sprite.texture.key !== soldierDead.key) sprite.setTexture(soldierDead.key);
+      sprite.setOrigin(soldierDead.originX, soldierDead.originY);
+    } else {
+      if (sprite.texture.key !== soldierDeath.key) sprite.setTexture(soldierDeath.key);
+      sprite.setFrame(frame);
+      sprite.setOrigin(soldierDeath.footX, soldierDeath.footY);
+    }
+    sprite.setPosition(this.cx, this.feetY);
+    sprite.setAngle(fall.angle);
+    sprite.setScale(soldierDeath.scale);
+    sprite.setFlipX(false);
+    sprite.setAlpha(1);
+    sprite.setVisible(true);
+    this.paintBlood(fall.corpse, fall.angle);
+  }
+
+  /** Лужа под туловищем. Плоская на земле, центр едет вместе с повёрнутым телом. */
+  private paintBlood(show: boolean, angle: number): void {
+    const gfx = this.blood;
+    gfx.clear();
+    if (!show) return;
+    const scale = soldierDeath.scale;
+    const torso = turn(deathTorso.x * scale, deathTorso.y * scale, angle);
+    const cx = Math.round(this.cx + torso.x);
+    const cy = Math.round(this.feetY + torso.y);
+    this.blob(gfx, cx, cy, 16, 6, palette.bloodDeep);
+    this.blob(gfx, cx, cy, 9, 3, palette.blood);
+    const left = turn(-7 * scale, -3 * scale, angle);
+    const right = turn(6 * scale, 2 * scale, angle);
+    this.blob(gfx, Math.round(cx + left.x), Math.round(cy + left.y), 4, 2, palette.blood);
+    this.blob(gfx, Math.round(cx + right.x), Math.round(cy + right.y), 3, 2, palette.bloodDeep);
+  }
+
+  private blob(
+    gfx: Phaser.GameObjects.Graphics,
+    cx: number,
+    cy: number,
+    rx: number,
+    ry: number,
+    color: number,
+  ): void {
+    gfx.fillStyle(color, 1);
+    for (let dy = -ry; dy <= ry; dy += 1) {
+      const span = 1 - (dy * dy) / (ry * ry);
+      if (span <= 0) continue;
+      const half = Math.round(rx * Math.sqrt(span));
+      gfx.fillRect(cx - half, cy + dy, half * 2 + 1, 1);
+    }
   }
 
   setAlpha(alpha: number): void {
@@ -472,4 +613,12 @@ export class Soldier {
     const track = view.track;
     return { min: track.x + half, max: track.x + track.width - half };
   }
+}
+
+/** Поворот смещения по часовой, как угол спрайта. y экрана растёт вниз. */
+function turn(dx: number, dy: number, deg: number): { x: number; y: number } {
+  const t = (deg * Math.PI) / 180;
+  const c = Math.cos(t);
+  const s = Math.sin(t);
+  return { x: dx * c - dy * s, y: dx * s + dy * c };
 }

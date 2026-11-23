@@ -676,6 +676,12 @@ export const enemyBar = {
   gap: 3,
 } as const;
 
+/** Падение навзничь: кадр ролика, затем труп перед подъёмом или экраном смерти. */
+export const deathFall = {
+  frameMs: 200,
+  lieMs: 500,
+} as const;
+
 export const hud = {
   lives: 5,
   continues: 3,
