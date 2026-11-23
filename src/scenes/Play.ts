@@ -88,6 +88,8 @@ export class Play extends Phaser.Scene {
   private debris!: Debris;
   private battleGfx!: Phaser.GameObjects.Graphics;
   private paused = false;
+  /** Слушатели окна сняты вместе со сценой. Иначе пауза после смены картинки бьёт в старый бой. */
+  private windowBound = false;
   /** Подсказка по кнопкам. Бой стоит, меню паузы под ней не снимается. */
   private helpOpen = false;
   /** Старт без выбора или «Новая игра» на паузе. Бой в это время стоит. */
@@ -266,6 +268,7 @@ export class Play extends Phaser.Scene {
       this.hud.setHold('difficulty');
       this.tweens.pauseAll();
     }
+    this.bindWindow();
     void this.attachSoldierSheet();
   }
 
@@ -333,11 +336,13 @@ export class Play extends Phaser.Scene {
     }
     if (this.cleared) {
       this.gun.quiet();
-      this.stepClear(Math.min(delta, 50));
+      if (this.paused && this.controls.escPressed()) this.setPaused(false);
+      this.victoryText.setVisible(!this.paused);
+      if (!this.paused) this.stepClear(Math.min(delta, 50));
       this.drawBattle();
       return;
     }
-    if (this.controls.escPressed() && !this.down && this.clearWait <= 0) {
+    if (this.controls.escPressed() && !this.down && (this.paused || this.clearWait <= 0)) {
       if (this.helpOpen) this.setHelp(false);
       else this.setPaused(!this.paused);
     }
@@ -807,7 +812,33 @@ export class Play extends Phaser.Scene {
     this.paused = paused;
     this.hud.setHold(paused ? 'pause' : null);
     if (paused) this.tweens.pauseAll();
-    else this.tweens.resumeAll();
+    else if (!this.cleared) this.tweens.resumeAll();
+  }
+
+  private bindWindow(): void {
+    this.game.events.on(Phaser.Core.Events.BLUR, this.pauseOnBlur, this);
+    this.game.events.on(Phaser.Core.Events.HIDDEN, this.pauseOnBlur, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.dropWindow, this);
+    this.windowBound = true;
+    if (document.hidden || !document.hasFocus()) this.pauseOnBlur();
+  }
+
+  private dropWindow(): void {
+    this.windowBound = false;
+    this.game.events.off(Phaser.Core.Events.BLUR, this.pauseOnBlur, this);
+    this.game.events.off(Phaser.Core.Events.HIDDEN, this.pauseOnBlur, this);
+  }
+
+  /**
+   * Окно потеряло фокус или вкладка ушла в фон. Та же пауза, что и Esc.
+   * Возврат фокуса её не снимает. Смерть и выбор сложности уже держат свой экран.
+   */
+  private pauseOnBlur(): void {
+    if (!this.windowBound || this.paused || this.choosing || this.down || this.handoff) return;
+    this.input.keyboard?.resetKeys();
+    this.gun.interrupt(true);
+    this.gun.quiet();
+    this.setPaused(true);
   }
 
   /** Список клавиш или жестов. Поверх паузы бой так и остаётся на паузе. */
