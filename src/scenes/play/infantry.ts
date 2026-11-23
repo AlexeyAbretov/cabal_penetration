@@ -3,7 +3,7 @@ import { centerBox, circleHitsRect, flightSample, type FlightArrival, type Fligh
 import { frame, grenade, infantry, palette, volley } from '../../constants';
 import { scaleHp } from '../../difficulty';
 import { pointHidden, shotReaches, type Cover } from '../../cover';
-import { infantrySheet } from '../../infantrySheet';
+import { infantryLooks, infantrySheet, type InfantryLook } from '../../infantrySheet';
 import { belowHorizon, fieldScale, wallTopY, type FrameLayout } from '../../layout';
 import type { InfantryGroup, Wait } from '../../wave';
 import type { Sparks } from './sparks';
@@ -26,6 +26,8 @@ type Soldier = {
   wait: number;
   column: number;
   anim: number;
+  /** Какой лист: новый или прежний. Труп хранит тот же номер. */
+  look: number;
   x: number;
   y: number;
   w: number;
@@ -40,6 +42,7 @@ type Corpse = {
   y: number;
   w: number;
   h: number;
+  look: number;
   /** Момент смерти по часам пехоты. */
   born: number;
 };
@@ -79,11 +82,9 @@ export class Infantry {
   private frozen = false;
   /** Где стоял солдат, когда пехота шагала. Пуля открытой колонки целится сюда. */
   private playerX = 0;
-  private pixels: ImageData | null = null;
+  private readonly pixels = new Map<number, ImageData>();
   /** Непрозрачный край клетки. Пустая кромка кадра в удар не входит. */
-  private readonly ink = new Map<number, { x0: number; y0: number; x1: number; y1: number }>();
-  /** Уже уменьшенные клетки: кадр, зеркало и размер. */
-  private readonly cells = new Map<string, ImageData>();
+  private readonly ink = new Map<string, { x0: number; y0: number; x1: number; y1: number }>();
   private readonly scene: Phaser.Scene;
   private readonly bodies: Phaser.GameObjects.Graphics;
   private readonly sparks: Sparks;
@@ -172,7 +173,6 @@ export class Infantry {
   draw(covers: readonly Cover[]): void {
     const gfx = this.bodies;
     gfx.clear();
-    const sheet = this.sheet();
     const marks: ({ y: number; soldier: Soldier } | { y: number; corpse: Corpse })[] = [
       ...this.units.map((soldier) => ({ y: soldier.y, soldier })),
       ...this.corpses.map((corpse) => ({ y: corpse.y, corpse })),
@@ -181,10 +181,14 @@ export class Infantry {
     for (const mark of marks) {
       if ('corpse' in mark) {
         this.puddle(gfx, mark.corpse, covers);
+        const sheet = this.sheet(mark.corpse.look);
         if (sheet) this.stampCorpse(gfx, sheet, mark.corpse, covers);
         else this.fallbackCorpse(gfx, mark.corpse, covers);
-      } else if (sheet) this.stamp(gfx, sheet, mark.soldier, covers);
-      else this.fallback(gfx, mark.soldier, covers);
+      } else {
+        const sheet = this.sheet(mark.soldier.look);
+        if (sheet) this.stamp(gfx, sheet, mark.soldier, covers);
+        else this.fallback(gfx, mark.soldier, covers);
+      }
     }
   }
 
@@ -254,6 +258,7 @@ export class Infantry {
       wait: 0,
       column: 0,
       anim: 0,
+      look: Math.floor(Math.random() * infantryLooks.length),
       x: 0,
       y: 0,
       w: infantry.width,
@@ -375,6 +380,7 @@ export class Infantry {
       y: soldier.y,
       w: soldier.w,
       h: soldier.h,
+      look: soldier.look,
       born: this.clock,
     };
   }
@@ -423,34 +429,37 @@ export class Infantry {
   /** Прямоугольник непрозрачных пикселей текущей клетки. Пустая кромка кадра удар не берёт. */
   private bodyBox(soldier: Soldier): HitBox {
     const pose = this.pose(soldier);
-    const sheet = this.sheet();
-    const depth = soldier.h / infantry.height;
-    const dh = Math.max(1, Math.round(infantrySheet.frameHeight * depth));
-    const dw = Math.max(1, Math.round((dh * infantrySheet.frameWidth) / infantrySheet.frameHeight));
+    const look = this.look(soldier.look);
+    const sheet = this.sheet(soldier.look);
+    const dh = look.frameHeight;
+    const dw = look.frameWidth;
     const foot = this.foot(soldier);
     const left = soldier.x - dw / 2;
     const top = foot - dh;
-    const ink = sheet ? this.frameInk(sheet, pose.frame) : null;
+    const ink = sheet ? this.frameInk(sheet, soldier.look, pose.frame) : null;
     if (!ink) return centerBox(soldier.x, soldier.y, soldier.w, soldier.h);
-    const fw = infantrySheet.frameWidth;
+    const fw = look.frameWidth;
     const x0 = pose.flip ? fw - 1 - ink.x1 : ink.x0;
     const x1 = pose.flip ? fw - 1 - ink.x0 : ink.x1;
     return {
       left: left + (x0 / fw) * dw,
       right: left + ((x1 + 1) / fw) * dw,
-      top: top + (ink.y0 / infantrySheet.frameHeight) * dh,
-      bottom: top + ((ink.y1 + 1) / infantrySheet.frameHeight) * dh,
+      top: top + (ink.y0 / look.frameHeight) * dh,
+      bottom: top + ((ink.y1 + 1) / look.frameHeight) * dh,
     };
   }
 
   private frameInk(
     sheet: ImageData,
+    look: number,
     frame: number,
   ): { x0: number; y0: number; x1: number; y1: number } | null {
-    const cached = this.ink.get(frame);
+    const key = `${look}:${frame}`;
+    const cached = this.ink.get(key);
     if (cached) return cached;
-    const fw = infantrySheet.frameWidth;
-    const fh = infantrySheet.frameHeight;
+    const spec = this.look(look);
+    const fw = spec.frameWidth;
+    const fh = spec.frameHeight;
     const origin = frame * fw;
     let x0: number = fw;
     let y0: number = fh;
@@ -468,23 +477,30 @@ export class Infantry {
     }
     if (x1 < 0) return null;
     const box = { x0, y0, x1, y1 };
-    this.ink.set(frame, box);
+    this.ink.set(key, box);
     return box;
   }
 
-  private pose(soldier: Soldier): { frame: number; flip: boolean } {
-    if (soldier.phase === 'run') {
-      return { frame: Math.floor(soldier.anim / 120) % infantrySheet.run, flip: soldier.heading < 0 };
-    }
-    return { frame: soldier.phase === 'burst' ? infantrySheet.fire : infantrySheet.aim, flip: false };
+  private look(index: number): InfantryLook {
+    return infantryLooks[index] ?? infantrySheet;
   }
 
-  private sheet(): ImageData | null {
-    if (this.pixels) return this.pixels;
-    if (!this.scene.textures.exists(infantrySheet.key)) return null;
-    const source = this.scene.textures.get(infantrySheet.key).getSourceImage() as CanvasImageSource;
-    const width = infantrySheet.frameWidth * infantrySheet.frames;
-    const height = infantrySheet.frameHeight;
+  private pose(soldier: Soldier): { frame: number; flip: boolean } {
+    const spec = this.look(soldier.look);
+    if (soldier.phase === 'run') {
+      return { frame: Math.floor(soldier.anim / 120) % spec.run, flip: soldier.heading < 0 };
+    }
+    return { frame: soldier.phase === 'burst' ? spec.fire : spec.aim, flip: false };
+  }
+
+  private sheet(index: number): ImageData | null {
+    const cached = this.pixels.get(index);
+    if (cached) return cached;
+    const spec = this.look(index);
+    if (!this.scene.textures.exists(spec.key)) return null;
+    const source = this.scene.textures.get(spec.key).getSourceImage() as CanvasImageSource;
+    const width = spec.frameWidth * spec.frames;
+    const height = spec.frameHeight;
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -492,8 +508,9 @@ export class Infantry {
     if (!ctx) return null;
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(source, 0, 0);
-    this.pixels = ctx.getImageData(0, 0, width, height);
-    return this.pixels;
+    const data = ctx.getImageData(0, 0, width, height);
+    this.pixels.set(index, data);
+    return data;
   }
 
   /** Пиксели листа. Клетка ближнего объекта не рисуется: дом остаётся поверх бойца. */
@@ -504,29 +521,28 @@ export class Infantry {
     covers: readonly Cover[],
   ): void {
     const pose = this.pose(soldier);
-    this.paint(gfx, sheet, pose.frame, pose.flip, soldier.flash > 0, soldier.x, soldier.h, this.foot(soldier), covers);
+    const spec = this.look(soldier.look);
+    this.paint(gfx, sheet, spec, pose.frame, pose.flip, soldier.flash > 0, soldier.x, this.foot(soldier), covers);
   }
 
   private paint(
     gfx: Phaser.GameObjects.Graphics,
     sheet: ImageData,
+    spec: InfantryLook,
     frame: number,
     flip: boolean,
     flash: boolean,
     x: number,
-    height: number,
     sole: number,
     covers: readonly Cover[],
   ): void {
-    const depth = height / infantry.height;
-    const dh = Math.max(1, Math.round(infantrySheet.frameHeight * depth));
-    const dw = Math.max(1, Math.round((dh * infantrySheet.frameWidth) / infantrySheet.frameHeight));
-    const cell = this.cell(sheet, frame, flip, dw, dh);
-    const data = cell.data;
+    const fw = spec.frameWidth;
+    const fh = spec.frameHeight;
     const foot = Math.round(sole);
-    const left = Math.round(x - dw / 2);
-    const top = foot - dh;
-    for (let dy = 0; dy < dh; dy += 1) {
+    const left = Math.round(x - fw / 2);
+    const top = foot - fh;
+    const sheetW = sheet.width;
+    for (let dy = 0; dy < fh; dy += 1) {
       const destY = top + dy;
       let runX = 0;
       let runW = 0;
@@ -537,9 +553,10 @@ export class Infantry {
         gfx.fillRect(runX, destY, runW, 1);
         runW = 0;
       };
-      for (let dx = 0; dx < dw; dx += 1) {
-        const i = (dy * dw + dx) * 4;
-        if ((data[i + 3] ?? 0) < 16) {
+      for (let dx = 0; dx < fw; dx += 1) {
+        const srcX = flip ? fw - 1 - dx : dx;
+        const i = (dy * sheetW + frame * fw + srcX) * 4;
+        if ((sheet.data[i + 3] ?? 0) < 16) {
           flush();
           continue;
         }
@@ -547,7 +564,7 @@ export class Infantry {
           flush();
           continue;
         }
-        const color = flash ? palette.ink : ((data[i] ?? 0) << 16) | ((data[i + 1] ?? 0) << 8) | (data[i + 2] ?? 0);
+        const color = flash ? palette.ink : ((sheet.data[i] ?? 0) << 16) | ((sheet.data[i + 1] ?? 0) << 8) | (sheet.data[i + 2] ?? 0);
         const px = left + dx;
         if (runW > 0 && color === runColor && px === runX + runW) runW += 1;
         else {
@@ -559,16 +576,6 @@ export class Infantry {
       }
       flush();
     }
-  }
-
-  /** Клетка в экранный размер. Пиксели площади усредняются, прозрачный край цвет не тянет. */
-  private cell(sheet: ImageData, frame: number, flip: boolean, dw: number, dh: number): ImageData {
-    const key = `${frame}:${flip ? 1 : 0}:${dw}x${dh}`;
-    const cached = this.cells.get(key);
-    if (cached) return cached;
-    const scaled = scaleCell(sheet, frame, flip, dw, dh);
-    this.cells.set(key, scaled);
-    return scaled;
   }
 
   private fallback(gfx: Phaser.GameObjects.Graphics, soldier: Soldier, covers: readonly Cover[]): void {
@@ -584,7 +591,8 @@ export class Infantry {
     corpse: Corpse,
     covers: readonly Cover[],
   ): void {
-    this.paint(gfx, sheet, infantrySheet.dead, corpse.flip, false, corpse.x, corpse.h, this.sole(corpse), covers);
+    const spec = this.look(corpse.look);
+    this.paint(gfx, sheet, spec, spec.dead, corpse.flip, false, corpse.x, this.sole(corpse), covers);
   }
 
   private fallbackCorpse(gfx: Phaser.GameObjects.Graphics, corpse: Corpse, covers: readonly Cover[]): void {
@@ -600,8 +608,9 @@ export class Infantry {
 
   /** Лужа на земле. Дальний дом закрывает её так же, как тело. */
   private puddle(gfx: Phaser.GameObjects.Graphics, corpse: Corpse, covers: readonly Cover[]): void {
-    const dh = Math.max(1, Math.round(corpse.h));
-    const dw = Math.max(1, Math.round((dh * infantrySheet.frameWidth) / infantrySheet.frameHeight));
+    const spec = this.look(corpse.look);
+    const dh = spec.frameHeight;
+    const dw = spec.frameWidth;
     const foot = this.sole(corpse);
     const cx = Math.round(corpse.x);
     const cy = foot - Math.max(1, Math.round(dh * 0.12));
@@ -664,54 +673,4 @@ function sideLanes(groups: readonly InfantryGroup[]): SideLane[] {
 
 function waitMs(span: Wait): number {
   return span.min + Math.random() * (span.max - span.min);
-}
-
-/** Ужимает клетку листа. Цвет — среднее непрозрачных пикселей площади, не один угол. */
-function scaleCell(sheet: ImageData, frame: number, flip: boolean, dw: number, dh: number): ImageData {
-  const fw = infantrySheet.frameWidth;
-  const fh = infantrySheet.frameHeight;
-  const sheetW = fw * infantrySheet.frames;
-  const src = sheet.data;
-  const out = new Uint8ClampedArray(dw * dh * 4);
-  for (let dy = 0; dy < dh; dy += 1) {
-    const y0 = (dy * fh) / dh;
-    const y1 = ((dy + 1) * fh) / dh;
-    const sy0 = Math.floor(y0);
-    const sy1 = Math.min(fh - 1, Math.ceil(y1) - 1);
-    for (let dx = 0; dx < dw; dx += 1) {
-      const x0 = (dx * fw) / dw;
-      const x1 = ((dx + 1) * fw) / dw;
-      const sx0 = Math.floor(x0);
-      const sx1 = Math.min(fw - 1, Math.ceil(x1) - 1);
-      let r = 0;
-      let g = 0;
-      let b = 0;
-      let a = 0;
-      for (let sy = sy0; sy <= sy1; sy += 1) {
-        const wy = Math.min(sy + 1, y1) - Math.max(sy, y0);
-        if (wy <= 0) continue;
-        for (let sx = sx0; sx <= sx1; sx += 1) {
-          const wx = Math.min(sx + 1, x1) - Math.max(sx, x0);
-          if (wx <= 0) continue;
-          const srcX = flip ? fw - 1 - sx : sx;
-          const i = (sy * sheetW + frame * fw + srcX) * 4;
-          const alpha = (src[i + 3] ?? 0) / 255;
-          if (alpha <= 0) continue;
-          const w = wx * wy * alpha;
-          r += (src[i] ?? 0) * w;
-          g += (src[i + 1] ?? 0) * w;
-          b += (src[i + 2] ?? 0) * w;
-          a += wx * wy * alpha;
-        }
-      }
-      const area = (x1 - x0) * (y1 - y0);
-      if (area <= 0 || (a / area) * 255 < 16) continue;
-      const o = (dy * dw + dx) * 4;
-      out[o] = Math.round(r / a);
-      out[o + 1] = Math.round(g / a);
-      out[o + 2] = Math.round(b / a);
-      out[o + 3] = Math.round((a / area) * 255);
-    }
-  }
-  return new ImageData(out, dw, dh);
 }

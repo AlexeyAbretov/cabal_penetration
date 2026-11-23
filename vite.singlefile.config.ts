@@ -30,6 +30,7 @@ function ruins(folder: string): Packed[] {
 const packedFiles: Packed[] = [
   png('assets/soldier.png'),
   png('assets/infantry.png'),
+  png('assets/infantry2.png'),
   png('assets/hud-heart.png'),
   png('assets/hud-grenade.png'),
   png('assets/touch-grenade.png'),

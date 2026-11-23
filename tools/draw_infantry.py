@@ -3,30 +3,38 @@
 Бег вправо: running/frame_000..003. Влево игру зеркалит код.
 Стойка: shooting/frame_000. Выстрел: shooting/frame_002, вспышка у дула.
 Труп: dead/frame_000. Лужа на лист не входит, её рисует игра.
-Остальные кадры стрельбы на лист не входят: бой держит одну клетку наводки.
 
-Общее окно 44×48. Ступня самого низкого кадра на нижней строке,
-пустой край исходных 64×64 фигуру не уменьшает.
-Труп шире этого окна: площадь пикселя усредняется в клетку
-и низ тела садится на ту же строку.
-Пишет public/assets/infantry.png, 308×48.
+Новый солдат садится в клетку 32×30 ближайшим пикселем, без смешивания цветов.
+Рост стойки как у прежнего солдата, около 30 пикселей.
+Один масштаб на все кадры: труп остаётся ниже стойки.
+Низ тела на нижней строке, фигура по центру.
+Пишет public/assets/infantry.png, 224×30.
+
+Прежний солдат лежит в public/assets/enemies/infantry2.
+Его окно 44×48 садится в клетку 30×33 ближайшим пикселем, без смешивания цветов.
+Пишет public/assets/infantry2.png, 210×33.
 """
 
 from __future__ import annotations
 
-import math
 import struct
 import zlib
 from pathlib import Path
 
-CELL_W = 44
-CELL_H = 48
-CROP_X = 12
-CROP_Y = 6
+CELL_W = 32
+CELL_H = 30
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "public" / "assets" / "enemies" / "infantry"
 OUT = ROOT / "public" / "assets" / "infantry.png"
+OLD_SRC = ROOT / "public" / "assets" / "enemies" / "infantry2"
+OLD_OUT = ROOT / "public" / "assets" / "infantry2.png"
+OLD_W = 30
+OLD_H = 33
+OLD_CROP_X = 12
+OLD_CROP_Y = 6
+OLD_CROP_W = 44
+OLD_CROP_H = 48
 
 FRAMES = (
     SRC / "running" / "frame_000.png",
@@ -37,8 +45,6 @@ FRAMES = (
     SRC / "shooting" / "frame_002.png",
     SRC / "dead" / "frame_000.png",
 )
-
-DEAD = FRAMES[-1]
 
 
 def png_bytes(width: int, height: int, rows: list[bytes]) -> bytes:
@@ -121,99 +127,93 @@ def opaque_box(rows: list[bytearray], width: int) -> tuple[int, int, int, int]:
     return min_x, min_y, max_x, max_y
 
 
-def crop(rows: list[bytearray]) -> list[bytes]:
-    out: list[bytes] = []
-    for y in range(CELL_H):
-        src = rows[CROP_Y + y]
-        start = CROP_X * 4
-        out.append(bytes(src[start : start + CELL_W * 4]))
-    return out
-
-
-def fit_down(rows: list[bytearray], width: int) -> list[bytes]:
-    """Тело шире клетки. Среднее по площади, низ на последней строке, по центру."""
+def place(rows: list[bytearray], width: int, scale: float) -> list[bytes]:
+    """Фигура одним масштабом. Низ на последней строке, по центру клетки."""
     min_x, min_y, max_x, max_y = opaque_box(rows, width)
     src_w = max_x - min_x + 1
     src_h = max_y - min_y + 1
-    scale = min(CELL_W / src_w, CELL_H / src_h)
     dst_w = max(1, min(CELL_W, round(src_w * scale)))
     dst_h = max(1, min(CELL_H, round(src_h * scale)))
     left = (CELL_W - dst_w) // 2
     top = CELL_H - dst_h
-    cell = [bytearray(CELL_W * 4) for _ in range(CELL_H)]
+    return nearest(rows, min_x, min_y, src_w, src_h, dst_w, dst_h, left, top, CELL_W, CELL_H)
+
+
+def nearest(
+    rows: list[bytearray],
+    src_x: int,
+    src_y: int,
+    src_w: int,
+    src_h: int,
+    dst_w: int,
+    dst_h: int,
+    left: int,
+    top: int,
+    cell_w: int,
+    cell_h: int,
+) -> list[bytes]:
+    """Один исходный пиксель на клетку приёмника. Цвета соседей не смешиваются."""
+    cell = [bytearray(cell_w * 4) for _ in range(cell_h)]
     for dy in range(dst_h):
-        y0 = min_y + dy * src_h / dst_h
-        y1 = min_y + (dy + 1) * src_h / dst_h
+        sy = src_y + min(src_h - 1, int((dy + 0.5) * src_h / dst_h))
+        src = rows[sy]
         dest = cell[top + dy]
         for dx in range(dst_w):
-            x0 = min_x + dx * src_w / dst_w
-            x1 = min_x + (dx + 1) * src_w / dst_w
-            sample = average(rows, width, x0, x1, y0, y1)
-            if sample is None:
+            sx = src_x + min(src_w - 1, int((dx + 0.5) * src_w / dst_w))
+            i = sx * 4
+            if src[i + 3] <= 16:
                 continue
             j = (left + dx) * 4
-            dest[j : j + 4] = sample
+            dest[j : j + 4] = src[i : i + 4]
     return [bytes(row) for row in cell]
 
 
-def average(
-    rows: list[bytearray], width: int, x0: float, x1: float, y0: float, y1: float
-) -> bytes | None:
-    area = (x1 - x0) * (y1 - y0)
-    if area <= 0:
-        return None
-    red = green = blue = covered = 0.0
-    y_last = min(len(rows) - 1, math.ceil(y1) - 1)
-    x_last = min(width - 1, math.ceil(x1) - 1)
-    for sy in range(max(0, math.floor(y0)), y_last + 1):
-        wy = min(sy + 1, y1) - max(sy, y0)
-        if wy <= 0:
-            continue
-        row = rows[sy]
-        for sx in range(max(0, math.floor(x0)), x_last + 1):
-            wx = min(sx + 1, x1) - max(sx, x0)
-            if wx <= 0:
-                continue
-            i = sx * 4
-            alpha = row[i + 3] / 255
-            if alpha <= 0:
-                continue
-            weight = wx * wy * alpha
-            red += row[i] * weight
-            green += row[i + 1] * weight
-            blue += row[i + 2] * weight
-            covered += wx * wy * alpha
-    if covered <= 0 or covered / area * 255 < 16:
-        return None
-    return bytes(
-        (
-            round(red / covered),
-            round(green / covered),
-            round(blue / covered),
-            round(covered / area * 255),
-        )
-    )
+def place_old(rows: list[bytearray], width: int, path: Path) -> list[bytes]:
+    if path.name == "frame_000.png" and path.parent.name == "dead":
+        min_x, min_y, max_x, max_y = opaque_box(rows, width)
+        src_w = max_x - min_x + 1
+        src_h = max_y - min_y + 1
+        scale = min(OLD_W / src_w, OLD_H / src_h)
+        dst_w = max(1, min(OLD_W, round(src_w * scale)))
+        dst_h = max(1, min(OLD_H, round(src_h * scale)))
+        left = (OLD_W - dst_w) // 2
+        top = OLD_H - dst_h
+        return nearest(rows, min_x, min_y, src_w, src_h, dst_w, dst_h, left, top, OLD_W, OLD_H)
+    if (width, len(rows)) != (64, 64):
+        raise SystemExit(f"{path.relative_to(OLD_SRC)}: expected 64x64, got {width}x{len(rows)}")
+    return nearest(rows, OLD_CROP_X, OLD_CROP_Y, OLD_CROP_W, OLD_CROP_H, OLD_W, OLD_H, 0, 0, OLD_W, OLD_H)
+
+
+def write_old() -> None:
+    cells: list[list[bytes]] = []
+    for path in FRAMES:
+        old = OLD_SRC / path.relative_to(SRC)
+        width, _height, rows = read_png(old)
+        cells.append(place_old(rows, width, old))
+    sheet = [b"".join(cell[y] for cell in cells) for y in range(OLD_H)]
+    OLD_OUT.write_bytes(png_bytes(OLD_W * len(cells), OLD_H, sheet))
+    print(f"{OLD_W * len(cells)}x{OLD_H}")
 
 
 def main() -> None:
-    cells: list[list[bytes]] = []
+    loaded: list[tuple[Path, int, list[bytearray], tuple[int, int, int, int]]] = []
+    widest = 1
+    tallest = 1
     for path in FRAMES:
-        width, height, rows = read_png(path)
+        width, _height, rows = read_png(path)
         box = opaque_box(rows, width)
-        right = CROP_X + CELL_W - 1
-        bottom = CROP_Y + CELL_H - 1
-        if (width, height) != (64, 64):
-            raise SystemExit(f"{path.name}: expected 64x64, got {width}x{height}")
-        if path == DEAD:
-            cells.append(fit_down(rows, width))
-            continue
-        if box[0] < CROP_X or box[1] < CROP_Y or box[2] > right or box[3] > bottom:
-            raise SystemExit(f"{path.relative_to(SRC)} sticks out of the cell: {box}")
-        cells.append(crop(rows))
+        src_w = box[2] - box[0] + 1
+        src_h = box[3] - box[1] + 1
+        widest = max(widest, src_w)
+        tallest = max(tallest, src_h)
+        loaded.append((path, width, rows, box))
+    scale = min(CELL_W / widest, CELL_H / tallest)
+    cells = [place(rows, width, scale) for _path, width, rows, _box in loaded]
     sheet = [b"".join(cell[y] for cell in cells) for y in range(CELL_H)]
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_bytes(png_bytes(CELL_W * len(cells), CELL_H, sheet))
     print(f"{CELL_W * len(cells)}x{CELL_H}")
+    write_old()
 
 
 if __name__ == "__main__":

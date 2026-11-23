@@ -7,7 +7,7 @@ import { circleHitsRect, hitBox, resolveColumnHit, type FlightBlock, type HitBox
 import { bonus, cssColor, grenade, grenadeBoom, grenadeFly, grenadeThrow, gunFire, hitFlash, hud, medal, palette, pickup, star, ton, weapons, type DropKind } from '../constants';
 import type { FenceKind, FenceMark } from '../types/fence';
 import { isInfantry, isPack, waveQuota } from '../wave';
-import { infantrySheet } from '../infantrySheet';
+import { infantryLooks } from '../infantrySheet';
 import type { Cover } from '../cover';
 import { loadExplosion } from '../explosionSheet';
 import { aimBounds, frameLayout, type FrameLayout } from '../layout';
@@ -109,7 +109,9 @@ export class Play extends Phaser.Scene {
   }
 
   preload(): void {
-    if (!this.textures.exists(infantrySheet.key)) this.load.image(infantrySheet.key, infantrySheet.url);
+    for (const look of infantryLooks) {
+      if (!this.textures.exists(look.key)) this.load.image(look.key, look.url);
+    }
     if (!this.textures.exists(treeWoodAsset.key)) this.load.image(treeWoodAsset.key, treeWoodAsset.url);
     if (!this.textures.exists(treeBrokenAsset.key)) this.load.image(treeBrokenAsset.key, treeBrokenAsset.url);
     if (!this.textures.exists(hudIcons.heart)) this.load.image(hudIcons.heart, hudIcons.heartUrl);
