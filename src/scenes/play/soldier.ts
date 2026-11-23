@@ -47,7 +47,7 @@ export class Soldier {
   private clip = '';
   private pose: Pose = 'stand';
   private roll: Roll | null = null;
-  /** Пустая полоска: бег вперёд за правый край, без клампа дорожки. */
+  /** leave ведёт бег за правый край. Пустая полоска leave не зовёт: кадр замирает на месте. */
   private leaving = false;
   private view: FrameLayout | null = null;
   private columns: FrontWall | null = null;
