@@ -24,6 +24,13 @@ type Run = {
   image: Phaser.GameObjects.Image;
   key: string;
   sig: string;
+  /** Подошва столба в каждом плотном пикселе. 0 — воздух. */
+  depth: Uint16Array | null;
+  near: number;
+  ox: number;
+  oy: number;
+  pixW: number;
+  pixH: number;
 };
 
 type Burst = {
@@ -51,6 +58,8 @@ const woods = [palette.wood, palette.woodLite, palette.woodDark] as const;
  * Жерди вдоль дороги. Стену у ног не закрывают.
  * Очередь колет, граната снимает забор сразу.
  * Слом идёт щепкой по пролётам. Сломанные жерди остаются стоять.
+ * Целый забор закрывает пехоту своим пикселем и глубиной этого места.
+ * Прямоугольник пролёта дырку во враге не вырезает.
  * Один бонус из списка картинки на весь забор.
  */
 export class Rails {
@@ -89,6 +98,12 @@ export class Rails {
         key,
         sig: '',
         image,
+        depth: null,
+        near: 0,
+        ox: 0,
+        oy: 0,
+        pixW: 0,
+        pixH: 0,
       };
     });
   }
@@ -117,23 +132,13 @@ export class Rails {
     }
   }
 
-  /** Целые жерди и столбы закрывают пехоту за собой. */
+  /** Целый забор закрывает пехоту деревом. Воздух пролёта и дальний столб ближнего бойца не режут. */
   shields(): Cover[] {
     const out: Cover[] = [];
     for (const run of this.runs) {
-      if (!run.alive) continue;
-      for (const post of run.posts) {
-        const box = postRect(post);
-        out.push({ box, sole: box.bottom });
-      }
-      for (const line of railLines(run)) {
-        const left = Math.min(line.x0, line.x1);
-        const right = Math.max(line.x0, line.x1);
-        const top = Math.min(line.y0, line.y1) - 2;
-        const bottom = Math.max(line.y0, line.y1) + 2;
-        if (right - left < 2) continue;
-        out.push({ box: { left, right, top, bottom }, sole: bottom });
-      }
+      if (!run.alive || !run.depth || run.near <= 0 || run.pixW < 1) continue;
+      const box = { left: run.ox, right: run.ox + run.pixW, top: run.oy, bottom: run.oy + run.pixH };
+      out.push({ box, sole: run.near, soleAt: (x, y) => railSole(run, x, y) });
     }
     return out;
   }
@@ -308,13 +313,27 @@ export class Rails {
     if (run.posts.length === 0) {
       run.image.setVisible(false);
       run.sig = '';
+      run.depth = null;
+      run.near = 0;
       return;
     }
     const bits = run.bays.map((bay) => (bay.snapped ? '1' : '0')).join('');
     const sig = `${run.posts.map((post) => `${post.x}.${post.y}.${post.ph}.${post.w}`).join(',')}|${bits}`;
-    if (sig === run.sig) return;
+    if (sig === run.sig && (!run.alive || run.depth)) return;
     run.sig = sig;
     const drawn = drawRun(run.posts, run.bays, run.fit, run.side === 'left' ? -1 : 1);
+    run.ox = drawn.ox;
+    run.oy = drawn.oy;
+    run.pixW = drawn.pix.w;
+    run.pixH = drawn.pix.h;
+    if (run.alive) {
+      const cover = railCover(run.posts, drawn.pix, drawn.ox, drawn.oy);
+      run.depth = cover.depth;
+      run.near = cover.near;
+    } else {
+      run.depth = null;
+      run.near = 0;
+    }
     blit(this.scene, run.key, drawn.pix);
     run.image.setTexture(run.key);
     run.image.setDisplaySize(drawn.pix.w, drawn.pix.h);
@@ -451,6 +470,97 @@ function postRect(post: RailPost): HitBox {
     top: post.y - post.ph - 2,
     bottom: post.y + 1,
   };
+}
+
+function railSole(run: Run, x: number, y: number): number {
+  const depth = run.depth;
+  if (!depth) return 0;
+  const lx = Math.floor(x - run.ox);
+  const ly = Math.floor(y - run.oy);
+  if (lx < 0 || ly < 0 || lx >= run.pixW || ly >= run.pixH) return 0;
+  return depth[ly * run.pixW + lx] ?? 0;
+}
+
+/** Плотный пиксель помнит подошву своего столба. Сосед в один пиксель закрывает шов. */
+function railCover(
+  posts: readonly RailPost[],
+  pix: Pix,
+  ox: number,
+  oy: number,
+): { depth: Uint16Array; near: number } {
+  const depth = new Uint16Array(pix.w * pix.h);
+  const src = pix.data;
+  let near = 0;
+  for (let y = 0; y < pix.h; y += 1) {
+    for (let x = 0; x < pix.w; x += 1) {
+      if (src[(y * pix.w + x) * 4 + 3]! < 128) continue;
+      const ground = Math.round(groundAt(posts, ox + x + 0.5, oy + y + 0.5));
+      const stored = ground > 0 ? ground : 1;
+      depth[y * pix.w + x] = stored;
+      if (stored > near) near = stored;
+    }
+  }
+  return { depth: expandDepth(depth, pix.w, pix.h), near };
+}
+
+function groundAt(posts: readonly RailPost[], x: number, y: number): number {
+  let best = Number.POSITIVE_INFINITY;
+  let ground = 0;
+  const take = (d2: number, yGround: number): void => {
+    if (d2 >= best) return;
+    best = d2;
+    ground = yGround;
+  };
+  for (const post of posts) {
+    const left = post.x;
+    const right = post.x + post.w;
+    const top = post.y - post.ph;
+    const dx = x < left ? left - x : x > right ? x - right : 0;
+    const dy = y < top ? top - y : y > post.y ? y - post.y : 0;
+    take(dx * dx + dy * dy, post.y);
+  }
+  for (let i = 0; i < posts.length - 1; i += 1) {
+    const a = posts[i];
+    const b = posts[i + 1];
+    if (!a || !b) continue;
+    for (const frac of [0.72, 0.38]) {
+      const x0 = a.x;
+      const y0 = a.y - a.ph * frac;
+      const x1 = b.x;
+      const y1 = b.y - b.ph * frac;
+      const hit = distanceToSegment(x, y, x0, y0, x1, y1);
+      take(hit.distance * hit.distance, a.y + (b.y - a.y) * hit.t);
+    }
+  }
+  return ground;
+}
+
+function expandDepth(depth: Uint16Array, w: number, h: number): Uint16Array {
+  const out = new Uint16Array(depth.length);
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const i = y * w + x;
+      const own = depth[i] ?? 0;
+      if (own) {
+        out[i] = own;
+        continue;
+      }
+      let best = 0;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= h) continue;
+        const row = yy * w;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= w) continue;
+          const n = depth[row + xx] ?? 0;
+          if (n > best) best = n;
+        }
+      }
+      out[i] = best;
+    }
+  }
+  return out;
 }
 
 function segmentHitsRect(x0: number, y0: number, x1: number, y1: number, box: HitBox, pad: number): boolean {

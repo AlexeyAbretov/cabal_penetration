@@ -23,6 +23,7 @@ type Keg = {
   image: Phaser.GameObjects.Image;
   key: string;
   sig: string;
+  mask: Uint8Array | null;
 };
 
 type Chip = {
@@ -44,6 +45,7 @@ const woods = [palette.wood, palette.woodLite, palette.woodDark] as const;
  * Бочки на поле. Стоят перед жердями: свой спрайт, не дырка в заборе.
  * Очередь колет, граната снимает сразу. Щепа летит, как у жердей.
  * Сломанная не пропадает: остаётся рваная нижняя половина.
+ * Пехоту закрывает плотный пиксель, целый и сломанный. Пустой угол холста дырку не делает.
  * Один бонус из списка картинки.
  */
 export class Barrels {
@@ -87,6 +89,7 @@ export class Barrels {
         image,
         key,
         sig: '',
+        mask: null,
       };
     });
   }
@@ -105,30 +108,30 @@ export class Barrels {
     this.tickChips(delta);
   }
 
-  /** Квадрат креста колет бочку, в которую попал. */
+  /** Квадрат креста колет бочку, в чьё дерево попал. Пустой угол холста промах. */
   hit(box: HitBox, amount: number): void {
     const at = { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 };
     for (const keg of this.kegs) {
-      if (!keg.whole || !rectsOverlap(box, body(keg))) continue;
+      if (!keg.whole || !woodInBox(keg, box)) continue;
       this.wound(keg, amount, at.x, at.y);
     }
   }
 
-  /** Целая бочка закрывает пехоту за собой. */
+  /** Плотный пиксель бочки закрывает пехоту за собой. Сбитый верх и углы холста — нет. */
   shields(): Cover[] {
     const out: Cover[] = [];
     for (const keg of this.kegs) {
-      if (!keg.whole) continue;
+      if (!keg.mask || keg.w < 1) continue;
       const box = body(keg);
-      out.push({ box, sole: box.bottom });
+      out.push({ box, sole: box.bottom, opaque: (x, y) => kegOpaque(keg, x, y) });
     }
     return out;
   }
 
-  /** Разрыв снимает бочку, чьё тело входит в круг. */
+  /** Разрыв снимает бочку, чьё дерево входит в круг. */
   blast(x: number, y: number): void {
     for (const keg of this.kegs) {
-      if (!keg.whole || !circleHitsRect(x, y, grenade.blastRadius, body(keg))) continue;
+      if (!keg.whole || !woodInCircle(keg, x, y, grenade.blastRadius)) continue;
       this.wound(keg, keg.hp, x, y);
     }
   }
@@ -250,15 +253,18 @@ export class Barrels {
     if (keg.w < 1 || keg.h < 1) {
       keg.image.setVisible(false);
       keg.sig = '';
+      keg.mask = null;
       return;
     }
     const sig = `${keg.w}.${keg.h}.${keg.whole ? 0 : 1}`;
-    if (sig === keg.sig) {
+    if (sig === keg.sig && keg.mask) {
       keg.image.setPosition(Math.round(keg.x), Math.round(keg.y));
       return;
     }
     keg.sig = sig;
-    blit(this.scene, keg.key, paintBarrel(keg.w, keg.h, !keg.whole));
+    const art = paintBarrel(keg.w, keg.h, !keg.whole);
+    keg.mask = shade(art);
+    blit(this.scene, keg.key, art);
     keg.image.setTexture(keg.key);
     keg.image.setDisplaySize(keg.w, keg.h);
     keg.image.setPosition(Math.round(keg.x), Math.round(keg.y));
@@ -267,12 +273,82 @@ export class Barrels {
 }
 
 function body(keg: Keg): HitBox {
+  const x = Math.round(keg.x);
+  const y = Math.round(keg.y);
   return {
-    left: keg.x - keg.w / 2,
-    right: keg.x + keg.w / 2,
-    top: keg.y - keg.h / 2,
-    bottom: keg.y + keg.h / 2,
+    left: x - keg.w / 2,
+    right: x + keg.w / 2,
+    top: y - keg.h / 2,
+    bottom: y + keg.h / 2,
   };
+}
+
+function kegOpaque(keg: Keg, x: number, y: number): boolean {
+  const mask = keg.mask;
+  if (!mask || keg.w < 1) return false;
+  const face = body(keg);
+  const lx = Math.floor(x - face.left);
+  const ly = Math.floor(y - face.top);
+  if (lx < 0 || ly < 0 || lx >= keg.w || ly >= keg.h) return false;
+  return mask[ly * keg.w + lx] === 1;
+}
+
+function woodInBox(keg: Keg, box: HitBox): boolean {
+  if (!rectsOverlap(box, body(keg))) return false;
+  if (!keg.mask) return true;
+  const points: [number, number][] = [
+    [(box.left + box.right) / 2, (box.top + box.bottom) / 2],
+    [box.left, (box.top + box.bottom) / 2],
+    [box.right, (box.top + box.bottom) / 2],
+    [(box.left + box.right) / 2, box.top],
+    [(box.left + box.right) / 2, box.bottom],
+  ];
+  for (const [x, y] of points) {
+    if (kegOpaque(keg, x, y)) return true;
+  }
+  return false;
+}
+
+function woodInCircle(keg: Keg, x: number, y: number, radius: number): boolean {
+  const face = body(keg);
+  if (!circleHitsRect(x, y, radius, face)) return false;
+  const mask = keg.mask;
+  if (!mask) return true;
+  const r2 = radius * radius;
+  for (let ly = 0; ly < keg.h; ly += 1) {
+    for (let lx = 0; lx < keg.w; lx += 1) {
+      if (mask[ly * keg.w + lx] !== 1) continue;
+      const dx = face.left + lx + 0.5 - x;
+      const dy = face.top + ly + 0.5 - y;
+      if (dx * dx + dy * dy <= r2) return true;
+    }
+  }
+  return false;
+}
+
+/** Плотный пиксель и его соседи. Угол холста пехоту не закрывает. */
+function shade(pix: Pix): Uint8Array {
+  const mask = new Uint8Array(pix.w * pix.h);
+  const src = pix.data;
+  for (let y = 0; y < pix.h; y += 1) {
+    for (let x = 0; x < pix.w; x += 1) {
+      let solid = false;
+      for (let dy = -1; dy <= 1 && !solid; dy += 1) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= pix.h) continue;
+        const row = yy * pix.w;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= pix.w) continue;
+          if (src[(row + xx) * 4 + 3]! < 128) continue;
+          solid = true;
+          break;
+        }
+      }
+      if (solid) mask[y * pix.w + x] = 1;
+    }
+  }
+  return mask;
 }
 
 function chip(
