@@ -32,7 +32,8 @@ type Hold = 'stick' | 'aim' | 'grenade' | 'pause';
  * Палец. Слева стик: вбок шаг, у края бег, прямо вниз колено.
  * Второе нажатие в ту же сторону за короткое окно — один перекат.
  * Справа палец тащит крест и не переносит его на себя. Тот же палец стреляет, пока солдат стоит.
- * Гранату жмут над стиком, не отпуская очередь. Мышь этот слой не трогает.
+ * Гранату жмут над стиком, не отпуская очередь.
+ * Кнопку паузы в углу видит и мышь: щелчок по ней не ведёт крест и не стреляет.
  */
 export class TouchLayer {
   private readonly input: Phaser.Input.InputPlugin;
@@ -65,6 +66,8 @@ export class TouchLayer {
   private shiftHeld = false;
   private grenadeEdge = false;
   private pauseEdge = false;
+  /** Левая кнопка мыши зажата на паузе. Пока так, крест стоит и очередь молчит. */
+  private mousePause = false;
   /** Крест сейчас ещё и спуск: палец на нём, стик тело не ведёт. */
   private aimFiring = false;
 
@@ -167,6 +170,16 @@ export class TouchLayer {
     return pressed;
   }
 
+  /** Щелчок мыши пришёлся в кнопку паузы и кнопка ещё зажата. */
+  blocksMouse(): boolean {
+    return this.mousePause;
+  }
+
+  /** Точка на круге паузы. Слой ввода читает это раньше, чем поставит крест. */
+  overPause(x: number, y: number): boolean {
+    return this.hitPause(x, y);
+  }
+
   private body(): Pick<TouchMove, 'left' | 'right' | 'shift' | 'shiftPressed' | 'kneel' | 'ctrlPressed' | 'locomoting'> {
     let left = false;
     let right = false;
@@ -221,11 +234,15 @@ export class TouchLayer {
       y: Math.max(restR + gap, this.hudTop - gap - restR),
       r: restR,
     };
-    this.pauseBtn = { x: this.width - 36, y: 32, r: 22 };
+    const pauseR = this.coarse?.matches ? 22 : 11;
+    const pauseRight = 14 + pauseR;
+    const pauseTop = 10 + pauseR;
+    this.pauseBtn = { x: this.width - pauseRight, y: pauseTop, r: pauseR };
   }
 
   private readonly onCoarse = (): void => {
     this.shown = this.touched || !!this.coarse?.matches;
+    if (this.width > 0) this.layout();
   };
 
   private noteTouch(): void {
@@ -235,12 +252,18 @@ export class TouchLayer {
   }
 
   private readonly onDown = (pointer: Phaser.Input.Pointer): void => {
-    if (!pointer.wasTouch) return;
-    this.noteTouch();
     const x = pointer.worldX;
     const y = pointer.worldY;
+    if (!pointer.wasTouch) {
+      if (this.hitPause(x, y)) {
+        this.mousePause = true;
+        if (pointer.button === 0) this.pauseEdge = true;
+      }
+      return;
+    }
+    this.noteTouch();
     if (this.chrome === 'down') return;
-    if ((this.chrome === 'play' || this.chrome === 'pause') && this.hit(this.pauseBtn, x, y, 1.15)) {
+    if (this.hitPause(x, y)) {
       this.pauseEdge = true;
       this.owns.set(pointer.id, 'pause');
       return;
@@ -279,7 +302,10 @@ export class TouchLayer {
   };
 
   private readonly onUp = (pointer: Phaser.Input.Pointer): void => {
-    if (!pointer.wasTouch) return;
+    if (!pointer.wasTouch) {
+      this.mousePause = false;
+      return;
+    }
     this.noteTouch();
     const kind = this.owns.get(pointer.id);
     this.owns.delete(pointer.id);
@@ -342,6 +368,12 @@ export class TouchLayer {
     return false;
   }
 
+  /** Бой и пауза. На смерти и на первом выборе сложности кнопки нет. */
+  private hitPause(x: number, y: number): boolean {
+    if (this.width <= 0 || (this.chrome !== 'play' && this.chrome !== 'pause')) return false;
+    return this.hit(this.pauseBtn, x, y, 1.15);
+  }
+
   private hit(circle: Circle, x: number, y: number, slop: number): boolean {
     const reach = circle.r * slop;
     const dx = x - circle.x;
@@ -352,9 +384,9 @@ export class TouchLayer {
   private paint(): void {
     this.gfx.clear();
     this.grenadeIcon?.setVisible(false);
-    if (!this.shown || this.chrome === 'off' || this.chrome === 'down' || this.width <= 0) return;
+    if (this.chrome === 'off' || this.chrome === 'down' || this.width <= 0) return;
     this.paintPause();
-    if (this.chrome !== 'play') return;
+    if (!this.shown || this.chrome !== 'play') return;
     this.paintStick();
     this.paintGrenade();
     this.paintAimRest();
@@ -402,18 +434,19 @@ export class TouchLayer {
 
   private paintPause(): void {
     const { x, y, r } = this.pauseBtn;
-    this.ring(x, y, r, 0.4);
+    const scale = r / 22;
+    this.ring(x, y, r, 0.4, r < 22 ? 1 : 2);
     this.gfx.fillStyle(palette.ink, 0.9);
-    const w = 3;
+    const w = Math.max(1, Math.round(3 * scale));
     const h = Math.round(r * 0.7);
-    this.gfx.fillRect(x - 5, y - h / 2, w, h);
-    this.gfx.fillRect(x + 2, y - h / 2, w, h);
+    this.gfx.fillRect(x - Math.round(5 * scale), y - h / 2, w, h);
+    this.gfx.fillRect(x + Math.round(2 * scale), y - h / 2, w, h);
   }
 
-  private ring(x: number, y: number, r: number, alpha: number): void {
+  private ring(x: number, y: number, r: number, alpha: number, stroke = 2): void {
     this.gfx.fillStyle(palette.black, alpha);
     this.gfx.fillCircle(x, y, r);
-    this.gfx.lineStyle(2, palette.ink, 0.75);
+    this.gfx.lineStyle(stroke, palette.ink, 0.75);
     this.gfx.strokeCircle(x, y, r);
   }
 

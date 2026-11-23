@@ -63,11 +63,11 @@ export class Controls {
     scene.input.setDefaultCursor('none');
 
     scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.wasTouch) return;
+      if (pointer.wasTouch || this.touch.blocksMouse()) return;
       this.touch.placeAim(pointer.worldX, pointer.worldY);
     });
     scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.wasTouch) return;
+      if (pointer.wasTouch || this.touch.blocksMouse() || this.touch.overPause(pointer.worldX, pointer.worldY)) return;
       this.touch.placeAim(pointer.worldX, pointer.worldY);
       if (pointer.button !== 2) return;
       onRightClick();
@@ -105,7 +105,8 @@ export class Controls {
     const aimFire = finger.aimHeld && !moving;
     this.touch.noteAimFire(aimFire);
     const mouse = this.scene.input.mousePointer;
-    const mouseFire = !!mouse && !mouse.wasTouch && mouse.primaryDown && this.touch.mouseLive();
+    const mouseFire =
+      !!mouse && !mouse.wasTouch && mouse.primaryDown && this.touch.mouseLive() && !this.touch.blocksMouse();
     return {
       left,
       right,
