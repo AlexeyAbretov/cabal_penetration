@@ -3,6 +3,7 @@ import type { GroundAt } from '../../campaign/ground';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
 import { grenade, kiln as kilnStats, palette } from '../../constants';
+import { readNum, readRecord, type HpPhase } from '../../keep';
 import { fitScale, type FrameLayout } from '../../layout';
 import type { KilnMark } from '../../types/kiln';
 import { blit, ensureCanvas } from './blit';
@@ -118,6 +119,41 @@ export class Kilns {
         dust: 0,
         art: null,
       };
+    });
+  }
+
+  note(): HpPhase[] {
+    return this.ovens.map((oven) => ({
+      hp: oven.hp,
+      phase: oven.phase === 'down' ? 'down' : oven.phase === 'up' ? 'up' : 'scrap',
+    }));
+  }
+
+  /** Фаза и жизни. Начатое обрушение встаёт кучей: бонус уже взят. */
+  recall(data: unknown): void {
+    if (!Array.isArray(data)) return;
+    data.forEach((item, index) => {
+      const oven = this.ovens[index];
+      const row = readRecord(item);
+      if (!oven || !row) return;
+      const phase = row.phase;
+      if (phase === 'down') {
+        oven.phase = 'down';
+        oven.hp = 0;
+        return;
+      }
+      if (phase === 'scrap') {
+        oven.phase = 'scrap';
+        oven.hp = 0;
+        oven.stage = kilnStats.blasts - 1;
+        return;
+      }
+      if (phase !== 'up') return;
+      const hp = readNum(row.hp);
+      if (hp === null) return;
+      oven.phase = 'up';
+      oven.hp = Math.min(oven.maxHp, Math.max(0, hp));
+      oven.stage = woundStage(oven.hp, oven.maxHp);
     });
   }
 

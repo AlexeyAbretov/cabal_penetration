@@ -53,6 +53,21 @@ export class Gun {
     this.holdLeft = weaponHoldMs;
   }
 
+  note(): { weapon: WeaponId; holdLeft: number } {
+    return { weapon: this.weapon, holdLeft: Math.max(0, this.holdLeft) };
+  }
+
+  /** Тот же ствол и остаток десяти секунд. На границе картинки сцена его не зовёт. */
+  recall(weapon: WeaponId, holdLeft: number): void {
+    if (weapon === 'rifle' || holdLeft <= 0) {
+      this.weapon = 'rifle';
+      this.holdLeft = 0;
+      return;
+    }
+    this.weapon = weapon;
+    this.holdLeft = holdLeft;
+  }
+
   /** Граница сцены. Оба временных ствола сгорают, даже если десять секунд не вышли. */
   burn(): void {
     this.weapon = 'rifle';

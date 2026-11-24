@@ -250,6 +250,18 @@ export class Hud {
     this.paintBar();
   }
 
+  note(): { slain: number; quota: number; hurt: number } {
+    return { slain: this.slain, quota: this.quota, hurt: this.hurtTimer };
+  }
+
+  /** Полоска и мигание после ранения. Счёт и жизни сцена уже принесла заходом. */
+  recall(slain: number, quota: number, hurt: number): void {
+    if (quota >= 0) this.quota = Math.floor(quota);
+    this.slain = Math.max(0, Math.min(this.quota, Math.floor(slain)));
+    this.hurtTimer = Math.max(0, hurt);
+    this.paintBar();
+  }
+
   addScore(points: number): void {
     this.score += points;
     this.scoreText.setText(String(this.score).padStart(hud.scoreDigits, '0'));

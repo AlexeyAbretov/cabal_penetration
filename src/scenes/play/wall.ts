@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { columnIndex, rectsOverlap, type HitBox } from '../../combat';
 import { palette, wall } from '../../constants';
 import { soldierBodyY, wallBottomY, wallTopY, type FrameLayout } from '../../layout';
+import { readNum } from '../../keep';
 import { hash } from './pix';
 import type { Sparks } from './sparks';
 
@@ -33,6 +34,19 @@ export class FrontWall {
 
   up(column: number): boolean {
     return (this.hp[column] ?? 0) > 0;
+  }
+
+  note(): number[] {
+    return [...this.hp];
+  }
+
+  /** Жизни секций. Обновление страницы ставит их до первой отрисовки. */
+  recall(hp: readonly number[]): void {
+    for (let i = 0; i < this.hp.length && i < hp.length; i += 1) {
+      const n = readNum(hp[i]);
+      if (n === null) continue;
+      this.hp[i] = Math.min(wall.hits, Math.max(0, Math.round(n)));
+    }
   }
 
   count(): number {

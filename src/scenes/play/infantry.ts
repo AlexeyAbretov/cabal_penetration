@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { centerBox, circleHitsRect, flightSample, type FlightArrival, type FlightBlock, type HitBox } from '../../combat';
 import { frame, grenade, infantry, palette, volley } from '../../constants';
 import { scaleHp } from '../../difficulty';
+import { readNum, readRecord } from '../../keep';
 import { pointHidden, shotReaches, type Cover } from '../../cover';
 import { infantryLooks, infantrySheet, type InfantryLook } from '../../infantrySheet';
 import { belowHorizon, fieldScale, wallTopY, type FrameLayout } from '../../layout';
@@ -141,6 +142,110 @@ export class Infantry {
   freeze(): void {
     this.frozen = true;
     this.incoming.length = 0;
+  }
+
+  note(): {
+    clock: number;
+    lanes: { index: number; sent: number; nextAt: number }[];
+    units: {
+      hp: number;
+      lane: number;
+      heading: -1 | 1;
+      sx: number;
+      tx: number;
+      moveT: number;
+      runMs: number;
+      phase: Phase;
+      wait: number;
+      column: number;
+      anim: number;
+      look: number;
+    }[];
+  } {
+    return {
+      clock: this.clock,
+      lanes: this.lanes.map((lane) => ({ index: lane.index, sent: lane.sent, nextAt: lane.nextAt })),
+      units: this.units.filter((soldier) => soldier.alive).map((soldier) => ({
+        hp: soldier.hp,
+        lane: soldier.lane,
+        heading: soldier.heading,
+        sx: soldier.sx,
+        tx: soldier.tx,
+        moveT: soldier.moveT,
+        runMs: soldier.runMs,
+        phase: soldier.phase,
+        wait: soldier.wait,
+        column: soldier.column,
+        anim: soldier.anim,
+        look: soldier.look,
+      })),
+    };
+  }
+
+  /**
+   * Живые и то, что ещё не вышло. Трупы и пули в воздухе не возвращаются:
+   * полоска уже помнит убитых, выстрел в полёте просто пропадает.
+   */
+  recall(data: unknown): void {
+    const row = readRecord(data);
+    if (!row) return;
+    const clock = readNum(row.clock);
+    if (clock !== null) this.clock = Math.max(0, clock);
+    if (Array.isArray(row.lanes) && row.lanes.length === this.lanes.length) {
+      row.lanes.forEach((item, index) => {
+        const lane = this.lanes[index];
+        const saved = readRecord(item);
+        if (!lane || !saved) return;
+        const at = readNum(saved.index);
+        const sent = readNum(saved.sent);
+        const nextAt = readNum(saved.nextAt);
+        if (at !== null) lane.index = Math.min(lane.groups.length, Math.max(0, Math.floor(at)));
+        if (sent !== null) lane.sent = Math.max(0, Math.floor(sent));
+        if (nextAt !== null) lane.nextAt = Math.max(0, nextAt);
+      });
+    }
+    if (!Array.isArray(row.units)) return;
+    const units: Soldier[] = [];
+    for (const item of row.units) {
+      if (units.length >= infantry.cap) break;
+      const saved = readRecord(item);
+      if (!saved) continue;
+      const hp = readNum(saved.hp);
+      const lane = readNum(saved.lane);
+      const sx = readNum(saved.sx);
+      const tx = readNum(saved.tx);
+      const moveT = readNum(saved.moveT);
+      const runMs = readNum(saved.runMs);
+      if (hp === null || hp <= 0 || lane === null || sx === null || tx === null || moveT === null || runMs === null) {
+        continue;
+      }
+      const look = readNum(saved.look);
+      const wait = readNum(saved.wait);
+      const column = readNum(saved.column);
+      const anim = readNum(saved.anim);
+      units.push({
+        alive: true,
+        hp,
+        score: infantry.score,
+        flash: 0,
+        lane,
+        heading: saved.heading === -1 ? -1 : 1,
+        sx,
+        tx,
+        moveT: Math.min(1, Math.max(0, moveT)),
+        runMs: Math.max(1, runMs),
+        phase: phaseOf(saved.phase),
+        wait: wait === null ? 0 : Math.max(0, wait),
+        column: column === null ? 0 : Math.max(0, Math.floor(column)),
+        anim: anim === null ? 0 : Math.max(0, anim),
+        look: look === null ? 0 : Math.abs(Math.floor(look)) % infantryLooks.length,
+        x: 0,
+        y: 0,
+        w: infantry.width,
+        h: infantry.height,
+      });
+    }
+    this.units = units;
   }
 
   bind(view: FrameLayout): void {
@@ -991,6 +1096,12 @@ function turn(dx: number, dy: number, quarter: number): { x: number; y: number }
   if (q === 2) return { x: -dx, y: -dy };
   if (q === 3) return { x: dy, y: -dx };
   return { x: dx, y: dy };
+}
+
+const phases: readonly Phase[] = ['run', 'hold', 'aim', 'burst', 'recover'];
+
+function phaseOf(value: unknown): Phase {
+  return phases.includes(value as Phase) ? (value as Phase) : 'hold';
 }
 
 function sideLanes(groups: readonly InfantryGroup[]): SideLane[] {

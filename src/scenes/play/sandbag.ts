@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
 import { grenade, palette, sandbag } from '../../constants';
+import { readNum, readRecord, type GoneRow } from '../../keep';
 import type { GroundAt } from '../../campaign/ground';
 import type { SandbagMark } from '../../types/sandbag';
 import { ruinVariants, sandbagBreakKey, sandbagIdleKey, sandbagRuinKey } from '../../fenceSheet';
@@ -66,6 +67,29 @@ export class Sandbags {
       seat: scene.add.graphics().setDepth(2.51),
       seatSig: '',
     }));
+  }
+
+  note(): GoneRow[] {
+    return this.piles.map((pile) => ({ hp: pile.hp, gone: !pile.alive }));
+  }
+
+  /** Сломанная секция сразу куча. Ролик после обновления не крутится. */
+  recall(data: unknown): void {
+    if (!Array.isArray(data)) return;
+    data.forEach((item, index) => {
+      const pile = this.piles[index];
+      const row = readRecord(item);
+      if (!pile || !row) return;
+      if (row.gone === true) {
+        pile.alive = false;
+        pile.gone = true;
+        pile.breaking = false;
+        pile.hp = 0;
+        return;
+      }
+      const hp = readNum(row.hp);
+      if (hp !== null) pile.hp = Math.min(sandbag.hp, Math.max(0, hp));
+    });
   }
 
   bind(view: FrameLayout): void {

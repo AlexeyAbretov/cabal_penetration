@@ -75,6 +75,15 @@ export class Fences {
     return this.owned;
   }
 
+  /** Секция с нулём жизней уже куча. Ролик слома заново не крутится. */
+  recall(front: FrontWall): void {
+    for (const piece of this.pieces) {
+      if (front.up(piece.column)) continue;
+      piece.gone = true;
+      piece.breaking = false;
+    }
+  }
+
   /** Живые секции, чья кладка входит в квадрат креста. */
   hitColumns(box: HitBox): number[] {
     const columns: number[] = [];

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
 import { grenade, palette, shortFence } from '../../constants';
+import { readNum, readRecord, type GoneRow } from '../../keep';
 import type { GroundAt } from '../../campaign/ground';
 import type { ShortMark } from '../../types/shortFence';
 import { ruinVariants, shortFenceBreakKey, shortFenceIdleKey, shortFenceRuinKey } from '../../fenceSheet';
@@ -65,6 +66,29 @@ export class ShortFences {
         scene.add.sprite(0, 0, shortFenceIdleKey()).setOrigin(0.5, 1).setDepth(2.5).setVisible(false),
       ),
     }));
+  }
+
+  note(): GoneRow[] {
+    return this.runs.map((run) => ({ hp: run.hp, gone: !run.alive }));
+  }
+
+  /** Сломанный забор сразу куча. Ролик слома после обновления не крутится. */
+  recall(data: unknown): void {
+    if (!Array.isArray(data)) return;
+    data.forEach((item, index) => {
+      const run = this.runs[index];
+      const row = readRecord(item);
+      if (!run || !row) return;
+      if (row.gone === true) {
+        run.alive = false;
+        run.gone = true;
+        run.breaking = false;
+        run.hp = 0;
+        return;
+      }
+      const hp = readNum(row.hp);
+      if (hp !== null) run.hp = Math.min(shortFence.hp, Math.max(0, hp));
+    });
   }
 
   bind(view: FrameLayout): void {

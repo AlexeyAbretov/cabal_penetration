@@ -54,6 +54,13 @@ export class Grenades {
     return this.stock;
   }
 
+  /** Уже брошенные. В запись они возвращаются в запас: в воздухе их после обновления нет. */
+  flying(): number {
+    let n = 0;
+    for (const item of this.grenades) if (item.alive) n += 1;
+    return n;
+  }
+
   /** Заход приносит запас с прошлой картинки. Между сценами гранаты не сбрасываются. */
   setStock(stock: number): void {
     this.stock = Math.max(0, Math.floor(stock));

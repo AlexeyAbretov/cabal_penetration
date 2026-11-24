@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { GroundAt } from '../../campaign/ground';
 import { grenade, house as houseStats, palette } from '../../constants';
+import { readNum, readRecord, type HpPhase } from '../../keep';
 import type { HouseMark } from '../../types/house';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
@@ -120,6 +121,41 @@ export class Houses {
         art: null,
         mask: null,
       };
+    });
+  }
+
+  note(): HpPhase[] {
+    return this.houses.map((house) => ({
+      hp: house.hp,
+      phase: house.phase === 'down' ? 'down' : house.phase === 'up' ? 'up' : 'scrap',
+    }));
+  }
+
+  /** Фаза и жизни. Обрушение, которое уже началось, встаёт кучей: бонус с него уже взят. */
+  recall(data: unknown): void {
+    if (!Array.isArray(data)) return;
+    data.forEach((item, index) => {
+      const house = this.houses[index];
+      const row = readRecord(item);
+      if (!house || !row) return;
+      const phase = row.phase;
+      if (phase === 'down') {
+        house.phase = 'down';
+        house.hp = 0;
+        return;
+      }
+      if (phase === 'scrap') {
+        house.phase = 'scrap';
+        house.hp = 0;
+        house.stage = houseStats.blasts - 1;
+        return;
+      }
+      if (phase !== 'up') return;
+      const hp = readNum(row.hp);
+      if (hp === null) return;
+      house.phase = 'up';
+      house.hp = Math.min(house.maxHp, Math.max(0, hp));
+      house.stage = woundStage(house.hp, house.maxHp);
     });
   }
 

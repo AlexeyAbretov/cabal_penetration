@@ -162,6 +162,33 @@ export class Soldier {
     return this.columns.columnAt(this.view, this.cx);
   }
 
+  note(): { ratio: number; kneel: boolean; angle: number } {
+    return {
+      ratio: this.soldierRatio,
+      kneel: this.kneeling && !this.fallState,
+      angle: this.fallState?.angle ?? 0,
+    };
+  }
+
+  /** Доля дорожки и колено. Ресайз держит ту же долю. */
+  standShare(ratio: number, kneel: boolean): void {
+    this.soldierRatio = Math.min(1, Math.max(0, ratio));
+    this.kneeling = kneel;
+  }
+
+  /** Труп уже лежит. Экран смерти после обновления страницы не крутит падение заново. */
+  lie(angle: number): void {
+    if (!this.deathSprite || this.fallState) return;
+    const elapsed = deathFall.frameMs * soldierDeath.frames + deathFall.lieMs;
+    this.fallState = { elapsed, angle, corpse: true };
+    this.firing = false;
+    this.kneeling = false;
+    this.roll = null;
+    this.gait = 'stand';
+    this.runLatched = false;
+    this.clip = '';
+  }
+
   /** Доля дорожки, на которой центр солдата совпадает с центром колонки. */
   standInColumn(index: number): void {
     if (!this.view || !this.columns) return;

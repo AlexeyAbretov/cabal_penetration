@@ -9,6 +9,7 @@ import {
 } from '../../combat';
 import { frame, green, grenade, palette, tank, tankVolley, truck, volley, wheel } from '../../constants';
 import { scaleHp } from '../../difficulty';
+import { readNum, readRecord } from '../../keep';
 import { type EnemyKind, type WaveGroup } from '../../wave';
 import { fieldScale, wallTopY, type FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
@@ -110,6 +111,143 @@ export class Enemies {
   freeze(): void {
     this.frozen = true;
     this.incoming.length = 0;
+  }
+
+  note(): {
+    clock: number;
+    sent: number[];
+    units: {
+      kind: EnemyKind;
+      hp: number;
+      maxHp: number;
+      score: number;
+      sx: number;
+      sy: number;
+      tx: number;
+      ty: number;
+      moveT: number;
+      phase: Phase;
+      wait: number;
+      shotsLeft: number;
+      column: number;
+      runMs: number;
+      holdMs: number;
+      leadMs: number;
+      burst: number;
+      gapMs: number;
+      recoverMs: number;
+      heading: -1 | 1;
+      ridersLeft: number;
+      baseW: number;
+      baseH: number;
+    }[];
+  } {
+    return {
+      clock: this.clock,
+      sent: this.pockets.map((pocket) => pocket.sent),
+      units: this.units.filter((enemy) => enemy.alive).map((enemy) => ({
+        kind: enemy.kind,
+        hp: enemy.hp,
+        maxHp: enemy.maxHp,
+        score: enemy.score,
+        sx: enemy.sx,
+        sy: enemy.sy,
+        tx: enemy.tx,
+        ty: enemy.ty,
+        moveT: enemy.moveT,
+        phase: enemy.phase,
+        wait: enemy.wait,
+        shotsLeft: enemy.shotsLeft,
+        column: enemy.column,
+        runMs: enemy.runMs,
+        holdMs: enemy.holdMs,
+        leadMs: enemy.leadMs,
+        burst: enemy.burst,
+        gapMs: enemy.gapMs,
+        recoverMs: enemy.recoverMs,
+        heading: enemy.heading,
+        ridersLeft: enemy.ridersLeft,
+        baseW: enemy.baseW,
+        baseH: enemy.baseH,
+      })),
+    };
+  }
+
+  /** Живые и очередь выхода. Пули в воздухе не возвращаются. */
+  recall(data: unknown): void {
+    const row = readRecord(data);
+    if (!row) return;
+    const clock = readNum(row.clock);
+    if (clock !== null) this.clock = Math.max(0, clock);
+    if (Array.isArray(row.sent)) {
+      row.sent.forEach((item, index) => {
+        const pocket = this.pockets[index];
+        const sent = readNum(item);
+        if (!pocket || sent === null) return;
+        pocket.sent = Math.min(pocket.spec.composition.length, Math.max(0, Math.floor(sent)));
+      });
+    }
+    if (!Array.isArray(row.units)) return;
+    const units: Actor[] = [];
+    for (const item of row.units) {
+      if (units.length >= 32) break;
+      const saved = readRecord(item);
+      if (!saved || !isKind(saved.kind)) continue;
+      const hp = readNum(saved.hp);
+      const sx = readNum(saved.sx);
+      const sy = readNum(saved.sy);
+      const tx = readNum(saved.tx);
+      const ty = readNum(saved.ty);
+      if (hp === null || hp <= 0 || sx === null || sy === null || tx === null || ty === null) continue;
+      const body = this.unit(saved.kind, sx, sy, tx, ty);
+      body.hp = hp;
+      const maxHp = readNum(saved.maxHp);
+      if (maxHp !== null && maxHp > 0) body.maxHp = maxHp;
+      const score = readNum(saved.score);
+      if (score !== null) body.score = Math.max(0, score);
+      const moveT = readNum(saved.moveT);
+      if (moveT !== null) body.moveT = Math.min(1, Math.max(0, moveT));
+      body.phase = phaseOf(saved.phase);
+      const wait = readNum(saved.wait);
+      if (wait !== null) body.wait = Math.max(0, wait);
+      const shots = readNum(saved.shotsLeft);
+      if (shots !== null) body.shotsLeft = Math.max(0, Math.floor(shots));
+      const column = readNum(saved.column);
+      if (column !== null) body.column = Math.max(0, Math.floor(column));
+      copyNum(saved.runMs, (n) => {
+        body.runMs = Math.max(1, n);
+      });
+      copyNum(saved.holdMs, (n) => {
+        body.holdMs = Math.max(0, n);
+      });
+      copyNum(saved.leadMs, (n) => {
+        body.leadMs = Math.max(0, n);
+      });
+      copyNum(saved.burst, (n) => {
+        body.burst = Math.max(0, Math.floor(n));
+      });
+      copyNum(saved.gapMs, (n) => {
+        body.gapMs = Math.max(0, n);
+      });
+      copyNum(saved.recoverMs, (n) => {
+        body.recoverMs = Math.max(0, n);
+      });
+      body.heading = saved.heading === -1 ? -1 : 1;
+      const riders = readNum(saved.ridersLeft);
+      if (riders !== null) body.ridersLeft = Math.max(0, Math.floor(riders));
+      const baseW = readNum(saved.baseW);
+      const baseH = readNum(saved.baseH);
+      if (baseW !== null && baseW > 0) {
+        body.baseW = baseW;
+        body.w = baseW;
+      }
+      if (baseH !== null && baseH > 0) {
+        body.baseH = baseH;
+        body.h = baseH;
+      }
+      units.push(body);
+    }
+    this.units = units;
   }
 
   bind(view: FrameLayout): void {
@@ -685,5 +823,21 @@ export class Enemies {
       gfx.fillRect(left + i * (pipW + gap), y, pipW, 3);
     }
   }
+}
+
+const enemyPhases: readonly Phase[] = ['run', 'hold', 'aim', 'burst', 'recover', 'leave'];
+const enemyKinds: readonly EnemyKind[] = ['green', 'tank', 'wheel', 'truck'];
+
+function phaseOf(value: unknown): Phase {
+  return enemyPhases.includes(value as Phase) ? (value as Phase) : 'run';
+}
+
+function isKind(value: unknown): value is EnemyKind {
+  return enemyKinds.includes(value as EnemyKind);
+}
+
+function copyNum(value: unknown, write: (n: number) => void): void {
+  const n = readNum(value);
+  if (n !== null) write(n);
 }
 

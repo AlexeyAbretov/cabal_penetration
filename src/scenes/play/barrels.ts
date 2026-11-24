@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
 import { barrel, grenade, palette } from '../../constants';
+import { readNum, readRecord, type BarrelRow } from '../../keep';
 import type { BarrelMark } from '../../types/barrel';
 import { belowHorizon, fieldScale, fitScale, type FrameLayout } from '../../layout';
 import { blit, ensureCanvas } from './blit';
@@ -91,6 +92,25 @@ export class Barrels {
         sig: '',
         mask: null,
       };
+    });
+  }
+
+  note(): BarrelRow[] {
+    return this.kegs.map((keg) => ({ hp: keg.hp, whole: keg.whole }));
+  }
+
+  recall(data: unknown): void {
+    if (!Array.isArray(data)) return;
+    data.forEach((item, index) => {
+      const keg = this.kegs[index];
+      const row = readRecord(item);
+      if (!keg || !row) return;
+      const hp = readNum(row.hp);
+      if (hp !== null) keg.hp = Math.min(barrel.hp, Math.max(0, hp));
+      if (row.whole === false) {
+        keg.whole = false;
+        keg.hp = 0;
+      }
     });
   }
 

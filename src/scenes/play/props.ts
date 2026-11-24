@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { centerBox, circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
 import { grenade, palette, scenery, type PropKind } from '../../constants';
+import { readNum, readRecord, type PropRow } from '../../keep';
 import type { PropMark } from '../../types/prop';
 import { fieldScale, fitScale, wallTopY, type FrameLayout } from '../../layout';
 import { blit, ensureCanvas } from './blit';
@@ -86,6 +87,26 @@ export class Props {
       };
     });
     this.gfx = scene.add.graphics().setDepth(2.5);
+  }
+
+  note(): PropRow[] {
+    return this.props.map((prop) => ({ hp: prop.hp, alive: prop.alive }));
+  }
+
+  recall(data: unknown): void {
+    if (!Array.isArray(data)) return;
+    data.forEach((item, index) => {
+      const prop = this.props[index];
+      const row = readRecord(item);
+      if (!prop || !row) return;
+      const spec = scenery[prop.kind];
+      const hp = readNum(row.hp);
+      if (hp !== null) prop.hp = Math.min(spec.hp, Math.max(0, hp));
+      if (row.alive === false) {
+        prop.alive = false;
+        prop.hp = 0;
+      }
+    });
   }
 
   bind(view: FrameLayout): void {

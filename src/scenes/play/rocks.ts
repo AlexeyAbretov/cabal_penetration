@@ -3,6 +3,7 @@ import type { GroundAt } from '../../campaign/ground';
 import { circleHitsRect, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
 import { grenade, palette, rock as rockStats } from '../../constants';
+import { readNum, readRecord, type RockRow } from '../../keep';
 import { belowHorizon, fieldScale, fitScale, type FrameLayout } from '../../layout';
 import type { RockMark } from '../../types/rock';
 import { blit, ensureCanvas } from './blit';
@@ -81,6 +82,33 @@ export class Rocks {
         stage: 0,
         phase: 'up',
       };
+    });
+  }
+
+  note(): RockRow[] {
+    return this.stones.map((stone) => ({
+      hp: stone.hp,
+      phase: stone.phase === 'scrap' ? 'scrap' : 'up',
+    }));
+  }
+
+  recall(data: unknown): void {
+    if (!Array.isArray(data)) return;
+    data.forEach((item, index) => {
+      const stone = this.stones[index];
+      const row = readRecord(item);
+      if (!stone || !row) return;
+      if (row.phase === 'scrap') {
+        stone.phase = 'scrap';
+        stone.hp = 0;
+        return;
+      }
+      if (row.phase !== 'up') return;
+      const hp = readNum(row.hp);
+      if (hp === null) return;
+      stone.phase = 'up';
+      stone.hp = Math.min(stone.maxHp, Math.max(0, hp));
+      stone.stage = woundStage(stone.hp, stone.maxHp);
     });
   }
 

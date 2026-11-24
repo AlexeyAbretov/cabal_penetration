@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { afterPicture, marchFrom, marchPicture, openMarch, restartLevel, type March } from '../campaign/march';
+import { readKeep, storeFresh, storeKeep, type Keep } from '../keep';
 import { route } from '../campaign/route';
 import { difficultyById, riderCount, scaleHurt, scaleWave } from '../difficulty';
 import { bonusList, breakableCount, type Picture } from '../campaign/picture';
@@ -60,6 +61,7 @@ import { FrontWall } from './play/wall';
  * Танк-прямоугольник ест полоску. Очки за него и за крупные объекты выше, чем за зелёного.
  * Глубина сзади вперёд: небо и дома, крона живого дерева, замах, дорожка, кусты и ящики, зелёные и танк,
  * стена, дроп, солдат, очередь, прицел, рамка.
+ * Обновление страницы возвращает этот бой из вкладки. Закрытая вкладка его забывает.
  */
 export class Play extends Phaser.Scene {
   private view!: FrameLayout;
@@ -108,6 +110,18 @@ export class Play extends Phaser.Scene {
   private settled = false;
   private march: March = marchFrom(undefined);
   private picture!: Picture;
+  private bag!: DropBag;
+  /** Полная запись вкладки. Пусто, если картинка только что сменилась или сохранения нет. */
+  private kept: Keep | null = null;
+  /** Победа уже была на экране. finish ставит её после раскладки, иначе он выходит сразу. */
+  private resumeClear = false;
+  private wantHelp = false;
+  /** Объекты боя уже есть, запись можно снять. */
+  private seated = false;
+  private keepTimer = 0;
+  private readonly hidePage = (): void => {
+    this.writeKeep();
+  };
 
   constructor() {
     super('Play');
@@ -151,18 +165,29 @@ export class Play extends Phaser.Scene {
   }
 
   init(data?: object): void {
-    this.march = marchFrom(data);
+    const handoff = isMarch(data);
+    const kept = handoff ? null : readKeep();
+    this.kept = kept && !kept.fresh ? kept : null;
+    this.march = handoff ? marchFrom(data) : kept ? kept.march : marchFrom(data);
+    if (handoff) storeFresh(this.march);
     this.picture = marchPicture(this.march);
-    this.choosing = difficultyById(this.march.difficulty) ? null : 'start';
-    this.paused = false;
+    const dead = deadHold(this.kept);
+    if (dead) this.choosing = null;
+    else if (this.kept) this.choosing = this.kept.choosing;
+    else this.choosing = difficultyById(this.march.difficulty) ? null : 'start';
+    this.paused = this.kept !== null && dead === null && this.kept.paused;
     this.helpOpen = false;
+    this.wantHelp = this.kept !== null && this.kept.help && dead === null && this.choosing !== 'start';
     this.cleared = false;
-    this.clearWait = 0;
-    this.clearHold = 0;
-    this.down = null;
-    this.deathSpent = false;
+    this.resumeClear = this.kept !== null && dead === null && this.kept.cleared;
+    this.clearWait = this.kept && !this.resumeClear ? this.kept.clearWait : 0;
+    this.clearHold = this.kept?.clearHold ?? 0;
+    this.down = dead;
+    this.deathSpent = dead !== null;
     this.handoff = null;
-    this.settled = false;
+    this.settled = this.resumeClear && (this.kept?.settled ?? false);
+    this.seated = false;
+    this.keepTimer = 0;
   }
 
   create(): void {
@@ -211,10 +236,10 @@ export class Play extends Phaser.Scene {
     this.hud.setGrenades(this.grenades.count());
     this.drops = new Drops(this, this.sparks, (kind) => this.takeDrop(kind));
     const opened = frameLayout(Math.floor(this.scale.gameSize.width), Math.floor(this.scale.gameSize.height)).field;
-    const bag = new DropBag(bonusList(this.picture, opened), breakableCount(this.picture, opened), this.picture.id);
+    this.bag = new DropBag(bonusList(this.picture, opened), breakableCount(this.picture, opened), this.picture.id);
     const scatter = (score: number, rx: number, ry: number): void => {
       this.hud.addScore(score);
-      this.drops.spawn(bag.take(), rx, ry);
+      this.drops.spawn(this.bag.take(), rx, ry);
     };
     this.props = new Props(this, this.picture.props, this.sparks, scatter);
     const earth = this.picture.ground?.at ?? plainAt;
@@ -274,18 +299,20 @@ export class Play extends Phaser.Scene {
     this.controls = new Controls(this, () => this.onRightClick());
     this.hud.setQuota(waveQuota(wave, riders));
     this.hud.carry(this.march.score, this.march.lives);
+    if (this.kept) this.applyKept(this.kept);
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.layout();
-    // Центр секции, не стык. Стык у дыры читается как «стою в проломе».
-    this.soldier.standInColumn(Math.min(4, Math.max(0, this.picture.wall.length - 1)));
-    this.placeSoldier();
-    if (this.choosing) {
-      this.hud.setHold('difficulty');
-      this.tweens.pauseAll();
+    if (!this.kept) {
+      // Центр секции, не стык. Стык у дыры читается как «стою в проломе».
+      this.soldier.standInColumn(Math.min(4, Math.max(0, this.picture.wall.length - 1)));
+      this.placeSoldier();
     }
+    this.openHold();
     this.bindWindow();
     void this.attachSoldierSheet();
+    this.seated = true;
+    this.writeKeep();
   }
 
   /**
@@ -336,6 +363,7 @@ export class Play extends Phaser.Scene {
       this.scene.restart(next);
       return;
     }
+    this.keepStep(delta);
     const helpPressed = this.controls.helpPressed();
     if (helpPressed && !this.down && this.clearWait <= 0 && !this.cleared && this.choosing !== 'start') {
       this.setHelp(!this.helpOpen);
@@ -861,13 +889,18 @@ export class Play extends Phaser.Scene {
   private bindWindow(): void {
     this.game.events.on(Phaser.Core.Events.BLUR, this.pauseOnBlur, this);
     this.game.events.on(Phaser.Core.Events.HIDDEN, this.pauseOnBlur, this);
+    window.addEventListener('pagehide', this.hidePage);
+    window.addEventListener('beforeunload', this.hidePage);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.dropWindow, this);
     this.windowBound = true;
     if (document.hidden || !document.hasFocus()) this.pauseOnBlur();
   }
 
   private dropWindow(): void {
+    this.seated = false;
     this.windowBound = false;
+    window.removeEventListener('pagehide', this.hidePage);
+    window.removeEventListener('beforeunload', this.hidePage);
     this.game.events.off(Phaser.Core.Events.BLUR, this.pauseOnBlur, this);
     this.game.events.off(Phaser.Core.Events.HIDDEN, this.pauseOnBlur, this);
   }
@@ -882,6 +915,108 @@ export class Play extends Phaser.Scene {
     this.gun.interrupt(true);
     this.gun.quiet();
     this.setPaused(true);
+  }
+
+  /** Запись вкладки на объекты, которые сцена уже собрала. Раскладка потом их рисует. */
+  private applyKept(kept: Keep): void {
+    this.hud.recall(kept.slain, kept.quota, kept.hurt);
+    if (!this.resumeClear && !this.down) {
+      this.gun.recall(kept.weapon, kept.holdLeft);
+      this.aim.setWeapon(kept.weapon);
+      this.hud.setWeapon(kept.weapon);
+    }
+    this.soldier.standShare(kept.ratio, kept.kneel && !this.down);
+    if (this.down) this.soldier.lie(kept.angle);
+    this.wall.recall(kept.wall);
+    this.fences.recall(this.wall);
+    this.houses.recall(kept.houses);
+    this.kilns.recall(kept.kilns);
+    this.rocks.recall(kept.rocks);
+    this.trees.recall(kept.trees);
+    this.barrels.recall(kept.barrels);
+    this.props.recall(kept.props);
+    this.shorts.recall(kept.shorts);
+    this.bags.recall(kept.bags);
+    this.rails.recall(kept.rails);
+    this.pickets.recall(kept.pickets);
+    this.bag.recall(kept.bag);
+    this.drops.recall(kept.drops);
+    this.infantry.recall(kept.infantry);
+    this.enemies.recall(kept.enemies);
+  }
+
+  /** Пауза, смерть, победа и помощь — после раскладки, когда рамка уже знает размер. */
+  private openHold(): void {
+    if (this.choosing) {
+      this.hud.setHold('difficulty');
+      this.tweens.pauseAll();
+    } else if (this.down) {
+      this.hud.setHold(this.down, this.march.continues);
+      this.tweens.pauseAll();
+    } else if (this.resumeClear) {
+      this.finish();
+      if (this.paused) this.setPaused(true);
+    } else if (this.paused) {
+      this.setPaused(true);
+    }
+    if (this.wantHelp) this.setHelp(true);
+  }
+
+  private keepStep(delta: number): void {
+    if (!this.seated || this.handoff) return;
+    this.keepTimer += delta;
+    if (this.keepTimer < 400) return;
+    this.keepTimer = 0;
+    this.writeKeep();
+  }
+
+  /** Снимок боя. Обновление страницы читает его, пока вкладка не закрыта. */
+  private writeKeep(): void {
+    if (!this.seated || this.handoff) return;
+    const pose = this.soldier.note();
+    const gun = this.gun.note();
+    const bar = this.hud.note();
+    storeKeep({
+      v: 1,
+      fresh: false,
+      march: {
+        ...this.march,
+        lives: this.hud.livesLeft,
+        score: this.hud.points,
+        grenades: this.grenades.count() + this.grenades.flying(),
+      },
+      paused: this.paused,
+      help: this.helpOpen,
+      choosing: this.choosing,
+      down: this.down,
+      cleared: this.cleared,
+      settled: this.settled,
+      clearWait: Math.max(0, this.clearWait),
+      clearHold: Math.max(0, this.clearHold),
+      angle: pose.angle,
+      hurt: bar.hurt,
+      slain: bar.slain,
+      quota: bar.quota,
+      weapon: gun.weapon,
+      holdLeft: gun.holdLeft,
+      ratio: pose.ratio,
+      kneel: pose.kneel,
+      wall: this.wall.note(),
+      houses: this.houses.note(),
+      kilns: this.kilns.note(),
+      rocks: this.rocks.note(),
+      trees: this.trees.note(),
+      barrels: this.barrels.note(),
+      props: this.props.note(),
+      shorts: this.shorts.note(),
+      bags: this.bags.note(),
+      rails: this.rails.note(),
+      pickets: this.pickets.note(),
+      drops: this.drops.note(),
+      bag: this.bag.note(),
+      infantry: this.infantry.note(),
+      enemies: this.enemies.note(),
+    });
   }
 
   /** Список клавиш или жестов. Поверх паузы бой так и остаётся на паузе. */
@@ -899,4 +1034,19 @@ export class Play extends Phaser.Scene {
 
 function fenceKinds(marks: readonly FenceMark[]): FenceKind[] {
   return [...new Set(marks.map((mark) => mark.kind))];
+}
+
+/** scene.restart приносит заход. Первый запуск страницы — нет, его читает вкладка. */
+function isMarch(data: unknown): boolean {
+  if (!data || typeof data !== 'object') return false;
+  const row = data as Partial<March>;
+  return typeof row.level === 'number' && typeof row.picture === 'number';
+}
+
+/** Нуль жизней посреди падения ещё без надписи. После обновления сразу «ДАЛЬШЕ». */
+function deadHold(kept: Keep | null): 'continue' | 'over' | null {
+  if (!kept) return null;
+  if (kept.down) return kept.down;
+  if (kept.cleared || kept.choosing !== null || kept.march.lives > 0) return null;
+  return kept.march.continues > 0 ? 'continue' : 'over';
 }

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { circleHitsRect, distanceToSegment, rectsOverlap, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
 import { grenade, palette, railFence } from '../../constants';
+import { readNum, readRecord, type RailRow } from '../../keep';
 import type { RailLayout, RailMark, RailPost } from '../../types/rail';
 import type { FrameLayout } from '../../layout';
 import { blit, ensureCanvas } from './blit';
@@ -105,6 +106,26 @@ export class Rails {
         pixW: 0,
         pixH: 0,
       };
+    });
+  }
+
+  note(): RailRow[] {
+    return this.runs.map((run) => ({ hp: run.hp, alive: run.alive }));
+  }
+
+  /** Сломанный забор ставит рваные пролёты на первой раскладке. Бонус заново не берётся. */
+  recall(data: unknown): void {
+    if (!Array.isArray(data)) return;
+    data.forEach((item, index) => {
+      const run = this.runs[index];
+      const row = readRecord(item);
+      if (!run || !row) return;
+      const hp = readNum(row.hp);
+      if (hp !== null) run.hp = Math.min(railFence.hp, Math.max(0, hp));
+      if (row.alive === false) {
+        run.alive = false;
+        run.hp = 0;
+      }
     });
   }
 

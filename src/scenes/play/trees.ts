@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
 import { grenade, palette, tree as treeStats } from '../../constants';
+import { readNum, readRecord, type TreeRow } from '../../keep';
 import { belowHorizon, fitScale, type FrameLayout } from '../../layout';
 import type { TreeMark } from '../../types/tree';
 import { blit, ensureCanvas } from './blit';
@@ -103,6 +104,26 @@ export class Trees {
         key,
         sig: '',
       };
+    });
+  }
+
+  note(): TreeRow[] {
+    return this.trees.map((tree) => ({ hp: tree.hp, whole: tree.whole, pile: tree.pile }));
+  }
+
+  recall(data: unknown): void {
+    if (!Array.isArray(data)) return;
+    data.forEach((item, index) => {
+      const tree = this.trees[index];
+      const row = readRecord(item);
+      if (!tree || !row) return;
+      const hp = readNum(row.hp);
+      if (hp !== null) tree.hp = Math.min(treeStats.hp, Math.max(0, hp));
+      if (row.whole === false) {
+        tree.whole = false;
+        tree.hp = 0;
+      }
+      if (row.pile === true) tree.pile = true;
     });
   }
 

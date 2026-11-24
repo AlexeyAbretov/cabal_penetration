@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { grenadeDrop, palette, pickup, plaqueDrop, rapidDrop, soldierBox, spreadDrop, starDrop, type DropKind } from '../../constants';
+import { readNum, readRecord, type DropRow } from '../../keep';
 import { soldierFeetY, type FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
 
@@ -25,7 +26,7 @@ type Body = {
  * Лишние записи остаются в мешке и на дорожку не падают.
  */
 export class DropBag {
-  private readonly left: DropKind[];
+  private left: DropKind[];
 
   constructor(kinds: readonly DropKind[], need: number, id: string) {
     if (kinds.length < need) {
@@ -39,6 +40,36 @@ export class DropBag {
     if (kind === undefined) throw new Error('бонусы кончились раньше разрушаемых объектов');
     return kind;
   }
+
+  note(): DropKind[] {
+    return [...this.left];
+  }
+
+  /** Тот же остаток мешка. Иначе сломанное после обновления выпало бы второй раз другим бонусом. */
+  recall(data: unknown): void {
+    if (!Array.isArray(data)) return;
+    const next: DropKind[] = [];
+    for (const item of data) {
+      if (isDrop(item)) next.push(item);
+    }
+    this.left = next;
+  }
+}
+
+const dropKinds: readonly DropKind[] = [
+  'grenades',
+  'rapid',
+  'spread',
+  'star',
+  'bonus',
+  'medal',
+  'ton',
+  'fivek',
+  'tenk',
+];
+
+function isDrop(value: unknown): value is DropKind {
+  return dropKinds.includes(value as DropKind);
 }
 
 function shuffle<T>(items: T[]): T[] {
@@ -68,6 +99,31 @@ export class Drops {
     this.onTake = onTake;
     this.gfx = scene.add.graphics().setDepth(4.2);
     this.marks = scene.add.graphics().setDepth(4.3);
+  }
+
+  note(): DropRow[] {
+    return this.items.filter((item) => !item.taken).map((item) => ({ kind: item.kind, rx: item.rx, ry: item.ry }));
+  }
+
+  /** Лежащее на дорожке. То, что ещё падало, кладётся сразу: в воздухе после обновления его нет. */
+  recall(data: unknown): void {
+    if (!Array.isArray(data)) return;
+    for (const item of data) {
+      const row = readRecord(item);
+      if (!row || !isDrop(row.kind)) continue;
+      const rx = readNum(row.rx);
+      const ry = readNum(row.ry);
+      if (rx === null || ry === null) continue;
+      this.items.push({
+        kind: row.kind,
+        rx,
+        ry,
+        fall: 1,
+        landed: true,
+        taken: false,
+        icon: this.dropIcon(row.kind),
+      });
+    }
   }
 
   spawn(kind: DropKind, rx: number, ry: number): void {

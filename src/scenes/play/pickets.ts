@@ -62,6 +62,8 @@ const woods = [palette.wood, palette.woodLite, palette.woodDark] as const;
  */
 export class Pickets {
   private readonly runs: Run[];
+  /** Секции, сломанные до первой раскладки. true — ещё стоит. */
+  private broken: (readonly boolean[] | undefined)[] | null = null;
   private chips: Chip[] = [];
   private view: FrameLayout | null = null;
   private readonly scene: Phaser.Scene;
@@ -99,6 +101,27 @@ export class Pickets {
         key,
         sig: '',
       };
+    });
+  }
+
+  note(): boolean[][] {
+    return this.runs.map((run) => run.bays.map((bay) => bay.alive));
+  }
+
+  /** Сломанные секции. Бонус за них уже взят, раскладка только рисует рваные доски. */
+  recall(data: unknown): void {
+    if (!Array.isArray(data)) return;
+    this.broken = data.map((row) => (Array.isArray(row) ? row.map((cell) => cell !== false) : []));
+    if (!this.view) return;
+    this.runs.forEach((run, index) => {
+      const flags = this.broken?.[index];
+      if (!flags || !run.ready) return;
+      run.bays.forEach((bay, i) => {
+        if (flags[i] !== false) return;
+        bay.alive = false;
+        bay.hp = 0;
+      });
+      this.paint(run);
     });
   }
 
@@ -180,14 +203,17 @@ export class Pickets {
     const view = this.view;
     if (!view) return;
     const field = view.field;
-    for (const run of this.runs) this.layout(run, field);
+    for (let index = 0; index < this.runs.length; index += 1) {
+      const run = this.runs[index];
+      if (run) this.layout(run, field, index);
+    }
   }
 
   /**
    * Число секций фиксируется на первом кадре: мешок бонусов уже собран.
    * Дальше окно только растягивает те же пролёты.
    */
-  private layout(run: Run, field: FrameLayout['field']): void {
+  private layout(run: Run, field: FrameLayout['field'], index: number): void {
     const frame = picketFrame(run.mark, field);
     run.x0 = frame.x0;
     run.feet = frame.feet;
@@ -199,17 +225,21 @@ export class Pickets {
       const boxes = picketBays(frame.span, frame.height);
       const span = Math.max(1, frame.span);
       run.cuts = [...boxes.map((box) => box.start / span), 1];
-      run.bays = boxes.map((box) => ({
-        hp: picket.hp,
-        alive: true,
-        flash: 0,
-        start: box.start,
-        end: box.end,
-        left: 0,
-        right: 0,
-        top: 0,
-        bottom: 0,
-      }));
+      const flags = this.broken?.[index];
+      run.bays = boxes.map((box, bayIndex) => {
+        const alive = flags?.[bayIndex] !== false;
+        return {
+          hp: alive ? picket.hp : 0,
+          alive,
+          flash: 0,
+          start: box.start,
+          end: box.end,
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: 0,
+        };
+      });
       run.ready = true;
     } else {
       for (let i = 0; i < run.bays.length; i += 1) {
