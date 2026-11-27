@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { centerBox, circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
+import { centerBox, circleHitsRect, crossHitsSolid, rectsOverlap, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
 import { grenade, palette, scenery, type PropKind } from '../../constants';
 import { readNum, readRecord, type PropRow } from '../../keep';
@@ -123,7 +123,14 @@ export class Props {
   hit(box: HitBox, amount: number): void {
     let any = false;
     for (const prop of this.props) {
-      if (!prop.alive || !rectsOverlap(box, centerBox(prop.x, prop.y, prop.w, prop.h))) continue;
+      if (!prop.alive) continue;
+      const hit =
+        prop.kind === 'bush'
+          ? prop.mask
+            ? crossHitsSolid(box, bushBox(prop), (x, y) => bushOpaque(prop, x, y))
+            : rectsOverlap(box, bushBox(prop))
+          : rectsOverlap(box, centerBox(prop.x, prop.y, prop.w, prop.h));
+      if (!hit) continue;
       this.wound(prop, amount);
       any = true;
     }

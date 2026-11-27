@@ -162,7 +162,7 @@ export const aimFan = {
 } as const;
 
 /** Интервал очереди, пока левая кнопка зажата. */
-export const fireIntervalMs = 70;
+export const fireIntervalMs = 200;
 
 /** На сколько один выстрел удлиняет вспышку. Сама вспышка горит, пока зажат спуск. */
 export const muzzleFlashMs = 36;
@@ -174,6 +174,12 @@ export const muzzleFlashMs = 36;
 export const gunFire = {
   key: 'gun-fire',
   url: 'sounds/gun-fire-loop.wav',
+} as const;
+
+/** Выстрел широкого ствола. На каждый залп своя запись, без петли. */
+export const shotgunFire = {
+  key: 'shotgun-fire',
+  url: 'sounds/shotgun-fire.mp3',
 } as const;
 
 /** Бросок гранаты. На каждый бросок своя запись. Пустой запас и перекат молчат. */
@@ -228,7 +234,7 @@ export const weapons = {
     mark: palette.enemyLane,
   },
   rapid: {
-    intervalMs: 34,
+    intervalMs: 70,
     damage: 1,
     reach: 8,
     reachY: 8,
@@ -236,7 +242,7 @@ export const weapons = {
     mark: palette.rapid,
   },
   spread: {
-    intervalMs: 210,
+    intervalMs: fireIntervalMs * 3,
     damage: 3,
     reach: 28,
     reachY: 14,

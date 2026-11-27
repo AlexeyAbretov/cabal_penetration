@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { GroundAt } from '../../campaign/ground';
-import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
+import { circleHitsRect, crossHitsSolid, rectsOverlap, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
 import { grenade, kiln as kilnStats, palette } from '../../constants';
 import { readNum, readRecord, type HpPhase } from '../../keep';
@@ -445,14 +445,16 @@ export class Kilns {
 
 /** Верх купола — полукруг. Под экватором короткий прямой под, его и закрывает земля. */
 function hitsDome(oven: Oven, box: HitBox): boolean {
+  const face = bounds(oven);
+  if (!rectsOverlap(box, face)) return false;
   const cx = oven.root.x;
-  const qx = clamp(cx, box.left, box.right);
-  const qy = clamp(oven.ground, box.top, box.bottom);
-  const dx = qx - cx;
-  const dy = qy - oven.ground;
-  if (dy <= 0 && dx * dx + dy * dy <= oven.r * oven.r) return true;
   const half = oven.r * 0.92;
-  return rectsOverlap(box, { left: cx - half, right: cx + half, top: oven.ground, bottom: oven.ground + 2 });
+  return crossHitsSolid(box, face, (x, y) => {
+    const dx = x - cx;
+    const dy = y - oven.ground;
+    if (dy <= 0 && dx * dx + dy * dy <= oven.r * oven.r) return true;
+    return x >= cx - half && x <= cx + half && y >= oven.ground && y <= oven.ground + 2;
+  });
 }
 
 function blastHitsDome(x: number, y: number, oven: Oven): boolean {

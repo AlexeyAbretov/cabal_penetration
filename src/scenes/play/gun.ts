@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { gunFire, muzzleFlashMs, palette, weaponHoldMs, weapons, type WeaponId } from '../../constants';
+import { gunFire, muzzleFlashMs, palette, shotgunFire, weaponHoldMs, weapons, type WeaponId } from '../../constants';
 
 export type ShotMark = {
   damage: number;
@@ -51,6 +51,7 @@ export class Gun {
     this.weapon = kind;
     this.fireCooldown = 0;
     this.holdLeft = weaponHoldMs;
+    if (kind === 'spread') this.hushStream();
   }
 
   note(): { weapon: WeaponId; holdLeft: number } {
@@ -104,8 +105,8 @@ export class Gun {
     return true;
   }
 
-  /** Спуск отпущен, кувырок, пауза, смена картинки. Хвост гасится коротко, без щелчка. */
-  quiet(): void {
+  /** Только петля автомата. Вспышку и язык не трогаем. */
+  private hushStream(): void {
     const source = this.stream;
     const gain = this.streamGain;
     this.stream = null;
@@ -119,6 +120,11 @@ export class Gun {
       source.stop(now + release);
     }
     if (this.fallback?.isPlaying) this.fallback.stop();
+  }
+
+  /** Спуск отпущен, кувырок, пауза, смена картинки. Хвост гасится коротко, без щелчка. */
+  quiet(): void {
+    this.hushStream();
     this.muzzleLife = 0;
     this.gfx.clear();
     this.barrel.clear();
@@ -152,8 +158,12 @@ export class Gun {
     this.fireCooldown = weapons[this.weapon].intervalMs;
   }
 
-  /** Один и тот же круг на автомат, частый и широкий, пока кнопка зажата. */
+  /** Петля автомата и частого ствола, пока кнопка зажата. Широкий стреляет отдельными выстрелами. */
   private roar(): void {
+    if (this.weapon === 'spread') {
+      this.hushStream();
+      return;
+    }
     if (this.stream || this.fallback?.isPlaying) return;
     const cached = this.scene.cache.audio.get(gunFire.key);
     const sound = this.scene.sound;
@@ -180,6 +190,9 @@ export class Gun {
 
   private shoot(frame: ShotFrame): void {
     const spec = weapons[this.weapon];
+    if (this.weapon === 'spread' && this.scene.cache.audio.exists(shotgunFire.key)) {
+      this.scene.sound.play(shotgunFire.key);
+    }
     const muzzle = frame.muzzlePoint();
     frame.onShot(muzzle, { x: frame.aimX, y: frame.aimY }, {
       damage: spec.damage,

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { GroundAt } from '../../campaign/ground';
-import { circleHitsRect, type HitBox } from '../../combat';
+import { circleHitsRect, crossHitsSolid, rectsOverlap, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
 import { grenade, palette, rock as rockStats } from '../../constants';
 import { readNum, readRecord, type RockRow } from '../../keep';
@@ -267,15 +267,17 @@ export class Rocks {
 }
 
 function hitsBody(stone: Stone, box: HitBox): boolean {
+  const face = bounds(stone);
+  if (!rectsOverlap(box, face)) return false;
   const cx = stone.root.x;
   const cy = stone.sole - stone.h * 0.46;
   const rx = stone.w * 0.48;
   const ry = stone.h * 0.46;
-  const x = clamp(cx, box.left, box.right);
-  const y = clamp(cy, box.top, box.bottom);
-  const dx = (x - cx) / rx;
-  const dy = (y - cy) / ry;
-  return dx * dx + dy * dy <= 1;
+  return crossHitsSolid(box, face, (x, y) => {
+    const dx = (x - cx) / rx;
+    const dy = (y - cy) / ry;
+    return dx * dx + dy * dy <= 1;
+  });
 }
 
 function bounds(stone: Stone): HitBox {
@@ -294,7 +296,3 @@ function woundStage(hp: number, maxHp: number): number {
   return 0;
 }
 
-function clamp(v: number, min: number, max: number): number {
-  if (max < min) return (min + max) / 2;
-  return Math.min(max, Math.max(min, v));
-}

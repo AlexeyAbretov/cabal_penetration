@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { defineConfig } from 'vite';
 import { cabalPwa } from './pwa';
 
@@ -10,4 +11,12 @@ export default defineConfig({
     strictPort: true,
   },
   plugins: [cabalPwa()],
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        range: path.resolve(__dirname, 'range.html'),
+      },
+    },
+  },
 });

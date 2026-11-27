@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
+import { circleHitsRect, crossHitsSolid, rectsOverlap, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
 import { grenade, palette, tree as treeStats } from '../../constants';
 import { readNum, readRecord, type TreeRow } from '../../keep';
@@ -145,7 +145,12 @@ export class Trees {
   hit(box: HitBox, amount: number): void {
     const at = { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 };
     for (const tree of this.trees) {
-      if (!tree.whole || tree.pixH < 2 || !rectsOverlap(box, body(tree))) continue;
+      if (!tree.whole || tree.pixH < 2) continue;
+      const hit =
+        tree.mask
+          ? crossHitsSolid(box, spriteBox(tree), (x, y) => treeOpaque(tree, x, y))
+          : rectsOverlap(box, body(tree));
+      if (!hit) continue;
       const face = body(tree);
       this.wound(
         tree,

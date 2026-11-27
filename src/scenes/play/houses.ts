@@ -3,7 +3,7 @@ import type { GroundAt } from '../../campaign/ground';
 import { grenade, house as houseStats, palette } from '../../constants';
 import { readNum, readRecord, type HpPhase } from '../../keep';
 import type { HouseMark } from '../../types/house';
-import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
+import { circleHitsRect, crossHitsSolid, rectsOverlap, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
 import { belowHorizon, type FrameLayout } from '../../layout';
 import { blit, ensureCanvas } from './blit';
@@ -205,7 +205,13 @@ export class Houses {
   hit(box: HitBox, amount: number): void {
     const at = { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 };
     for (const house of this.houses) {
-      if (house.phase !== 'up' || house.w < 1 || !rectsOverlap(box, facade(house))) continue;
+      if (house.phase !== 'up' || house.w < 1) continue;
+      const face = facade(house);
+      const hit =
+        house.mask
+          ? crossHitsSolid(box, face, (x, y) => houseOpaque(house, x, y))
+          : rectsOverlap(box, face);
+      if (!hit) continue;
       this.wound(house, amount, at.x, at.y, false);
     }
   }

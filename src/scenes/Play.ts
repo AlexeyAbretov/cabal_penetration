@@ -2,12 +2,11 @@ import Phaser from 'phaser';
 import { afterPicture, marchFrom, marchPicture, openMarch, restartLevel, type March } from '../campaign/march';
 import { readKeep, storeFresh, storeKeep, type Keep } from '../keep';
 import { route } from '../campaign/route';
-import { difficultyById, riderCount, scaleHurt, scaleWave } from '../difficulty';
+import { difficultyById } from '../difficulty';
 import { bonusList, breakableCount, type Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type FlightBlock, type HitBox } from '../combat';
-import { bonus, cssColor, fivek, grenade, grenadeBoom, grenadeDrop, grenadeFly, grenadeThrow, gunFire, hitFlash, hud, medal, palette, pickup, plaqueDrop, rapidDrop, spreadDrop, star, starDrop, tenk, ton, weapons, type DropKind } from '../constants';
+import { bonus, cssColor, fivek, grenade, grenadeBoom, grenadeDrop, grenadeFly, grenadeThrow, gunFire, hitFlash, hud, medal, palette, pickup, plaqueDrop, rapidDrop, shotgunFire, spreadDrop, star, starDrop, tenk, ton, weapons, type DropKind } from '../constants';
 import type { FenceKind, FenceMark } from '../types/fence';
-import { isInfantry, isPack, waveQuota } from '../wave';
 import { infantryLooks } from '../infantrySheet';
 import type { Cover } from '../cover';
 import { loadExplosion } from '../explosionSheet';
@@ -26,9 +25,9 @@ import { Barrels } from './play/barrels';
 import { Controls } from './play/input';
 import { touchGrenade, type TouchChrome } from './play/touch';
 import { Debris } from './play/debris';
-import { DropBag, Drops, EnemyBag } from './play/drops';
-import { Enemies } from './play/enemies';
-import { Infantry } from './play/infantry';
+import { DropBag, Drops } from './play/drops';
+import { Hostiles, openHostiles } from './play/hostiles';
+import { gameRuntime } from '../runtime';
 import { Fences } from './play/fences';
 import { Grenades } from './play/grenades';
 import { Gun, type ShotMark } from './play/gun';
@@ -73,8 +72,7 @@ export class Play extends Phaser.Scene {
   private gun!: Gun;
   private wall!: FrontWall;
   private grenades!: Grenades;
-  private enemies!: Enemies;
-  private infantry!: Infantry;
+  private hostiles!: Hostiles;
   private props!: Props;
   private drops!: Drops;
   private houses!: Houses;
@@ -111,7 +109,6 @@ export class Play extends Phaser.Scene {
   private march: March = marchFrom(undefined);
   private picture!: Picture;
   private bag!: DropBag;
-  private spoils!: EnemyBag;
   /** Полная запись вкладки. Пусто, если картинка только что сменилась или сохранения нет. */
   private kept: Keep | null = null;
   /** Победа уже была на экране. finish ставит её после раскладки, иначе он выходит сразу. */
@@ -161,6 +158,7 @@ export class Play extends Phaser.Scene {
     if (this.picture.shorts.length > 0) loadShortFence(this);
     if (this.picture.sandbags.length > 0) loadSandbag(this);
     if (!this.cache.audio.exists(gunFire.key)) this.load.audio(gunFire.key, gunFire.url);
+    if (!this.cache.audio.exists(shotgunFire.key)) this.load.audio(shotgunFire.key, shotgunFire.url);
     if (!this.cache.audio.exists(grenadeThrow.key)) this.load.audio(grenadeThrow.key, grenadeThrow.url);
     if (!this.cache.audio.exists(grenadeBoom.key)) this.load.audio(grenadeBoom.key, grenadeBoom.url);
   }
@@ -170,11 +168,16 @@ export class Play extends Phaser.Scene {
     const kept = handoff ? null : readKeep();
     this.kept = kept && !kept.fresh ? kept : null;
     this.march = handoff ? marchFrom(data) : kept ? kept.march : marchFrom(data);
+    const runtime = gameRuntime();
+    if (runtime.skipDifficultyMenu && !difficultyById(this.march.difficulty)) {
+      this.march = { ...this.march, difficulty: runtime.defaultDifficulty };
+    }
     if (handoff) storeFresh(this.march);
     this.picture = marchPicture(this.march);
     const dead = deadHold(this.kept);
     if (dead) this.choosing = null;
     else if (this.kept) this.choosing = this.kept.choosing;
+    else if (runtime.skipDifficultyMenu) this.choosing = null;
     else this.choosing = difficultyById(this.march.difficulty) ? null : 'start';
     this.paused = this.kept !== null && dead === null && this.kept.paused;
     this.helpOpen = false;
@@ -255,28 +258,16 @@ export class Play extends Phaser.Scene {
     this.trees = new Trees(this, this.picture.trees, scatter);
     this.pickets = new Pickets(this, this.picture.pickets, this.stage.field, scatter);
     const difficulty = difficultyById(this.march.difficulty);
-    const enemies = difficulty?.enemies ?? 1;
-    const hp = difficulty?.hp ?? 1;
-    this.enemyStrike = difficulty ? scaleHurt(difficulty.damage) : 1;
-    const wave = scaleWave(this.picture.wave, enemies);
-    const riders = riderCount(enemies);
-    this.spoils = new EnemyBag(this.picture.enemyDrops, waveQuota(wave, riders));
-    this.enemies = new Enemies(
+    const hostileMount = openHostiles(
       this,
-      wave.filter(isPack),
+      this.picture,
       this.sparks,
       (points, rx, ry) => this.onKill(points, rx, ry),
       (count) => this.onGone(count),
-      hp,
-      riders,
+      difficulty,
     );
-    this.infantry = new Infantry(
-      this,
-      wave.filter(isInfantry),
-      this.sparks,
-      (points, rx, ry) => this.onKill(points, rx, ry),
-      hp,
-    );
+    this.hostiles = hostileMount.layer;
+    this.enemyStrike = hostileMount.strike;
     this.houses = new Houses(this, this.picture.houses, this.stage.field, earth, this.debris, scatter);
     this.kilns = new Kilns(this, this.picture.kilns, earth, this.debris, scatter);
     this.rocks = new Rocks(this, this.picture.rocks, earth, this.debris, scatter);
@@ -284,8 +275,7 @@ export class Play extends Phaser.Scene {
     this.fences = new Fences(this, this.picture.fences, this.picture.wall, this.debris, earth);
     this.grenades.onLand((x, y) => {
       if (this.cleared) return;
-      this.enemies.blast(x, y);
-      this.infantry.blast(x, y, this.covers());
+      this.hostiles.blast(x, y, this.covers());
       this.props.blast(x, y);
       this.shorts.blast(x, y);
       this.bags.blast(x, y);
@@ -299,7 +289,7 @@ export class Play extends Phaser.Scene {
       this.blastFrontWall(x, y);
     });
     this.controls = new Controls(this, () => this.onRightClick());
-    this.hud.setQuota(waveQuota(wave, riders));
+    this.hud.setQuota(this.hostiles.quota());
     this.hud.carry(this.march.score, this.march.lives);
     if (this.kept) this.applyKept(this.kept);
 
@@ -414,8 +404,7 @@ export class Play extends Phaser.Scene {
       else this.soldier.step(step, input, input.firing && this.gun.acceptsTrigger(), this.aim.x, this.aim.y);
     }
 
-    this.enemies.step(step, this.soldier.column(), this.view, this.wall, this.soldier.body().x);
-    this.infantry.step(step, this.soldier.column(), this.view, this.wall, this.soldier.body().x);
+    this.hostiles.step(step, this.soldier.column(), this.view, this.wall, this.soldier.body().x);
     if (this.cleared) {
       this.gun.quiet();
       this.stepClear(step);
@@ -443,10 +432,7 @@ export class Play extends Phaser.Scene {
       return;
     }
     const blocks = this.flightBlocks();
-    for (const shot of [
-      ...this.enemies.arrive(step, this.view, this.wall, blocks),
-      ...this.infantry.arrive(step, this.view, this.wall, blocks),
-    ]) {
+    for (const shot of this.hostiles.arrive(step, this.view, this.wall, blocks)) {
       if (this.down || this.handoff) break;
       if (shot.fence !== null) {
         this.stopOnFence(shot.fence, shot.x, shot.y);
@@ -517,8 +503,7 @@ export class Play extends Phaser.Scene {
     this.houses.place(this.view);
     this.kilns.place(this.view);
     this.rocks.place(this.view);
-    this.enemies.bind(this.view);
-    this.infantry.bind(this.view);
+    this.hostiles.bind(this.view);
     this.props.bind(this.view);
     this.shorts.bind(this.view);
     this.bags.bind(this.view);
@@ -585,8 +570,7 @@ export class Play extends Phaser.Scene {
     const inCross = this.grenades.sweep(box);
     if (shot.reach <= weapons.rifle.reach && (along || inCross)) return;
     const covers = this.covers();
-    this.enemies.hit(box, shot.damage);
-    this.infantry.hit(box, shot.damage, covers);
+    this.hostiles.hit(box, shot.damage, covers);
     this.props.hit(box, shot.damage);
     this.shorts.hit(box, shot.damage);
     this.bags.hit(box, shot.damage);
@@ -758,7 +742,7 @@ export class Play extends Phaser.Scene {
 
   /** Доля этого убийства. Пустая ничего не роняет. Несколько падают рядом, не в одну точку. */
   private spill(rx: number, ry: number): void {
-    const kinds = this.spoils.take();
+    const kinds = this.hostiles.takeKillDrops();
     const step = 0.1;
     kinds.forEach((kind, index) => {
       const shift = (index - (kinds.length - 1) / 2) * step;
@@ -846,8 +830,7 @@ export class Play extends Phaser.Scene {
   private finish(): void {
     if (this.cleared) return;
     this.cleared = true;
-    this.enemies.freeze();
-    this.infantry.freeze();
+    this.hostiles.freeze();
     this.gun.burn();
     this.restoreRifle();
     this.drops.freeze();
@@ -864,15 +847,13 @@ export class Play extends Phaser.Scene {
     const gfx = this.battleGfx;
     gfx.clear();
     this.props.draw();
-    this.enemies.draw();
-    this.infantry.draw(this.covers());
+    this.hostiles.draw(this.covers());
     this.fences.sync(this.view, this.wall);
     this.wall.draw(gfx, this.view, this.fences.columns());
     this.drops.draw(this.view);
     this.soldier.draw();
     const blocks = this.flightBlocks();
-    this.enemies.drawBullets(gfx, this.view, this.wall, blocks);
-    this.infantry.drawBullets(gfx, this.view, this.wall, blocks);
+    this.hostiles.drawBullets(gfx, this.view, this.wall, blocks);
     this.grenades.draw(gfx);
     this.sparks.draw(gfx);
     this.debris.draw();
@@ -953,10 +934,13 @@ export class Play extends Phaser.Scene {
     this.rails.recall(kept.rails);
     this.pickets.recall(kept.pickets);
     this.bag.recall(kept.bag);
-    if (!this.spoils.recall(kept.enemyBag)) this.spoils.skip(kept.slain);
+    this.hostiles.recall({
+      enemyBag: kept.enemyBag,
+      infantry: kept.infantry,
+      enemies: kept.enemies,
+      slain: kept.slain,
+    });
     this.drops.recall(kept.drops);
-    this.infantry.recall(kept.infantry);
-    this.enemies.recall(kept.enemies);
   }
 
   /** Пауза, смерть, победа и помощь — после раскладки, когда рамка уже знает размер. */
@@ -1028,9 +1012,7 @@ export class Play extends Phaser.Scene {
       pickets: this.pickets.note(),
       drops: this.drops.note(),
       bag: this.bag.note(),
-      enemyBag: this.spoils.note(),
-      infantry: this.infantry.note(),
-      enemies: this.enemies.note(),
+      ...this.hostiles.note(),
     });
   }
 

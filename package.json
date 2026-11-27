@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:range": "vite --open /range.html",
     "build": "tsc --noEmit && vite build",
     "build:html": "tsc --noEmit && vite build --config vite.singlefile.config.ts",
     "preview": "vite preview"

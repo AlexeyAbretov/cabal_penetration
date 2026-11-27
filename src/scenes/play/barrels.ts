@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { circleHitsRect, rectsOverlap, type HitBox } from '../../combat';
+import { circleHitsRect, crossHitsMask, rectsOverlap, type HitBox } from '../../combat';
 import type { Cover } from '../../cover';
 import { barrel, grenade, palette } from '../../constants';
 import { readNum, readRecord, type BarrelRow } from '../../keep';
@@ -313,20 +313,13 @@ function kegOpaque(keg: Keg, x: number, y: number): boolean {
   return mask[ly * keg.w + lx] === 1;
 }
 
+/** Плотный пиксель дерева в пересечении креста и холста бочки. */
 function woodInBox(keg: Keg, box: HitBox): boolean {
-  if (!rectsOverlap(box, body(keg))) return false;
-  if (!keg.mask) return true;
-  const points: [number, number][] = [
-    [(box.left + box.right) / 2, (box.top + box.bottom) / 2],
-    [box.left, (box.top + box.bottom) / 2],
-    [box.right, (box.top + box.bottom) / 2],
-    [(box.left + box.right) / 2, box.top],
-    [(box.left + box.right) / 2, box.bottom],
-  ];
-  for (const [x, y] of points) {
-    if (kegOpaque(keg, x, y)) return true;
-  }
-  return false;
+  const face = body(keg);
+  if (!rectsOverlap(box, face)) return false;
+  const mask = keg.mask;
+  if (!mask) return true;
+  return crossHitsMask(box, face, keg.w, keg.h, mask);
 }
 
 function woodInCircle(keg: Keg, x: number, y: number, radius: number): boolean {

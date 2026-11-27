@@ -1,4 +1,4 @@
-import type { HitBox } from './combat';
+import { crossHitsSolid, rectsOverlap, type HitBox } from './combat';
 
 /** Объект сцены, который закрывает того, кто дальше от камеры. sole — ближний низ на экране. */
 export type Cover = {
@@ -24,24 +24,10 @@ export function pointHidden(x: number, y: number, foot: number, covers: readonly
 }
 
 /**
- * Крест достаёт до бойца, если хотя бы одна точка пересечения не лежит в ближнем объекте.
- * Целиком за домом, деревом или бочкой выстрел его не берёт.
+ * Крест достаёт до бойца, если в пересечении тела и креста
+ * есть точка, которую ближний объект не закрывает.
  */
 export function shotReaches(enemy: HitBox, shot: HitBox, foot: number, covers: readonly Cover[]): boolean {
-  const left = Math.max(enemy.left, shot.left);
-  const right = Math.min(enemy.right, shot.right);
-  const top = Math.max(enemy.top, shot.top);
-  const bottom = Math.min(enemy.bottom, shot.bottom);
-  if (left > right || top > bottom) return false;
-  const samples: readonly [number, number][] = [
-    [(left + right) / 2, (top + bottom) / 2],
-    [left, top],
-    [right, top],
-    [left, bottom],
-    [right, bottom],
-  ];
-  for (const [x, y] of samples) {
-    if (!pointHidden(x, y, foot, covers)) return true;
-  }
-  return false;
+  if (!rectsOverlap(enemy, shot)) return false;
+  return crossHitsSolid(shot, enemy, (x, y) => !pointHidden(x, y, foot, covers));
 }

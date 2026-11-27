@@ -63,6 +63,99 @@ export function rectsOverlap(a: HitBox, b: HitBox): boolean {
   return a.left <= b.right && b.left <= a.right && a.top <= b.bottom && b.top <= a.bottom;
 }
 
+/** Общая часть двух прямоугольников. */
+export function overlapRect(a: HitBox, b: HitBox): HitBox | null {
+  const left = Math.max(a.left, b.left);
+  const right = Math.min(a.right, b.right);
+  const top = Math.max(a.top, b.top);
+  const bottom = Math.min(b.bottom, b.bottom);
+  if (left > right || top > bottom) return null;
+  return { left, right, top, bottom };
+}
+
+function overlapSpanStep(w: number, h: number): number {
+  const span = Math.min(w, h);
+  if (span <= 14) return 1;
+  return Math.max(2, Math.min(6, Math.floor(span / 4)));
+}
+
+/** В пересечении креста и тела есть точка, где тело «плотное» по predicate. */
+export function crossHitsSolid(
+  cross: HitBox,
+  body: HitBox,
+  solid: (x: number, y: number) => boolean,
+): boolean {
+  if (!rectsOverlap(cross, body)) return false;
+  const overlap = overlapRect(cross, body);
+  if (!overlap) return false;
+  const w = overlap.right - overlap.left;
+  const h = overlap.bottom - overlap.top;
+  const step = overlapSpanStep(w, h);
+  for (let y = overlap.top; y <= overlap.bottom; y += step) {
+    for (let x = overlap.left; x <= overlap.right; x += step) {
+      if (solid(x, y)) return true;
+    }
+  }
+  if (step > 1) {
+    const probes: [number, number][] = [
+      [overlap.left, overlap.top],
+      [overlap.right, overlap.top],
+      [overlap.left, overlap.bottom],
+      [overlap.right, overlap.bottom],
+      [(overlap.left + overlap.right) / 2, (overlap.top + overlap.bottom) / 2],
+    ];
+    for (const [x, y] of probes) {
+      if (solid(x, y)) return true;
+    }
+  }
+  return false;
+}
+
+/** Плотный пиксель маски тела в пересечении с крестом. */
+export function crossHitsMask(
+  cross: HitBox,
+  face: HitBox,
+  sizeW: number,
+  sizeH: number,
+  mask: Uint8Array,
+): boolean {
+  if (!rectsOverlap(cross, face)) return false;
+  const x0 = Math.max(Math.ceil(cross.left), Math.ceil(face.left));
+  const y0 = Math.max(Math.ceil(cross.top), Math.ceil(face.top));
+  const x1 = Math.min(Math.floor(cross.right), Math.floor(face.right));
+  const y1 = Math.min(Math.floor(cross.bottom), Math.floor(face.bottom));
+  if (x0 > x1 || y0 > y1) return false;
+  const w = x1 - x0 + 1;
+  const h = y1 - y0 + 1;
+  const step = overlapSpanStep(w, h);
+  for (let y = y0; y <= y1; y += step) {
+    const ly = Math.floor(y - face.top);
+    if (ly < 0 || ly >= sizeH) continue;
+    const row = ly * sizeW;
+    for (let x = x0; x <= x1; x += step) {
+      const lx = Math.floor(x - face.left);
+      if (lx < 0 || lx >= sizeW) continue;
+      if (mask[row + lx] === 1) return true;
+    }
+  }
+  if (step > 1) {
+    const probes: [number, number][] = [
+      [x0, y0],
+      [x1, y0],
+      [x0, y1],
+      [x1, y1],
+      [(x0 + x1) / 2, (y0 + y1) / 2],
+    ];
+    for (const [x, y] of probes) {
+      const ly = Math.floor(y - face.top);
+      const lx = Math.floor(x - face.left);
+      if (lx < 0 || lx >= sizeW || ly < 0 || ly >= sizeH) continue;
+      if (mask[ly * sizeW + lx] === 1) return true;
+    }
+  }
+  return false;
+}
+
 /** Круг касается прямоугольника, включая кромку. */
 export function circleHitsRect(
   x: number,

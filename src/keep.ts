@@ -2,13 +2,16 @@ import { hud, type DropKind, type WeaponId } from './constants';
 import { difficultyById } from './difficulty';
 import { marchFrom, type March } from './campaign/march';
 import { route } from './campaign/route';
+import { gameRuntime } from './runtime';
 
 /**
  * Бой этой вкладки. Обновление страницы читает запись обратно.
  * Закрытая вкладка её стирает: слота и меню «продолжить» нет.
  * Смена картинки пишет заход заново, поле и ствол туда не входят.
  */
-const key = 'cabal-keep';
+function keepKey(): string {
+  return gameRuntime().keepKey;
+}
 
 export type HpPhase = { hp: number; phase: 'up' | 'scrap' | 'down' };
 export type RockRow = { hp: number; phase: 'up' | 'scrap' };
@@ -75,7 +78,7 @@ export function storeFresh(march: March): void {
 
 export function storeKeep(keep: Keep): void {
   try {
-    sessionStorage.setItem(key, JSON.stringify(keep));
+    sessionStorage.setItem(keepKey(), JSON.stringify(keep));
   } catch {
     // Квота или закрытое хранилище. Бой в этой вкладке просто не переживёт обновление.
   }
@@ -83,7 +86,7 @@ export function storeKeep(keep: Keep): void {
 
 export function readKeep(): Keep | null {
   try {
-    const raw = sessionStorage.getItem(key);
+    const raw = sessionStorage.getItem(keepKey());
     if (!raw) return null;
     const data = JSON.parse(raw) as Partial<Keep>;
     if (data.v !== 1) return null;
@@ -138,7 +141,7 @@ function blank(march: March, fresh: boolean): Keep {
     march,
     paused: false,
     help: false,
-    choosing: difficultyById(march.difficulty) ? null : 'start',
+    choosing: pickChoosing(march),
     down: null,
     cleared: false,
     settled: false,
@@ -209,4 +212,9 @@ function numberList(value: unknown): number[] {
     if (n !== null) out.push(n);
   }
   return out;
+}
+
+function pickChoosing(march: March): 'start' | 'restart' | null {
+  if (gameRuntime().skipDifficultyMenu) return null;
+  return difficultyById(march.difficulty) ? null : 'start';
 }
