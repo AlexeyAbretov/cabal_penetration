@@ -72,6 +72,71 @@ function isDrop(value: unknown): value is DropKind {
   return dropKinds.includes(value as DropKind);
 }
 
+/**
+ * Бонусы с врагов. Список картинки любой длины.
+ * Ноль записей — никто ничего не роняет. Меньше, чем врагов — часть убийств пустая.
+ * Больше, чем врагов — с одного падает несколько, и все записи выходят.
+ * Доля берётся по порядку убийств.
+ */
+export class EnemyBag {
+  private slots: DropKind[][];
+  private next = 0;
+
+  constructor(kinds: readonly DropKind[], enemies: number) {
+    this.slots = spreadKills(kinds, enemies);
+  }
+
+  take(): readonly DropKind[] {
+    const slot = this.slots[this.next];
+    if (slot === undefined) return [];
+    this.next += 1;
+    return slot;
+  }
+
+  /** Хвост долей, включая пустые: обновление не сдвигает, кому что досталось. */
+  note(): DropKind[][] {
+    return this.slots.slice(this.next).map((slot) => [...slot]);
+  }
+
+  /** Убийства, которые уже были, когда записи долей ещё не было. */
+  skip(count: number): void {
+    if (count <= 0) return;
+    this.next = Math.min(this.slots.length, this.next + Math.floor(count));
+  }
+
+  /** Тот же хвост. Неверный список не подменяет доли, собранные на старте. */
+  recall(data: unknown): boolean {
+    if (!Array.isArray(data)) return false;
+    const slots: DropKind[][] = [];
+    for (const slot of data) {
+      if (!Array.isArray(slot)) return false;
+      const kinds: DropKind[] = [];
+      for (const item of slot) {
+        if (!isDrop(item)) return false;
+        kinds.push(item);
+      }
+      slots.push(kinds);
+    }
+    this.slots = slots;
+    this.next = 0;
+    return true;
+  }
+}
+
+/** Раскладывает записи по убийствам. Ноль врагов — пусто, бонусам некуда падать. */
+function spreadKills(kinds: readonly DropKind[], enemies: number): DropKind[][] {
+  const count = Math.max(0, Math.floor(enemies));
+  const slots: DropKind[][] = Array.from({ length: count }, () => []);
+  if (count === 0 || kinds.length === 0) return slots;
+  const order = shuffle([...kinds]);
+  const seat = shuffle(slots.map((_, index) => index));
+  order.forEach((kind, index) => {
+    const at = seat[index % seat.length];
+    if (at !== undefined) slots[at].push(kind);
+  });
+  return slots;
+}
+
 function shuffle<T>(items: T[]): T[] {
   for (let i = items.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));

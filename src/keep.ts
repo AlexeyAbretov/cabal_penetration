@@ -52,6 +52,8 @@ export type Keep = {
   pickets: boolean[][];
   drops: DropRow[];
   bag: DropKind[];
+  /** Хвост долей бонусов с врагов. null — запись ещё без этого поля. */
+  enemyBag: DropKind[][] | null;
   infantry: unknown;
   enemies: unknown;
 };
@@ -120,6 +122,7 @@ export function readKeep(): Keep | null {
       pickets: Array.isArray(data.pickets) ? (data.pickets as boolean[][]) : [],
       drops: Array.isArray(data.drops) ? (data.drops as DropRow[]) : [],
       bag: Array.isArray(data.bag) ? (data.bag as DropKind[]) : [],
+      enemyBag: Array.isArray(data.enemyBag) ? (data.enemyBag as DropKind[][]) : null,
       infantry: data.infantry ?? null,
       enemies: data.enemies ?? null,
     };
@@ -162,6 +165,7 @@ function blank(march: March, fresh: boolean): Keep {
     pickets: [],
     drops: [],
     bag: [],
+    enemyBag: null,
     infantry: null,
     enemies: null,
   };

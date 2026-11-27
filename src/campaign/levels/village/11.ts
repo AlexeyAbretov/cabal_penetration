@@ -182,6 +182,13 @@ const drops: readonly DropKind[] = [
   'tenk',
 ];
 
+/**
+ * Бонусы с пехоты. Шесть записей на тридцать бойцов: кому не досталось — ничего.
+ * Список может быть и длиннее волны: тогда с одного убийства падает несколько.
+ * Частый ствол, широкий ствол, одна пачка, таблички 100, 500 и 1000.
+ */
+const enemyDrops: readonly DropKind[] = ['rapid', 'spread', 'grenades', 'ton', 'bonus', 'medal'];
+
 /** false — дыра: пуля этой колонки доходит до тела. */
 const wall = [true, true, true, false, true, true, true, true] as const;
 
@@ -266,5 +273,6 @@ export const picture: Picture = {
   trees,
   pickets,
   drops,
+  enemyDrops,
   wave: infantryWave,
 };

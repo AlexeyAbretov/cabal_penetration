@@ -5,7 +5,7 @@ import { scaleHp } from '../../difficulty';
 import { readNum, readRecord } from '../../keep';
 import { pointHidden, shotReaches, type Cover } from '../../cover';
 import { infantryLooks, infantrySheet, type InfantryLook } from '../../infantrySheet';
-import { belowHorizon, fieldScale, wallTopY, type FrameLayout } from '../../layout';
+import { belowHorizon, fieldScale, fieldShare, wallTopY, type FrameLayout } from '../../layout';
 import type { InfantryGroup, Wait } from '../../wave';
 import type { Sparks } from './sparks';
 import type { FrontWall } from './wall';
@@ -115,20 +115,21 @@ export class Infantry {
   private frozen = false;
   /** Где стоял солдат, когда пехота шагала. Пуля открытой колонки целится сюда. */
   private playerX = 0;
+  private view: FrameLayout | null = null;
   private readonly pixels = new Map<number, ImageData>();
   /** Непрозрачный край клетки. Пустая кромка кадра в удар не входит. */
   private readonly ink = new Map<string, { x0: number; y0: number; x1: number; y1: number }>();
   private readonly scene: Phaser.Scene;
   private readonly bodies: Phaser.GameObjects.Graphics;
   private readonly sparks: Sparks;
-  private readonly onKill: (points: number) => void;
+  private readonly onKill: (points: number, rx: number, ry: number) => void;
   private readonly hpMul: number;
 
   constructor(
     scene: Phaser.Scene,
     groups: readonly InfantryGroup[],
     sparks: Sparks,
-    onKill: (points: number) => void,
+    onKill: (points: number, rx: number, ry: number) => void,
     hpMul = 1,
   ) {
     this.scene = scene;
@@ -249,10 +250,12 @@ export class Infantry {
   }
 
   bind(view: FrameLayout): void {
+    this.view = view;
     this.place(view);
   }
 
   step(delta: number, playerColumn: number, view: FrameLayout, columns: FrontWall, playerX: number): void {
+    this.view = view;
     this.playerX = playerX;
     if (!this.frozen) {
       this.clock += delta;
@@ -510,7 +513,18 @@ export class Infantry {
     this.corpses.push(this.remains(soldier, blast !== undefined));
     if (blast) this.tear(soldier, blast);
     else this.sparks.add(x, y, 160, 'land');
-    this.onKill(soldier.score);
+    this.fell(soldier.score, x, y);
+  }
+
+  /** Доля поля, откуда бонус падает на дорожку. */
+  private fell(points: number, x: number, y: number): void {
+    const field = this.view?.field;
+    if (!field) {
+      this.onKill(points, 0.5, 0.5);
+      return;
+    }
+    const share = fieldShare(field, x, y);
+    this.onKill(points, share.rx, share.ry);
   }
 
   private remains(soldier: Soldier, torn: boolean): Corpse {

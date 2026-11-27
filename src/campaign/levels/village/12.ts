@@ -42,6 +42,13 @@ const rocks: readonly RockMark[] = [{ x: 0.7, y: 0.47 }];
 const drops: readonly DropKind[] = ['grenades', 'bonus', 'medal', 'grenades', 'grenades'];
 
 /**
+ * Бонусы с пехоты. Восемь записей на сорок два бойца: кому не досталось — ничего.
+ * Список может быть и длиннее волны: тогда с одного убийства падает несколько.
+ * Частый ствол, широкий ствол, две пачки, таблички 100, 500, 1000 и звезда 2000.
+ */
+const enemyDrops: readonly DropKind[] = ['rapid', 'spread', 'grenades', 'grenades', 'ton', 'bonus', 'medal', 'star'];
+
+/**
  * Пехота 1-2. Сорок два бойца, семь групп по шесть.
  * На сцене не больше шести. Левый и правый край выпускают бойцов одновременно.
  * Пауза step — между бойцами группы, gap — перед группой своего края.
@@ -129,5 +136,6 @@ export const picture: Picture = {
   trees,
   pickets: [],
   drops,
+  enemyDrops,
   wave: infantryWave,
 };

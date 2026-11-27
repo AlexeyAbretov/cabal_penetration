@@ -117,6 +117,14 @@ export function belowHorizon(fraction: number, field: Rect): number {
   return fraction * sceneDepth(field);
 }
 
+/** Точка кадра долями поля: 0 слева и у дальнего края, 1 справа и у дорожки. */
+export function fieldShare(field: Rect, x: number, y: number): { rx: number; ry: number } {
+  return {
+    rx: (x - field.x) / Math.max(1, field.width),
+    ry: (y - field.y) / Math.max(1, field.height),
+  };
+}
+
 /** 0 у верхнего края поля, 1 у дорожки. Дальние фигуры мельче. */
 export function fieldScale(y: number, field: Rect): number {
   const t = Math.min(1, Math.max(0, (y - field.y) / Math.max(1, field.height)));

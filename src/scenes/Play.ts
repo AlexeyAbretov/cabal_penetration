@@ -26,7 +26,7 @@ import { Barrels } from './play/barrels';
 import { Controls } from './play/input';
 import { touchGrenade, type TouchChrome } from './play/touch';
 import { Debris } from './play/debris';
-import { DropBag, Drops } from './play/drops';
+import { DropBag, Drops, EnemyBag } from './play/drops';
 import { Enemies } from './play/enemies';
 import { Infantry } from './play/infantry';
 import { Fences } from './play/fences';
@@ -111,6 +111,7 @@ export class Play extends Phaser.Scene {
   private march: March = marchFrom(undefined);
   private picture!: Picture;
   private bag!: DropBag;
+  private spoils!: EnemyBag;
   /** Полная запись вкладки. Пусто, если картинка только что сменилась или сохранения нет. */
   private kept: Keep | null = null;
   /** Победа уже была на экране. finish ставит её после раскладки, иначе он выходит сразу. */
@@ -259,11 +260,12 @@ export class Play extends Phaser.Scene {
     this.enemyStrike = difficulty ? scaleHurt(difficulty.damage) : 1;
     const wave = scaleWave(this.picture.wave, enemies);
     const riders = riderCount(enemies);
+    this.spoils = new EnemyBag(this.picture.enemyDrops, waveQuota(wave, riders));
     this.enemies = new Enemies(
       this,
       wave.filter(isPack),
       this.sparks,
-      (points) => this.onKill(points),
+      (points, rx, ry) => this.onKill(points, rx, ry),
       (count) => this.onGone(count),
       hp,
       riders,
@@ -272,7 +274,7 @@ export class Play extends Phaser.Scene {
       this,
       wave.filter(isInfantry),
       this.sparks,
-      (points) => this.onKill(points),
+      (points, rx, ry) => this.onKill(points, rx, ry),
       hp,
     );
     this.houses = new Houses(this, this.picture.houses, this.stage.field, earth, this.debris, scatter);
@@ -747,10 +749,21 @@ export class Play extends Phaser.Scene {
     this.handoff = this.march;
   }
 
-  private onKill(points: number): void {
+  private onKill(points: number, rx: number, ry: number): void {
     this.hud.addScore(points);
+    this.spill(rx, ry);
     if (this.cleared) return;
     if (this.hud.eat()) this.armVictory();
+  }
+
+  /** Доля этого убийства. Пустая ничего не роняет. Несколько падают рядом, не в одну точку. */
+  private spill(rx: number, ry: number): void {
+    const kinds = this.spoils.take();
+    const step = 0.1;
+    kinds.forEach((kind, index) => {
+      const shift = (index - (kinds.length - 1) / 2) * step;
+      this.drops.spawn(kind, Math.min(0.94, Math.max(0.06, rx + shift)), ry);
+    });
   }
 
   /** Грузовик уехал или кузов не высадился. Очков нет. */
@@ -940,6 +953,7 @@ export class Play extends Phaser.Scene {
     this.rails.recall(kept.rails);
     this.pickets.recall(kept.pickets);
     this.bag.recall(kept.bag);
+    if (!this.spoils.recall(kept.enemyBag)) this.spoils.skip(kept.slain);
     this.drops.recall(kept.drops);
     this.infantry.recall(kept.infantry);
     this.enemies.recall(kept.enemies);
@@ -1014,6 +1028,7 @@ export class Play extends Phaser.Scene {
       pickets: this.pickets.note(),
       drops: this.drops.note(),
       bag: this.bag.note(),
+      enemyBag: this.spoils.note(),
       infantry: this.infantry.note(),
       enemies: this.enemies.note(),
     });

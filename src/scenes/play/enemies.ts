@@ -11,7 +11,7 @@ import { frame, green, grenade, palette, tank, tankVolley, truck, volley, wheel 
 import { scaleHp } from '../../difficulty';
 import { readNum, readRecord } from '../../keep';
 import { type EnemyKind, type WaveGroup } from '../../wave';
-import { fieldScale, wallTopY, type FrameLayout } from '../../layout';
+import { fieldScale, fieldShare, wallTopY, type FrameLayout } from '../../layout';
 import type { Sparks } from './sparks';
 import type { FrontWall } from './wall';
 
@@ -81,9 +81,10 @@ export class Enemies {
   private frozen = false;
   /** Где стоял солдат, когда волна шагала. Пуля открытой колонки целится сюда. */
   private playerX = 0;
+  private view: FrameLayout | null = null;
   private readonly bodies: Phaser.GameObjects.Graphics;
   private readonly sparks: Sparks;
-  private readonly onKill: (points: number) => void;
+  private readonly onKill: (points: number, rx: number, ry: number) => void;
   private readonly onRelease: (count: number) => void;
   private readonly hpMul: number;
   private readonly riders: number;
@@ -94,7 +95,7 @@ export class Enemies {
     scene: Phaser.Scene,
     wave: readonly WaveGroup[],
     sparks: Sparks,
-    onKill: (points: number) => void,
+    onKill: (points: number, rx: number, ry: number) => void,
     onRelease: (count: number) => void,
     hpMul = 1,
     riders: number = truck.riders,
@@ -251,10 +252,12 @@ export class Enemies {
   }
 
   bind(view: FrameLayout): void {
+    this.view = view;
     this.place(view);
   }
 
   step(delta: number, playerColumn: number, view: FrameLayout, columns: FrontWall, playerX: number): void {
+    this.view = view;
     this.playerX = playerX;
     if (!this.frozen) {
       this.clock += delta;
@@ -686,7 +689,18 @@ export class Enemies {
       enemy.ridersLeft = 0;
       this.onRelease(left);
     }
-    this.onKill(enemy.score);
+    this.fell(enemy.score, enemy.x, enemy.y);
+  }
+
+  /** Доля поля, откуда бонус падает на дорожку. */
+  private fell(points: number, x: number, y: number): void {
+    const field = this.view?.field;
+    if (!field) {
+      this.onKill(points, 0.5, 0.5);
+      return;
+    }
+    const share = fieldShare(field, x, y);
+    this.onKill(points, share.rx, share.ry);
   }
 
   private bury(): void {
