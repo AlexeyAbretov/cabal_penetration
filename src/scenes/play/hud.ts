@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { cssColor, enemyBar, hud, palette, type WeaponId } from '../../constants';
+import { gameVersion } from '../../version';
 import { difficulties } from '../../difficulty';
 import type { FrameLayout, Rect } from '../../layout';
 
@@ -63,6 +64,7 @@ export class Hud {
   private readonly pauseLabel: Phaser.GameObjects.Text;
   private readonly deathLabel: Phaser.GameObjects.Text;
   private readonly edge: Phaser.GameObjects.Graphics;
+  private readonly versionText: Phaser.GameObjects.Text;
   private pictureButtons: HTMLButtonElement[] = [];
   private onPicture: PicturePick | null = null;
   private pauseActions: PauseMenu | null = null;
@@ -139,6 +141,13 @@ export class Hud {
       .setOrigin(0.5, 1)
       .setVisible(false);
     this.edge = scene.add.graphics();
+    this.versionText = scene.add
+      .text(0, 0, `v${gameVersion}`, {
+        fontFamily,
+        fontSize: '12px',
+        color: cssColor(palette.wallBand),
+      })
+      .setOrigin(0, 1);
     layer.add(this.heart);
     layer.add(this.livesText);
     layer.add(this.scoreText);
@@ -151,6 +160,7 @@ export class Hud {
     layer.add(this.pauseLabel);
     layer.add(this.deathLabel);
     layer.add(this.edge);
+    layer.add(this.versionText);
   }
 
   get hurt(): boolean {
@@ -347,6 +357,7 @@ export class Hud {
     this.edge.fillRect(0, height - 1, width, 1);
     this.edge.fillRect(0, 0, 1, height);
     this.edge.fillRect(width - 1, 0, 1, height);
+    this.versionText.setPosition(6, band.y + band.height - 3);
     this.syncFigures();
   }
 
