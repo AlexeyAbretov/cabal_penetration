@@ -21,6 +21,103 @@
 
       #game {
         position: relative;
+        z-index: 0;
+      }
+
+      input,
+      button,
+      textarea {
+        font-family: inherit;
+      }
+
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #000;
+        font-family: Consolas, "Courier New", monospace;
+        transition: opacity 0.22s ease;
+      }
+
+      #boot.is-done {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .boot-plate {
+        box-sizing: border-box;
+        width: min(460px, calc(100% - 24px));
+        padding: 22px 16px 18px;
+        background: #1a140e;
+        border: 4px solid #e7dcc4;
+      }
+
+      .boot-title {
+        margin: 0;
+        color: #e7dcc4;
+        font-size: clamp(15px, 4.6vw, 24px);
+        font-weight: 400;
+        letter-spacing: 0.12em;
+        text-align: center;
+        white-space: nowrap;
+      }
+
+      .boot-label {
+        margin: 16px 0 12px;
+        color: #c2ae84;
+        font-size: 13px;
+        font-weight: 400;
+        letter-spacing: 0.16em;
+        text-align: center;
+        text-transform: uppercase;
+      }
+
+      .boot-track {
+        height: 12px;
+        overflow: hidden;
+        background: #000;
+        border: 2px solid #c2ae84;
+      }
+
+      .boot-fill {
+        width: 40%;
+        height: 100%;
+        background: #e7dcc4;
+        animation: boot-slide 1.2s ease-in-out infinite;
+      }
+
+      #boot-track.is-known .boot-fill {
+        animation: none;
+        transform: none;
+      }
+
+      @keyframes boot-slide {
+        from {
+          transform: translateX(-110%);
+        }
+        to {
+          transform: translateX(280%);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #boot {
+          transition: none;
+        }
+
+        .boot-fill {
+          width: 100%;
+          opacity: 0.35;
+          animation: none;
+          transform: none;
+        }
+
+        #boot-track.is-known .boot-fill {
+          opacity: 1;
+        }
       }
 
       html.force-landscape #game {
@@ -244,6 +341,22 @@
   </head>
   <body>
     <div id="game"></div>
+    <div id="boot">
+      <div class="boot-plate">
+        <p class="boot-title">CABAL — полигон</p>
+        <p id="boot-label" class="boot-label">Загрузка</p>
+        <div
+          id="boot-track"
+          class="boot-track"
+          role="progressbar"
+          aria-label="Загрузка"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        >
+          <div id="boot-fill" class="boot-fill"></div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main-range.ts"></script>
   </body>
 </html>

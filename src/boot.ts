@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { watchBootProgress } from './bootScreen';
 import { frame, palette } from './constants';
 import { Play } from './scenes/Play';
 import { cssViewportSize } from './mobile-landscape';
@@ -26,6 +27,11 @@ export function bootGame(): Phaser.Game {
       zoom: pixel,
     },
     scene: [Play],
+    callbacks: {
+      postBoot: (game) => {
+        watchBootProgress(game);
+      },
+    },
   });
 
   if (pixel > 1) fitDenseScreen(game);
