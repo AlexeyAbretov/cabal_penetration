@@ -145,7 +145,7 @@ export class Hud {
       .text(0, 0, `v${gameVersion}`, {
         fontFamily,
         fontSize: '12px',
-        color: cssColor(palette.wallBand),
+        color: cssColor(palette.ink),
       })
       .setOrigin(0, 1);
     layer.add(this.heart);
