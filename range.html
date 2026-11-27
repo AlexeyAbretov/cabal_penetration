@@ -23,6 +23,17 @@
         position: relative;
       }
 
+      html.force-landscape #game {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        width: 100dvh;
+        height: 100vw;
+        max-width: 100dvh;
+        max-height: 100vw;
+        transform: translate(-50%, -50%) rotate(90deg);
+      }
+
       canvas {
         image-rendering: pixelated;
         image-rendering: crisp-edges;

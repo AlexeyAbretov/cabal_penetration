@@ -132,6 +132,7 @@ function manifestJson(): string {
       start_url: './index.html',
       scope: './',
       display: 'standalone',
+      orientation: 'landscape',
       background_color: theme,
       theme_color: theme,
       categories: ['games'],

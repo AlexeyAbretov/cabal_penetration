@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { frame, palette } from './constants';
 import { Play } from './scenes/Play';
+import { cssViewportSize } from './mobile-landscape';
 import { readScreenPixel, screenPixel, setScreenPixel } from './screen';
 
 export function bootGame(): Phaser.Game {
@@ -39,8 +40,9 @@ export function bootGame(): Phaser.Game {
 function fitDenseScreen(game: Phaser.Game): void {
   const fit = (): void => {
     const parent = game.scale.parentSize;
-    const cssW = parent.width || window.innerWidth;
-    const cssH = parent.height || window.innerHeight;
+    const viewport = cssViewportSize();
+    const cssW = parent.width || viewport.width;
+    const cssH = parent.height || viewport.height;
     if (cssW < 2 || cssH < 2) return;
     const zoom = screenPixel();
     const width = Math.max(1, Math.floor(cssW / zoom));

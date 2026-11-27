@@ -1,4 +1,5 @@
 import { frame } from './constants';
+import { cssViewportSize } from './mobile-landscape';
 
 let pixel = 1;
 
@@ -24,8 +25,7 @@ export function readScreenPixel(): number {
   const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
   const dpr = window.devicePixelRatio || 1;
   if (!coarse || dpr < 2) return 1;
-  const cssW = window.innerWidth;
-  const cssH = window.innerHeight;
+  const { width: cssW, height: cssH } = cssViewportSize();
   if (cssW < 2 || cssH < 2) return 1;
   const fit = Math.min(cssW / frame.width, cssH / frame.height);
   return fit < 1 ? densePixel : 1;
