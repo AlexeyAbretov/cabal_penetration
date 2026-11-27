@@ -5,7 +5,7 @@ import { route } from '../campaign/route';
 import { difficultyById } from '../difficulty';
 import { bonusList, breakableCount, type Picture } from '../campaign/picture';
 import { circleHitsRect, hitBox, resolveColumnHit, type FlightBlock, type HitBox } from '../combat';
-import { bonus, cssColor, fivek, grenade, grenadeBoom, grenadeDrop, grenadeFly, grenadeThrow, gunFire, hitFlash, hud, medal, palette, pickup, plaqueDrop, rapidDrop, shotgunFire, spreadDrop, star, starDrop, tenk, ton, weapons, type DropKind } from '../constants';
+import { bonus, cssColor, fivek, grenade, grenadeBoom, grenadeDrop, grenadeFly, grenadeThrow, gunFire, hitFlash, hud, medal, palette, pickup, plaqueDrop, rapidDrop, rapidFire, shotgunFire, spreadDrop, star, starDrop, tenk, ton, weapons, type DropKind } from '../constants';
 import type { FenceKind, FenceMark } from '../types/fence';
 import { infantryLooks } from '../infantrySheet';
 import type { Cover } from '../cover';
@@ -158,6 +158,7 @@ export class Play extends Phaser.Scene {
     if (this.picture.shorts.length > 0) loadShortFence(this);
     if (this.picture.sandbags.length > 0) loadSandbag(this);
     if (!this.cache.audio.exists(gunFire.key)) this.load.audio(gunFire.key, gunFire.url);
+    if (!this.cache.audio.exists(rapidFire.key)) this.load.audio(rapidFire.key, rapidFire.url);
     if (!this.cache.audio.exists(shotgunFire.key)) this.load.audio(shotgunFire.key, shotgunFire.url);
     if (!this.cache.audio.exists(grenadeThrow.key)) this.load.audio(grenadeThrow.key, grenadeThrow.url);
     if (!this.cache.audio.exists(grenadeBoom.key)) this.load.audio(grenadeBoom.key, grenadeBoom.url);

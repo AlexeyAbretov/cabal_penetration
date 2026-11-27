@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { gunFire, muzzleFlashMs, palette, shotgunFire, weaponHoldMs, weapons, type WeaponId } from '../../constants';
+import { gunFire, muzzleFlashMs, palette, rapidFire, shotgunFire, weaponHoldMs, weapons, type WeaponId } from '../../constants';
 
 export type ShotMark = {
   damage: number;
@@ -35,6 +35,8 @@ export class Gun {
   private streamGain: GainNode | null = null;
   /** Запасной путь, если браузер без Web Audio. */
   private fallback: Phaser.Sound.BaseSound | null = null;
+  private fallbackKey: string | null = null;
+  private loopKey: string | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -52,6 +54,7 @@ export class Gun {
     this.fireCooldown = 0;
     this.holdLeft = weaponHoldMs;
     if (kind === 'spread') this.hushStream();
+    else this.syncLoopKey();
   }
 
   note(): { weapon: WeaponId; holdLeft: number } {
@@ -63,10 +66,12 @@ export class Gun {
     if (weapon === 'rifle' || holdLeft <= 0) {
       this.weapon = 'rifle';
       this.holdLeft = 0;
+      this.syncLoopKey();
       return;
     }
     this.weapon = weapon;
     this.holdLeft = holdLeft;
+    this.syncLoopKey();
   }
 
   /** Граница сцены. Оба временных ствола сгорают, даже если десять секунд не вышли. */
@@ -74,6 +79,7 @@ export class Gun {
     this.weapon = 'rifle';
     this.fireCooldown = 0;
     this.holdLeft = 0;
+    this.syncLoopKey();
   }
 
   /** Сброс очереди в кадр, когда кувырок только начался. Язык гаснет вместе с ней. */
@@ -102,6 +108,7 @@ export class Gun {
     this.weapon = 'rifle';
     this.fireCooldown = 0;
     this.holdLeft = 0;
+    this.syncLoopKey();
     return true;
   }
 
@@ -111,6 +118,7 @@ export class Gun {
     const gain = this.streamGain;
     this.stream = null;
     this.streamGain = null;
+    this.loopKey = null;
     if (source && gain && 'context' in this.scene.sound) {
       const now = this.scene.sound.context.currentTime;
       const release = 0.012;
@@ -120,6 +128,7 @@ export class Gun {
       source.stop(now + release);
     }
     if (this.fallback?.isPlaying) this.fallback.stop();
+    this.fallbackKey = null;
   }
 
   /** Спуск отпущен, кувырок, пауза, смена картинки. Хвост гасится коротко, без щелчка. */
@@ -158,19 +167,37 @@ export class Gun {
     this.fireCooldown = weapons[this.weapon].intervalMs;
   }
 
+  private fireLoop(): typeof gunFire | typeof rapidFire {
+    return this.weapon === 'rapid' ? rapidFire : gunFire;
+  }
+
+  /** Смена ствола при зажатом спуске — другая петля. */
+  private syncLoopKey(): void {
+    if (this.weapon === 'spread') {
+      this.hushStream();
+      return;
+    }
+    const key = this.fireLoop().key;
+    if (this.loopKey !== null && this.loopKey !== key) this.hushStream();
+  }
+
   /** Петля автомата и частого ствола, пока кнопка зажата. Широкий стреляет отдельными выстрелами. */
   private roar(): void {
     if (this.weapon === 'spread') {
       this.hushStream();
       return;
     }
+    const loop = this.fireLoop();
+    const rate = this.weapon === 'rapid' ? rapidFire.loopRate : 1;
+    this.syncLoopKey();
     if (this.stream || this.fallback?.isPlaying) return;
-    const cached = this.scene.cache.audio.get(gunFire.key);
+    const cached = this.scene.cache.audio.get(loop.key);
     const sound = this.scene.sound;
     if (cached instanceof AudioBuffer && 'context' in sound) {
       const source = sound.context.createBufferSource();
       source.buffer = cached;
       source.loop = true;
+      source.playbackRate.value = rate;
       const gain = sound.context.createGain();
       source.connect(gain);
       gain.connect(sound.destination);
@@ -181,11 +208,21 @@ export class Gun {
       source.start();
       this.stream = source;
       this.streamGain = gain;
+      this.loopKey = loop.key;
       return;
     }
-    if (!this.scene.cache.audio.exists(gunFire.key)) return;
-    if (!this.fallback) this.fallback = sound.add(gunFire.key, { loop: true });
+    if (!this.scene.cache.audio.exists(loop.key)) return;
+    if (this.fallback && this.fallbackKey !== loop.key) {
+      this.fallback.destroy();
+      this.fallback = null;
+      this.fallbackKey = null;
+    }
+    if (!this.fallback) {
+      this.fallback = sound.add(loop.key, { loop: true, rate });
+      this.fallbackKey = loop.key;
+    }
     this.fallback.play();
+    this.loopKey = loop.key;
   }
 
   private shoot(frame: ShotFrame): void {

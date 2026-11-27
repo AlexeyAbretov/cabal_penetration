@@ -167,13 +167,18 @@ export const fireIntervalMs = 200;
 /** На сколько один выстрел удлиняет вспышку. Сама вспышка горит, пока зажат спуск. */
 export const muzzleFlashMs = 36;
 
-/**
- * Очередь всех стволов, файл `sounds/gun-fire-loop.wav`.
- * Повтор идёт без паузы и без щелчка.
- */
+/** Петля автомата. Повтор без паузы и без щелчка на стыке. */
 export const gunFire = {
   key: 'gun-fire',
   url: 'sounds/gun-fire-loop.wav',
+} as const;
+
+/** Петля частого ствола: третий залп из `freesound_community-smgshoot2-35768.mp3`. */
+export const rapidFire = {
+  key: 'rapid-fire',
+  url: 'sounds/rapid-fire.wav',
+  /** Можно чуть поджать, если стык петли слышен. */
+  loopRate: 1,
 } as const;
 
 /** Выстрел широкого ствола. На каждый залп своя запись, без петли. */

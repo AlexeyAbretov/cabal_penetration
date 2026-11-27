@@ -60,6 +60,7 @@ const packedFiles: Packed[] = [
   ...frames('assets/fence/sandbag/animation'),
   ...ruins('assets/fence/sandbag'),
   ['sounds/gun-fire-loop.wav', 'audio/wav'],
+  ['sounds/rapid-fire.wav', 'audio/wav'],
   ['sounds/shotgun-fire.mp3', 'audio/mpeg'],
   ['sounds/grenade_throw.mp3', 'audio/mpeg'],
   ['sounds/grenade_exposion.mp3', 'audio/mpeg'],
