@@ -232,6 +232,7 @@ export const aimMark = {
 export const weapons = {
   rifle: {
     intervalMs: fireIntervalMs,
+    muzzleFlashMs,
     damage: 0.5,
     reach: 8,
     reachY: 8,
@@ -240,6 +241,7 @@ export const weapons = {
   },
   rapid: {
     intervalMs: 70,
+    muzzleFlashMs,
     damage: 1,
     reach: 8,
     reachY: 8,
@@ -248,6 +250,8 @@ export const weapons = {
   },
   spread: {
     intervalMs: fireIntervalMs * 3,
+    /** Вспышка на залп, не между ними; четверть паузы между выстрелами. */
+    muzzleFlashMs: (fireIntervalMs * 3) / 4,
     damage: 3,
     reach: 28,
     reachY: 14,

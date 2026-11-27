@@ -107,6 +107,8 @@ export class Play extends Phaser.Scene {
   private handoff: March | null = null;
   private settled = false;
   private march: March = marchFrom(undefined);
+  /** Полигон: «1» — дроп широкого ствола у креста. */
+  private rangeSpreadKey?: Phaser.Input.Keyboard.Key;
   private picture!: Picture;
   private bag!: DropBag;
   /** Полная запись вкладки. Пусто, если картинка только что сменилась или сохранения нет. */
@@ -290,6 +292,13 @@ export class Play extends Phaser.Scene {
       this.blastFrontWall(x, y);
     });
     this.controls = new Controls(this, () => this.onRightClick());
+    if (gameRuntime().withoutEnemies) {
+      const keyboard = this.input.keyboard;
+      if (keyboard) {
+        this.rangeSpreadKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
+        keyboard.addCapture(Phaser.Input.Keyboard.KeyCodes.ONE);
+      }
+    }
     this.hud.setQuota(this.hostiles.quota());
     this.hud.carry(this.march.score, this.march.lives);
     if (this.kept) this.applyKept(this.kept);
@@ -388,6 +397,7 @@ export class Play extends Phaser.Scene {
       this.controls.sample();
       return;
     }
+    this.spawnRangeSpreadDrop();
     this.grenades.step(Math.min(delta, 50));
 
     const input = this.controls.sample(this.soldier.rolling);
@@ -769,6 +779,15 @@ export class Play extends Phaser.Scene {
     if (this.clearWait > 0) return;
     this.clearWait = 0;
     this.finish();
+  }
+
+  /** Полигон: широкий ствол падает у прицела. */
+  private spawnRangeSpreadDrop(): void {
+    if (!this.rangeSpreadKey || !Phaser.Input.Keyboard.JustDown(this.rangeSpreadKey)) return;
+    const field = this.view.field;
+    const rx = Phaser.Math.Clamp((this.aim.x - field.x) / field.width, 0.06, 0.94);
+    const ry = Phaser.Math.Clamp((this.aim.y - field.y) / field.height, 0.12, 0.75);
+    this.drops.spawn('spread', rx, ry);
   }
 
   private takeDrop(kind: DropKind): void {

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { gunFire, muzzleFlashMs, palette, rapidFire, shotgunFire, weaponHoldMs, weapons, type WeaponId } from '../../constants';
+import { gunFire, palette, rapidFire, shotgunFire, weaponHoldMs, weapons, type WeaponId } from '../../constants';
 
 export type ShotMark = {
   damage: number;
@@ -236,7 +236,7 @@ export class Gun {
       reach: spec.reach,
       reachY: spec.reachY,
     });
-    this.muzzleLife = muzzleFlashMs;
+    this.muzzleLife = weapons[this.weapon].muzzleFlashMs;
   }
 
   /** Вспышка держится всю очередь. На сам выстрел она чуть длиннее, без паузы между пулями. */
@@ -247,7 +247,13 @@ export class Gun {
     if (frame.rolling || !frame.triggerDown || this.blockFire) return;
     const muzzle = frame.muzzlePoint();
     this.drawBarrel(frame.gripPoint(), muzzle, frame.bodyCovers);
-    this.drawTongue(muzzle, frame.aimX, frame.aimY, this.muzzleLife > 0);
+    const hot = this.muzzleLife > 0;
+    if (this.weapon === 'spread' && !hot) return;
+    if (this.weapon === 'spread') {
+      this.drawTongue(muzzle, frame.aimX, frame.aimY, true, spreadFlashAlong, spreadFlashAcross);
+    } else {
+      this.drawTongue(muzzle, frame.aimX, frame.aimY, hot);
+    }
   }
 
   /** Чёрное дуло от тела до белого ядра. По непрозрачным пикселям кадра не кладётся. */
@@ -272,7 +278,14 @@ export class Gun {
   }
 
   /** Четыре кадра вспышки. Белое ядро у дула, луч смотрит вправо на рисунке. */
-  private drawTongue(from: { x: number; y: number }, aimX: number, aimY: number, hot: boolean): void {
+  private drawTongue(
+    from: { x: number; y: number },
+    aimX: number,
+    aimY: number,
+    hot: boolean,
+    along = 1,
+    across = 1,
+  ): void {
     const dx = aimX - from.x;
     const dy = aimY - from.y;
     const dist = Math.hypot(dx, dy) || 1;
@@ -283,14 +296,32 @@ export class Gun {
     const rate = hot ? 40 : 70;
     const frame = flashFrames[Math.floor(this.scene.time.now / rate) % flashFrames.length];
     const gfx = this.gfx;
+    const aAlong = Math.max(1, Math.round(along));
+    const aAcross = Math.max(1, Math.round(across));
+    const upscale = aAlong !== 1 || aAcross !== 1;
     for (const dot of frame.pixels) {
       gfx.fillStyle(dot.color, 1);
-      gfx.fillRect(
-        Math.round(from.x + dot.x * ux + dot.y * px),
-        Math.round(from.y + dot.x * uy + dot.y * py),
-        1,
-        1,
-      );
+      if (!upscale) {
+        gfx.fillRect(
+          Math.round(from.x + dot.x * ux + dot.y * px),
+          Math.round(from.y + dot.x * uy + dot.y * py),
+          1,
+          1,
+        );
+        continue;
+      }
+      for (let j = 0; j < aAcross; j += 1) {
+        for (let i = 0; i < aAlong; i += 1) {
+          const lx = dot.x * aAlong + i;
+          const ly = dot.y * aAcross + j;
+          gfx.fillRect(
+            Math.round(from.x + lx * ux + ly * px),
+            Math.round(from.y + lx * uy + ly * py),
+            1,
+            1,
+          );
+        }
+      }
     }
   }
 }
@@ -306,6 +337,10 @@ const flashInk: Record<string, number> = {
 };
 
 const flashOrder = 'DROAYW';
+
+/** Широкий ствол: тот же язык, утолщён цельным блоком, без разъезжающихся рядов. */
+const spreadFlashAlong = 1;
+const spreadFlashAcross = 2;
 
 /** Ядро — левый край белых пикселей. Плюс по x смотрит в выстрел. */
 const flashSheets: { anchorX: number; anchorY: number; rows: string[] }[] = [
