@@ -56,8 +56,28 @@ export function cabalPwa(): Plugin {
 }
 
 const registerScript = `if ('serviceWorker' in navigator) {
+  var reloadForSw = false;
+  var hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!hadController) {
+      hadController = true;
+      return;
+    }
+    if (reloadForSw) return;
+    reloadForSw = true;
+    window.location.reload();
+  });
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(function () {});
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(function (reg) {
+      function checkUpdate() {
+        reg.update().catch(function () {});
+      }
+      checkUpdate();
+      window.addEventListener('pageshow', checkUpdate);
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') checkUpdate();
+      });
+    }).catch(function () {});
   });
 }`;
 
